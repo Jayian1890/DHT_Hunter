@@ -19,7 +19,7 @@ DHT-Hunter functions as a real DHT node and crawls/scrapes the DHT network for a
 
 ### Prerequisites
 
-- C++17 compatible compiler
+- C++20 compatible compiler
 - CMake 3.14 or higher
 
 ### Build Instructions
@@ -39,4 +39,4 @@ make
 
 ## License
 
-[MIT License](LICENSE)
+[AGPLv3 License](LICENSE)
