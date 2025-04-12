@@ -13,8 +13,8 @@
 #include <thread>
 #include <functional>
 
-namespace dht_hunter {
-namespace logging {
+
+namespace dht_hunter::logging {
 
 /**
  * @enum LogLevel
@@ -472,5 +472,5 @@ private:
     static bool s_initialized;
 };
 
-} // namespace logging
-} // namespace dht_hunter
+} // namespace dht_hunter::logging
+

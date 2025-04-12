@@ -1,7 +1,7 @@
 #include "dht_hunter/logging/logger.hpp"
 
-namespace dht_hunter {
-namespace logging {
+
+namespace dht_hunter::logging {
 
 // Initialize static members
 std::mutex Logger::s_mutex;
@@ -12,5 +12,5 @@ bool Logger::s_initialized = false;
 
 // Add some implementation methods here if needed
 
-} // namespace logging
-} // namespace dht_hunter
+} // namespace dht_hunter::logging
+
