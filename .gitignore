@@ -50,3 +50,4 @@ Makefile
 # OS specific files
 .DS_Store
 Thumbs.db
+/DHT-Hunter-Plan.md
