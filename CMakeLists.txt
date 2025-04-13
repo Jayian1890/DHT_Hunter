@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 project(DHT_Hunter VERSION 0.1.0 LANGUAGES CXX)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -10,7 +10,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
   add_compile_options(/W4 /WX)
 else()
-  add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+  add_compile_options(
+    -Wall -Wextra -Wpedantic -Werror
+    -Wconversion -Wshadow -Wnon-virtual-dtor
+    -Wold-style-cast -Wcast-align -Wunused
+    -Woverloaded-virtual -Wdouble-promotion -Wformat=2
+  )
 endif()
 
 # Include directories

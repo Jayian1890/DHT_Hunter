@@ -3,10 +3,10 @@
 #include <chrono>
 #include "dht_hunter/logging/logger.hpp"
 
-using namespace dht_hunter::logging;
+namespace dl = dht_hunter::logging;
 
 // Function to demonstrate logging from a different thread
-void logFromThread(std::shared_ptr<Logger> logger, int threadId) {
+void logFromThread(std::shared_ptr<dl::Logger> logger, int threadId) {
     for (int i = 0; i < 5; ++i) {
         logger->info("Message {} from thread {}", i, threadId);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -18,10 +18,10 @@ int main() {
     std::cout << "=======================" << std::endl;
 
     // Initialize the logging system with color support
-    Logger::init(LogLevel::TRACE, LogLevel::TRACE, "logging_demo.log", true);
+    dl::Logger::init(dl::LogLevel::TRACE, dl::LogLevel::TRACE, "logging_demo.log", true);
 
     // Get a logger for the main component
-    auto mainLogger = Logger::getLogger("Main");
+    auto mainLogger = dl::Logger::getLogger("Main");
     mainLogger->info("Logging system initialized with color support");
 
     // Demonstrate different log levels
@@ -33,8 +33,8 @@ int main() {
     mainLogger->critical("This is a CRITICAL message");
 
     // Demonstrate multiple loggers
-    auto networkLogger = Logger::getLogger("Network");
-    auto dhtLogger = Logger::getLogger("DHT");
+    auto networkLogger = dl::Logger::getLogger("Network");
+    auto dhtLogger = dl::Logger::getLogger("DHT");
 
     networkLogger->info("Network component initialized");
     dhtLogger->info("DHT component initialized");
@@ -53,7 +53,7 @@ int main() {
 
     // Demonstrate changing log levels
     mainLogger->info("Changing log level to WARNING");
-    Logger::setGlobalLevel(LogLevel::WARNING);
+    dl::Logger::setGlobalLevel(dl::LogLevel::WARNING);
 
     mainLogger->debug("This debug message should not appear");
     mainLogger->info("This info message should not appear");
@@ -63,10 +63,10 @@ int main() {
     mainLogger->warning("Now demonstrating color toggling...");
 
     // Get the console sink to toggle colors
-    auto& sinks = Logger::getSinks();
+    auto& sinks = dl::Logger::getSinks();
     for (auto& sink : sinks) {
         // Try to cast to ConsoleSink
-        auto consoleSink = std::dynamic_pointer_cast<ConsoleSink>(sink);
+        auto consoleSink = std::dynamic_pointer_cast<dl::ConsoleSink>(sink);
         if (consoleSink) {
             // Toggle color support
             bool currentColorState = consoleSink->getUseColors();

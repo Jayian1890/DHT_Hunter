@@ -1,17 +1,15 @@
 #pragma once
 
-#include <string>
-#include <memory>
-#include <vector>
-#include <unordered_map>
+#include <chrono>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <mutex>
 #include <sstream>
-#include <iostream>
-#include <fstream>
-#include <chrono>
-#include <iomanip>
+#include <string>
 #include <thread>
-#include <functional>
+#include <unordered_map>
+#include <vector>
 
 
 namespace dht_hunter::logging {
@@ -35,7 +33,7 @@ enum class LogLevel {
  * @param level The log level to convert.
  * @return String representation of the log level.
  */
-inline std::string logLevelToString(LogLevel level) {
+inline std::string logLevelToString(const LogLevel level) {
     switch (level) {
         case LogLevel::TRACE:    return "TRACE";
         case LogLevel::DEBUG:    return "DEBUG";
@@ -89,7 +87,7 @@ public:
      * @brief Sets the minimum log level for this sink.
      * @param level The minimum log level.
      */
-    void setLevel(LogLevel level) {
+    void setLevel(const LogLevel level) {
         m_level = level;
     }
 
@@ -97,7 +95,7 @@ public:
      * @brief Gets the minimum log level for this sink.
      * @return The minimum log level.
      */
-    LogLevel getLevel() const {
+    [[nodiscard]] LogLevel getLevel() const {
         return m_level;
     }
 
@@ -106,7 +104,7 @@ public:
      * @param level The level to check.
      * @return True if the message should be logged, false otherwise.
      */
-    bool shouldLog(LogLevel level) const {
+    [[nodiscard]] bool shouldLog(const LogLevel level) const {
         return level >= m_level;
     }
 
@@ -120,22 +118,27 @@ protected:
  */
 class ConsoleSink : public LogSink {
 public:
-    ConsoleSink(bool useColors = true) : m_useColors(useColors) {}
+    explicit ConsoleSink(const bool useColors = true) : m_useColors(useColors) {}
 
-    void write(LogLevel level, const std::string& loggerName,
+    void write(const LogLevel level, const std::string& loggerName,
               const std::string& message,
               const std::chrono::system_clock::time_point& timestamp) override {
         if (!shouldLog(level)) {
             return;
         }
 
-        std::lock_guard<std::mutex> lock(m_mutex);
+        const std::lock_guard lock(m_mutex);
 
         // Format timestamp
         auto time_t = std::chrono::system_clock::to_time_t(timestamp);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             timestamp.time_since_epoch()) % 1000;
-        std::tm tm = *std::localtime(&time_t);
+        std::tm tm{};
+#ifdef _WIN32
+        localtime_s(&tm, &time_t);
+#else
+        localtime_r(&time_t, &tm);
+#endif
 
         std::ostringstream oss;
         oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << '.'
@@ -163,7 +166,7 @@ public:
      * @brief Enables or disables colored output.
      * @param useColors Whether to use colors.
      */
-    void setUseColors(bool useColors) {
+    void setUseColors(const bool useColors) {
         m_useColors = useColors;
     }
 
@@ -171,7 +174,7 @@ public:
      * @brief Checks if colored output is enabled.
      * @return True if colored output is enabled, false otherwise.
      */
-    bool getUseColors() const {
+    [[nodiscard]] bool getUseColors() const {
         return m_useColors;
     }
 
@@ -181,7 +184,7 @@ private:
      * @param level The log level.
      * @return The ANSI color code.
      */
-    std::string getColorCode(LogLevel level) const {
+    [[nodiscard]] static std::string getColorCode(const LogLevel level) {
         switch (level) {
             case LogLevel::TRACE:    return "\033[90m";  // Dark gray
             case LogLevel::DEBUG:    return "\033[36m";  // Cyan
@@ -197,7 +200,7 @@ private:
      * @brief Gets the ANSI reset code.
      * @return The ANSI reset code.
      */
-    std::string getColorReset() const {
+    [[nodiscard]] static std::string getColorReset() {
         return "\033[0m";
     }
 
@@ -216,7 +219,7 @@ public:
      * @param filename The name of the file to write to.
      * @param append Whether to append to the file or overwrite it.
      */
-    FileSink(const std::string& filename, bool append = true) {
+    explicit FileSink(const std::string& filename, bool append = true) {
         auto mode = append ? std::ios::app : std::ios::trunc;
         m_file.open(filename, std::ios::out | mode);
         if (!m_file.is_open()) {
@@ -224,26 +227,31 @@ public:
         }
     }
 
-    ~FileSink() {
+    ~FileSink() override {
         if (m_file.is_open()) {
             m_file.close();
         }
     }
 
-    void write(LogLevel level, const std::string& loggerName,
+    void write(const LogLevel level, const std::string& loggerName,
               const std::string& message,
               const std::chrono::system_clock::time_point& timestamp) override {
         if (!shouldLog(level) || !m_file.is_open()) {
             return;
         }
 
-        std::lock_guard<std::mutex> lock(m_mutex);
+        const std::lock_guard<std::mutex> lock(m_mutex);
 
         // Format timestamp
         auto time_t = std::chrono::system_clock::to_time_t(timestamp);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             timestamp.time_since_epoch()) % 1000;
-        std::tm tm = *std::localtime(&time_t);
+        std::tm tm{};
+#ifdef _WIN32
+        localtime_s(&tm, &time_t);
+#else
+        localtime_r(&time_t, &tm);
+#endif
 
         m_file << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << '.'
                << std::setfill('0') << std::setw(3) << ms.count() << " "
@@ -267,6 +275,10 @@ private:
 class Logger {
 public:
     /**
+     * @brief Virtual destructor for proper cleanup.
+     */
+    virtual ~Logger() = default;
+    /**
      * @brief Initializes the logging system.
      * @param consoleLevel The minimum log level for the console sink.
      * @param fileLevel The minimum log level for the file sink.
@@ -277,7 +289,7 @@ public:
                     LogLevel fileLevel = LogLevel::DEBUG,
                     const std::string& filename = "dht_hunter.log",
                     bool useColors = true) {
-        std::lock_guard<std::mutex> lock(s_mutex);
+        const std::lock_guard<std::mutex> lock(s_mutex);
 
         // Create default sinks if not already initialized
         if (s_initialized) {
@@ -301,8 +313,8 @@ public:
      * @brief Adds a sink to the logging system.
      * @param sink The sink to add.
      */
-    static void addSink(std::shared_ptr<LogSink> sink) {
-        std::lock_guard<std::mutex> lock(s_mutex);
+    static void addSink(const std::shared_ptr<LogSink> &sink) {
+        const std::lock_guard<std::mutex> lock(s_mutex);
         s_sinks.push_back(sink);
     }
 
@@ -320,7 +332,7 @@ public:
      * @return A shared pointer to the logger.
      */
     static std::shared_ptr<Logger> getLogger(const std::string& name) {
-        std::lock_guard<std::mutex> lock(s_mutex);
+        const std::lock_guard<std::mutex> lock(s_mutex);
 
         // Initialize if not already done
         if (!s_initialized) {
@@ -344,7 +356,7 @@ public:
      * @param level The log level to set.
      */
     static void setGlobalLevel(LogLevel level) {
-        std::lock_guard<std::mutex> lock(s_mutex);
+        const std::lock_guard<std::mutex> lock(s_mutex);
         s_globalLevel = level;
     }
 
@@ -360,13 +372,14 @@ public:
      * @brief Gets the log level for this logger.
      * @return The log level.
      */
-    LogLevel getLevel() const {
+    [[nodiscard]] LogLevel getLevel() const {
         return m_level;
     }
 
     /**
      * @brief Logs a message at the TRACE level.
-     * @param message The message to log.
+     * @param format The format string.
+     * @param args The arguments to format.
      */
     template<typename... Args>
     void trace(const std::string& format, Args&&... args) {
@@ -375,7 +388,8 @@ public:
 
     /**
      * @brief Logs a message at the DEBUG level.
-     * @param message The message to log.
+     * @param format The format string.
+     * @param args The arguments to format.
      */
     template<typename... Args>
     void debug(const std::string& format, Args&&... args) {
@@ -384,7 +398,8 @@ public:
 
     /**
      * @brief Logs a message at the INFO level.
-     * @param message The message to log.
+     * @param format The format string.
+     * @param args The arguments to format.
      */
     template<typename... Args>
     void info(const std::string& format, Args&&... args) {
@@ -393,7 +408,8 @@ public:
 
     /**
      * @brief Logs a message at the WARNING level.
-     * @param message The message to log.
+     * @param format The format string.
+     * @param args The arguments to format.
      */
     template<typename... Args>
     void warning(const std::string& format, Args&&... args) {
@@ -402,7 +418,8 @@ public:
 
     /**
      * @brief Logs a message at the ERROR level.
-     * @param message The message to log.
+     * @param format The format string.
+     * @param args The arguments to format.
      */
     template<typename... Args>
     void error(const std::string& format, Args&&... args) {
@@ -411,7 +428,8 @@ public:
 
     /**
      * @brief Logs a message at the CRITICAL level.
-     * @param message The message to log.
+     * @param format The format string.
+     * @param args The arguments to format.
      */
     template<typename... Args>
     void critical(const std::string& format, Args&&... args) {
@@ -423,28 +441,29 @@ private:
      * @brief Constructs a Logger with the specified name.
      * @param name The name of the logger.
      */
-    Logger(const std::string& name) : m_name(name) {}
+    explicit Logger(std::string name) : m_name(std::move(name)) {}
 
     /**
      * @brief Logs a message at the specified level.
      * @param level The level to log at.
-     * @param message The message to log.
+     * @param format The format string.
+     * @param args The arguments to format.
      */
     template<typename... Args>
-    void log(LogLevel level, const std::string& format, Args&&... args) {
+    void log(const LogLevel level, const std::string& format, Args&&... args) {
         // Check if this message should be logged
         if (level < m_level || level < s_globalLevel) {
             return;
         }
 
         // Format the message
-        std::string message = formatString(format, std::forward<Args>(args)...);
+        const std::string message = formatString(format, std::forward<Args>(args)...);
 
         // Get current timestamp
-        auto timestamp = std::chrono::system_clock::now();
+        const auto timestamp = std::chrono::system_clock::now();
 
         // Write to all sinks
-        for (auto& sink : s_sinks) {
+        for (const auto& sink : s_sinks) {
             sink->write(level, m_name, message, timestamp);
         }
     }
@@ -456,7 +475,7 @@ private:
      * @return The formatted string.
      */
     template<typename... Args>
-    std::string formatString(const std::string& format, [[maybe_unused]] Args&&... args) {
+    static std::string formatString(const std::string& format, [[maybe_unused]] Args&&... args) {
         // For simplicity, we'll just return the format string for now
         // In a real implementation, you would replace {} placeholders with args
         return format;
