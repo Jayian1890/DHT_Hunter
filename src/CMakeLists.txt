@@ -1,5 +1,5 @@
 # Add subdirectories for each component
-add_subdirectory(logging)
+add_subdirectory(logforge)
 add_subdirectory(network)
 add_subdirectory(dht)
 add_subdirectory(bencode)
@@ -14,7 +14,7 @@ add_executable(dht_hunter main.cpp)
 # Link with all libraries
 target_link_libraries(dht_hunter
     PRIVATE
-    dht_hunter_logging
+    dht_hunter_logforge
     dht_hunter_network
     dht_hunter_dht
     dht_hunter_bencode

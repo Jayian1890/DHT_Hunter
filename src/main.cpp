@@ -1,16 +1,16 @@
-#include "dht_hunter/logging/logger.hpp"
+#include "dht_hunter/logforge/logforge.hpp"
 
 // Use namespace alias for cleaner code
-namespace dl = dht_hunter::logging;
+namespace lf = dht_hunter::logforge;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     // Initialize the logging system with color support
-    dl::Logger::init(dl::LogLevel::TRACE,
-                    dl::LogLevel::TRACE,
-                    "dht_hunter.log",
-                    true);
+    lf::LogForge::init(lf::LogLevel::TRACE,
+                      lf::LogLevel::TRACE,
+                      "dht_hunter.log",
+                      true);
 
-    const auto logger = dl::Logger::getLogger("main");
+    const auto logger = lf::LogForge::getLogger("main");
 
     logger->info("Starting...");
 
