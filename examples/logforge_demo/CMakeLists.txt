@@ -48,3 +48,20 @@ target_include_directories(async_logging_demo
     PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
+
+# Add the async test executable
+add_executable(async_test
+    async_test.cpp
+)
+
+# Link with the logforge library
+target_link_libraries(async_test
+    PRIVATE
+    dht_hunter_logforge
+)
+
+# Set include directories
+target_include_directories(async_test
+    PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
