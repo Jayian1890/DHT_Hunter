@@ -6,13 +6,14 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 ## Core Components
 
 ### 1. Logging System
-- [x] Custom logging framework implementation
+- [x] Custom logging framework implementation (LogForge)
 - [x] Multiple log levels (TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL)
 - [x] Configurable log outputs (console, file, both)
 - [x] Log rotation and management
 - [x] Thread-safe logging implementation
 - [x] Performance-optimized logging with minimal overhead
 - [x] Context-aware logging (component, function, line number)
+- [x] Custom string formatter with placeholder support
 
 ### 2. Network Layer
 - [ ] UDP socket implementation for DHT communication
@@ -63,11 +64,13 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 
 ### Phase 1: Project Setup and Logging System
 - [x] Set up project structure
-- [x] Implement comprehensive logging system
+- [x] Implement comprehensive logging system (LogForge)
 - [x] Create logging configuration system
 - [x] Implement log rotation and management
 - [x] Add thread-safe logging capabilities
 - [x] Create unit tests for logging system
+- [x] Implement asynchronous logging with background thread
+- [x] Create custom string formatter with placeholder support
 
 ### Phase 2: Core Network and Protocol Implementation
 - [ ] Implement UDP socket handling
@@ -128,16 +131,19 @@ For retrieving torrent metadata:
 - Implement parallel requests to maximize discovery
 - Use bloom filters to avoid duplicate processing
 
-### Logging System
+### Logging System (LogForge)
 - [x] Custom implementation without external dependencies
 - [x] Hierarchical logger structure with inheritance of log levels
 - [x] Compile-time filtering for zero-overhead in release builds
 - [ ] Structured logging with JSON output option for machine parsing
 - [x] Contextual logging with thread ID, timestamp, component, and severity
-- [ ] Asynchronous logging with dedicated background thread for minimal performance impact
+- [x] Asynchronous logging with dedicated background thread for minimal performance impact
 - [x] Configurable log sinks (console, file, memory buffer)
 - [x] Log rotation based on size or time intervals
 - [x] Color-coded console output for different log levels
+- [x] Custom string formatter with {} placeholders and positional arguments
+- [x] Thread-safe implementation with mutex protection
+- [x] Comprehensive unit tests and example applications
 
 ## Project Structure
 

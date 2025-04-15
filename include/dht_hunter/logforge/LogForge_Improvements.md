@@ -18,11 +18,11 @@ This document outlines potential improvements for the DHT-Hunter logging system,
 - [x] Prepare for migration to std::format when moving to C++20
 
 ### 3. Log Rotation
-- [ ] Implement size-based and time-based rotation policies
+- [x] Implement size-based and time-based rotation policies
 - [ ] Support for compression of rotated logs
-- [ ] Configurable naming patterns for rotated files
-- [ ] Retention policies based on age or count
-- [ ] Atomic file operations to prevent data loss during rotation
+- [x] Configurable naming patterns for rotated files
+- [x] Retention policies based on age or count
+- [x] Atomic file operations to prevent data loss during rotation
 
 ## Enhanced Functionality
 

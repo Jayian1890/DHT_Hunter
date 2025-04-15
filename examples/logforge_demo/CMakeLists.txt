@@ -65,3 +65,20 @@ target_include_directories(async_test
     PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
+
+# Add the rotation demo executable
+add_executable(rotation_demo
+    rotation_demo.cpp
+)
+
+# Link with the logforge library
+target_link_libraries(rotation_demo
+    PRIVATE
+    dht_hunter_logforge
+)
+
+# Set include directories
+target_include_directories(rotation_demo
+    PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)

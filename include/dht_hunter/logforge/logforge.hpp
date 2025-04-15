@@ -13,6 +13,7 @@
 
 #include "formatter.hpp"
 #include "log_common.hpp"
+#include "rotating_file_sink.hpp"
 
 namespace dht_hunter::logforge {
 
@@ -184,7 +185,7 @@ public:
     ~LogForge() = default;
 
     /**
-     * @brief Initializes the logging system.
+     * @brief Initializes the logging system with a standard file sink.
      * @param consoleLevel The minimum log level for the console sink.
      * @param fileLevel The minimum log level for the file sink.
      * @param filename The name of the log file.
@@ -217,6 +218,128 @@ public:
         s_asyncLoggingEnabled = async;
         std::cout << "LogForge::init called with async=" << (async ? "true" : "false") << std::endl;
         std::cout << "s_asyncLoggingEnabled set to " << (s_asyncLoggingEnabled ? "true" : "false") << std::endl;
+
+        s_initialized = true;
+    }
+
+    /**
+     * @brief Initializes the logging system with a size-based rotating file sink.
+     * @param consoleLevel The minimum log level for the console sink.
+     * @param fileLevel The minimum log level for the file sink.
+     * @param filename The name of the log file.
+     * @param maxSizeBytes The maximum size of a log file before rotation (in bytes).
+     * @param maxFiles The maximum number of log files to keep.
+     * @param useColors Whether to use colored output in the console.
+     * @param async Whether to use asynchronous logging.
+     */
+    static void initWithSizeRotation(const LogLevel consoleLevel = LogLevel::INFO,
+                                    const LogLevel fileLevel = LogLevel::DEBUG,
+                                    const std::string& filename = "dht_hunter.log",
+                                    size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
+                                    size_t maxFiles = 5,
+                                    bool useColors = true,
+                                    const bool async = true) {
+        const std::lock_guard lock(s_mutex);
+
+        // Create default sinks if not already initialized
+        if (s_initialized) {
+            return;
+        }
+
+        // Create console sink with color support
+        const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
+        consoleSink->setLevel(consoleLevel);
+        addSink(consoleSink);
+
+        // Create rotating file sink with size-based rotation
+        const auto fileSink = std::make_shared<RotatingFileSink>(filename, maxSizeBytes, maxFiles);
+        fileSink->setLevel(fileLevel);
+        addSink(fileSink);
+
+        // Set async mode
+        s_asyncLoggingEnabled = async;
+
+        s_initialized = true;
+    }
+
+    /**
+     * @brief Initializes the logging system with a time-based rotating file sink.
+     * @param consoleLevel The minimum log level for the console sink.
+     * @param fileLevel The minimum log level for the file sink.
+     * @param filename The name of the log file.
+     * @param rotationHours The time interval for rotation (in hours).
+     * @param maxFiles The maximum number of log files to keep.
+     * @param useColors Whether to use colored output in the console.
+     * @param async Whether to use asynchronous logging.
+     */
+    static void initWithTimeRotation(const LogLevel consoleLevel = LogLevel::INFO,
+                                    const LogLevel fileLevel = LogLevel::DEBUG,
+                                    const std::string& filename = "dht_hunter.log",
+                                    int rotationHours = 24,  // 24 hours default
+                                    size_t maxFiles = 5,
+                                    bool useColors = true,
+                                    const bool async = true) {
+        const std::lock_guard lock(s_mutex);
+
+        // Create default sinks if not already initialized
+        if (s_initialized) {
+            return;
+        }
+
+        // Create console sink with color support
+        const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
+        consoleSink->setLevel(consoleLevel);
+        addSink(consoleSink);
+
+        // Create rotating file sink with time-based rotation
+        const auto fileSink = std::make_shared<RotatingFileSink>(filename, std::chrono::hours(rotationHours), maxFiles);
+        fileSink->setLevel(fileLevel);
+        addSink(fileSink);
+
+        // Set async mode
+        s_asyncLoggingEnabled = async;
+
+        s_initialized = true;
+    }
+
+    /**
+     * @brief Initializes the logging system with a rotating file sink that uses both size and time-based rotation.
+     * @param consoleLevel The minimum log level for the console sink.
+     * @param fileLevel The minimum log level for the file sink.
+     * @param filename The name of the log file.
+     * @param maxSizeBytes The maximum size of a log file before rotation (in bytes).
+     * @param rotationHours The time interval for rotation (in hours).
+     * @param maxFiles The maximum number of log files to keep.
+     * @param useColors Whether to use colored output in the console.
+     * @param async Whether to use asynchronous logging.
+     */
+    static void initWithSizeAndTimeRotation(const LogLevel consoleLevel = LogLevel::INFO,
+                                           const LogLevel fileLevel = LogLevel::DEBUG,
+                                           const std::string& filename = "dht_hunter.log",
+                                           size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
+                                           int rotationHours = 24,  // 24 hours default
+                                           size_t maxFiles = 5,
+                                           bool useColors = true,
+                                           const bool async = true) {
+        const std::lock_guard lock(s_mutex);
+
+        // Create default sinks if not already initialized
+        if (s_initialized) {
+            return;
+        }
+
+        // Create console sink with color support
+        const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
+        consoleSink->setLevel(consoleLevel);
+        addSink(consoleSink);
+
+        // Create rotating file sink with both size and time-based rotation
+        const auto fileSink = std::make_shared<RotatingFileSink>(filename, maxSizeBytes, std::chrono::hours(rotationHours), maxFiles);
+        fileSink->setLevel(fileLevel);
+        addSink(fileSink);
+
+        // Set async mode
+        s_asyncLoggingEnabled = async;
 
         s_initialized = true;
     }
