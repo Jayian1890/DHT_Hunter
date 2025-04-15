@@ -11,8 +11,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "log_common.hpp"
 #include "formatter.hpp"
+#include "log_common.hpp"
 
 namespace dht_hunter::logforge {
 
@@ -22,7 +22,7 @@ namespace dht_hunter::logforge {
  */
 class ConsoleSink final : public LogSink {
 public:
-    explicit ConsoleSink(bool useColors = true) : m_useColors(useColors) {}
+    explicit ConsoleSink(const bool useColors = true) : m_useColors(useColors) {}
 
     void write(LogLevel level, const std::string& loggerName,
               const std::string& message,
@@ -78,7 +78,7 @@ public:
      * @brief Checks if colored output is enabled.
      * @return True if colored output is enabled, false otherwise.
      */
-    bool getUseColors() const {
+    [[nodiscard]] bool getUseColors() const {
         return m_useColors;
     }
 
@@ -88,7 +88,7 @@ private:
      * @param level The log level.
      * @return The ANSI color code.
      */
-    std::string getColorCode(LogLevel level) const {
+    [[nodiscard]] static std::string getColorCode(LogLevel level) {
         switch (level) {
             case LogLevel::TRACE:    return "\033[90m";  // Dark gray
             case LogLevel::DEBUG:    return "\033[36m";  // Cyan
@@ -104,7 +104,7 @@ private:
      * @brief Gets the ANSI reset code.
      * @return The ANSI reset code.
      */
-    std::string getColorReset() const {
+    [[nodiscard]] static std::string getColorReset() {
         return "\033[0m";
     }
 
@@ -131,7 +131,7 @@ public:
         }
     }
 
-    ~FileSink() {
+    ~FileSink() override {
         if (m_file.is_open()) {
             m_file.close();
         }
@@ -286,7 +286,7 @@ public:
      * @brief Gets the log level for this logger.
      * @return The log level.
      */
-    LogLevel getLevel() const {
+    [[nodiscard]] LogLevel getLevel() const {
         return m_level;
     }
 
