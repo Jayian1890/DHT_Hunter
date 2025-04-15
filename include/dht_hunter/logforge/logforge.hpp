@@ -24,18 +24,18 @@ class ConsoleSink final : public LogSink {
 public:
     explicit ConsoleSink(const bool useColors = true) : m_useColors(useColors) {}
 
-    void write(LogLevel level, const std::string& loggerName,
+    void write(const LogLevel level, const std::string& loggerName,
               const std::string& message,
               const std::chrono::system_clock::time_point& timestamp) override {
         if (!shouldLog(level)) {
             return;
         }
 
-        const std::lock_guard<std::mutex> lock(m_mutex);
+        const std::lock_guard lock(m_mutex);
 
         // Format timestamp
         auto time_t = std::chrono::system_clock::to_time_t(timestamp);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             timestamp.time_since_epoch()) % 1000;
         std::tm tm{};
 #ifdef _WIN32
@@ -70,7 +70,7 @@ public:
      * @brief Enables or disables colored output.
      * @param useColors Whether to use colors.
      */
-    void setUseColors(bool useColors) {
+    void setUseColors(const bool useColors) {
         m_useColors = useColors;
     }
 
@@ -88,7 +88,7 @@ private:
      * @param level The log level.
      * @return The ANSI color code.
      */
-    [[nodiscard]] static std::string getColorCode(LogLevel level) {
+    [[nodiscard]] static std::string getColorCode(const LogLevel level) {
         switch (level) {
             case LogLevel::TRACE:    return "\033[90m";  // Dark gray
             case LogLevel::DEBUG:    return "\033[36m";  // Cyan
@@ -123,8 +123,8 @@ public:
      * @param filename The name of the file to write to.
      * @param append Whether to append to the file or overwrite it.
      */
-    explicit FileSink(const std::string& filename, bool append = true) {
-        auto mode = append ? std::ios::app : std::ios::trunc;
+    explicit FileSink(const std::string& filename, const bool append = true) {
+        const auto mode = append ? std::ios::app : std::ios::trunc;
         m_file.open(filename, std::ios::out | mode);
         if (!m_file.is_open()) {
             throw std::runtime_error("Failed to open log file: " + filename);
@@ -137,18 +137,18 @@ public:
         }
     }
 
-    void write(LogLevel level, const std::string& loggerName,
+    void write(const LogLevel level, const std::string& loggerName,
               const std::string& message,
               const std::chrono::system_clock::time_point& timestamp) override {
         if (!shouldLog(level) || !m_file.is_open()) {
             return;
         }
 
-        const std::lock_guard<std::mutex> lock(m_mutex);
+        const std::lock_guard lock(m_mutex);
 
         // Format timestamp
         auto time_t = std::chrono::system_clock::to_time_t(timestamp);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             timestamp.time_since_epoch()) % 1000;
         std::tm tm{};
 #ifdef _WIN32
@@ -176,12 +176,12 @@ private:
  * @class LogForge
  * @brief Main logger class that handles log messages and distributes them to sinks.
  */
-class LogForge {
+class LogForge final {
 public:
     /**
-     * @brief Virtual destructor for proper cleanup.
+     * @brief Destructor for proper cleanup.
      */
-    virtual ~LogForge() = default;
+    ~LogForge() = default;
 
     /**
      * @brief Initializes the logging system.
@@ -191,12 +191,12 @@ public:
      * @param useColors Whether to use colored output in the console.
      * @param async Whether to use asynchronous logging.
      */
-    static void init(LogLevel consoleLevel = LogLevel::INFO,
-                    LogLevel fileLevel = LogLevel::DEBUG,
+    static void init(const LogLevel consoleLevel = LogLevel::INFO,
+                    const LogLevel fileLevel = LogLevel::DEBUG,
                     const std::string& filename = "dht_hunter.log",
                     bool useColors = true,
-                    bool async = true) {
-        const std::lock_guard<std::mutex> lock(s_mutex);
+                    const bool async = true) {
+        const std::lock_guard lock(s_mutex);
 
         // Create default sinks if not already initialized
         if (s_initialized) {
@@ -204,12 +204,12 @@ public:
         }
 
         // Create console sink with color support
-        auto consoleSink = std::make_shared<ConsoleSink>(useColors);
+        const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
         consoleSink->setLevel(consoleLevel);
         addSink(consoleSink);
 
         // Create file sink
-        auto fileSink = std::make_shared<FileSink>(filename);
+        const auto fileSink = std::make_shared<FileSink>(filename);
         fileSink->setLevel(fileLevel);
         addSink(fileSink);
 
@@ -227,7 +227,7 @@ public:
      * @return A shared pointer to the logger.
      */
     static std::shared_ptr<LogForge> getLogger(const std::string& name) {
-        const std::lock_guard<std::mutex> lock(s_mutex);
+        const std::lock_guard lock(s_mutex);
 
         // Initialize if not already done
         if (!s_initialized) {
@@ -235,8 +235,7 @@ public:
         }
 
         // Check if logger already exists
-        auto it = s_loggers.find(name);
-        if (it != s_loggers.end()) {
+        if (const auto it = s_loggers.find(name); it != s_loggers.end()) {
             return it->second;
         }
 
@@ -253,7 +252,7 @@ public:
     template<typename T>
     static void addSink(const std::shared_ptr<T> &sink) {
         static_assert(std::is_base_of_v<LogSink, T>, "Sink must inherit from LogSink");
-        const std::lock_guard<std::mutex> lock(s_mutex);
+        const std::lock_guard lock(s_mutex);
         s_sinks.push_back(sink);
     }
 
@@ -269,8 +268,8 @@ public:
      * @brief Sets the global log level for all loggers.
      * @param level The log level to set.
      */
-    static void setGlobalLevel(LogLevel level) {
-        const std::lock_guard<std::mutex> lock(s_mutex);
+    static void setGlobalLevel(const LogLevel level) {
+        const std::lock_guard lock(s_mutex);
         s_globalLevel = level;
     }
 
@@ -278,7 +277,7 @@ public:
      * @brief Sets the log level for this logger.
      * @param level The log level to set.
      */
-    void setLevel(LogLevel level) {
+    void setLevel(const LogLevel level) {
         m_level = level;
     }
 
@@ -378,17 +377,17 @@ private:
      * @param args The arguments to format.
      */
     template<typename... Args>
-    void log(LogLevel level, const std::string& format, Args&&... args) {
+    void log(const LogLevel level, const std::string& format, Args&&... args) {
         // Check if this message should be logged
         if (level < m_level || level < s_globalLevel) {
             return;
         }
 
         // Format the message
-        std::string message = formatString(format, std::forward<Args>(args)...);
+        const std::string message = formatString(format, std::forward<Args>(args)...);
 
         // Get current timestamp
-        auto timestamp = std::chrono::system_clock::now();
+        const auto timestamp = std::chrono::system_clock::now();
 
         // Check if async logging is enabled
         if (s_asyncLoggingEnabled) {
