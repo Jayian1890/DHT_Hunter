@@ -101,8 +101,10 @@ namespace {
         }
     };
 
-    // Static instance to ensure cleanup
-    AsyncLoggerCleanup cleanup;
+    // Static instance to ensure cleanup at program exit
+    // This variable is intentionally not referenced elsewhere in the code
+    // It's used for its destructor, which will be called when the program exits
+    [[maybe_unused]] AsyncLoggerCleanup cleanup;
 }
 
 // Implementation of the flush method
