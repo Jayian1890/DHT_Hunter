@@ -252,7 +252,7 @@ public:
      */
     template<typename T>
     static void addSink(const std::shared_ptr<T> &sink) {
-        static_assert(std::is_base_of<LogSink, T>::value, "Sink must inherit from LogSink");
+        static_assert(std::is_base_of_v<LogSink, T>, "Sink must inherit from LogSink");
         const std::lock_guard<std::mutex> lock(s_mutex);
         s_sinks.push_back(sink);
     }
@@ -369,7 +369,7 @@ private:
      * @brief Constructs a LogForge with the specified name.
      * @param name The name of the logger.
      */
-    explicit LogForge(const std::string& name) : m_name(name) {}
+    explicit LogForge(std::string name) : m_name(std::move(name)) {}
 
     /**
      * @brief Logs a message at the specified level.
