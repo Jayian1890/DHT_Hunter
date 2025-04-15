@@ -1,8 +1,6 @@
 #pragma once
 
 #include <string>
-#include <memory>
-#include <vector>
 #include <chrono>
 
 namespace dht_hunter::logforge {
@@ -26,7 +24,7 @@ enum class LogLevel {
  * @param level The log level to convert.
  * @return String representation of the log level.
  */
-inline std::string logLevelToString(LogLevel level) {
+inline std::string logLevelToString(const LogLevel level) {
     switch (level) {
         case LogLevel::TRACE:    return "TRACE";
         case LogLevel::DEBUG:    return "DEBUG";
@@ -80,7 +78,7 @@ public:
      * @brief Sets the minimum log level for this sink.
      * @param level The minimum log level.
      */
-    void setLevel(LogLevel level) {
+    void setLevel(const LogLevel level) {
         m_level = level;
     }
     
@@ -88,7 +86,7 @@ public:
      * @brief Gets the minimum log level for this sink.
      * @return The minimum log level.
      */
-    LogLevel getLevel() const {
+    [[nodiscard]] LogLevel getLevel() const {
         return m_level;
     }
     
@@ -97,7 +95,7 @@ public:
      * @param level The level to check.
      * @return True if the message should be logged, false otherwise.
      */
-    bool shouldLog(LogLevel level) const {
+    [[nodiscard]] bool shouldLog(const LogLevel level) const {
         return level >= m_level;
     }
     
