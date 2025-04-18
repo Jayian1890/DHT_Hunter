@@ -76,15 +76,15 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 - [x] Implement asynchronous logging with background thread
 - [x] Create custom string formatter with placeholder support
 
-### Phase 2: Core Network and Protocol Implementation ✅
-- [x] Implement socket abstraction layer for cross-platform compatibility ✅
-- [x] Implement basic UDP socket handling for DHT ✅
-- [x] Implement basic TCP socket handling for metadata exchange ✅
+### Phase 2: Core Network and Protocol Implementation
+- [x] Implement socket abstraction layer for cross-platform compatibility
+- [x] Implement basic UDP socket handling for DHT
+- [x] Implement basic TCP socket handling for metadata exchange
 - [ ] Implement asynchronous I/O multiplexer
-- [x] Implement bencode encoder/decoder ✅
-- [x] Implement basic KRPC message handling ✅
-- [x] Create routing table structure ✅
-- [x] Implement basic DHT node functionality (ping, find_node) ✅
+- [x] Implement bencode encoder/decoder
+- [x] Implement basic KRPC message handling
+- [x] Create routing table structure
+- [x] Implement basic DHT node functionality (ping, find_node)
 
 ### Phase 3: DHT Node Functionality
 - [x] Complete DHT protocol message types
