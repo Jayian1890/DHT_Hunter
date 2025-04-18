@@ -29,7 +29,7 @@ bool SelectMultiplexer::addSocket(Socket* socket, int events, IOEventCallback ca
     }
 
     SocketHandle handle = socket->getHandle();
-    
+
     // Check if the socket is already in the multiplexer
     if (m_sockets.find(handle) != m_sockets.end()) {
         logger->warning("Socket already in multiplexer, use modifySocket instead");
@@ -42,6 +42,9 @@ bool SelectMultiplexer::addSocket(Socket* socket, int events, IOEventCallback ca
     // Update the maximum handle value
     m_maxHandle = std::max(m_maxHandle, handle);
 
+    // Store the socket pointer for later use
+    m_socketPtrs[handle] = socket;
+
     logger->debug("Added socket {} to multiplexer with events {}", static_cast<int>(handle), events);
     return true;
 }
@@ -53,7 +56,7 @@ bool SelectMultiplexer::modifySocket(Socket* socket, int events) {
     }
 
     SocketHandle handle = socket->getHandle();
-    
+
     // Check if the socket is in the multiplexer
     auto it = m_sockets.find(handle);
     if (it == m_sockets.end()) {
@@ -75,7 +78,7 @@ bool SelectMultiplexer::removeSocket(Socket* socket) {
     }
 
     SocketHandle handle = socket->getHandle();
-    
+
     // Check if the socket is in the multiplexer
     auto it = m_sockets.find(handle);
     if (it == m_sockets.end()) {
@@ -83,8 +86,9 @@ bool SelectMultiplexer::removeSocket(Socket* socket) {
         return false;
     }
 
-    // Remove the socket from the map
+    // Remove the socket from the maps
     m_sockets.erase(it);
+    m_socketPtrs.erase(handle);
 
     // Recalculate the maximum handle value if this was the maximum
     if (handle == m_maxHandle) {
@@ -120,8 +124,8 @@ int SelectMultiplexer::wait(std::chrono::milliseconds timeout) {
     struct timeval* tvp = nullptr;
 
     if (timeout.count() >= 0) {
-        tv.tv_sec = static_cast<long>(timeout.count() / 1000);
-        tv.tv_usec = static_cast<long>((timeout.count() % 1000) * 1000);
+        tv.tv_sec = static_cast<time_t>(timeout.count() / 1000);
+        tv.tv_usec = static_cast<suseconds_t>((timeout.count() % 1000) * 1000);
         tvp = &tv;
     }
 
@@ -136,31 +140,25 @@ int SelectMultiplexer::wait(std::chrono::milliseconds timeout) {
     if (result == 0) {
         // Timeout
         logger->debug("select() timed out");
-        
+
         // Notify sockets that are interested in timeout events
         for (const auto& [handle, info] : m_sockets) {
             if (hasEvent(info.events, IOEvent::Timeout)) {
-                Socket* socket = nullptr;
-                for (const auto& [s, _] : m_sockets) {
-                    if (s == handle) {
-                        socket = reinterpret_cast<Socket*>(s);
-                        break;
-                    }
-                }
-                
+                Socket* socket = m_socketPtrs[handle];
+
                 if (socket && info.callback) {
                     info.callback(socket, IOEvent::Timeout);
                 }
             }
         }
-        
+
         return 0;
     }
 
     // Process the events
     for (const auto& [handle, info] : m_sockets) {
         int triggeredEvents = 0;
-        
+
         if (FD_ISSET(handle, &m_readSet)) {
             triggeredEvents |= toInt(IOEvent::Read);
         }
@@ -173,14 +171,8 @@ int SelectMultiplexer::wait(std::chrono::milliseconds timeout) {
 
         if (triggeredEvents != 0) {
             // Find the socket pointer
-            Socket* socket = nullptr;
-            for (const auto& [s, _] : m_sockets) {
-                if (s == handle) {
-                    socket = reinterpret_cast<Socket*>(s);
-                    break;
-                }
-            }
-            
+            Socket* socket = m_socketPtrs[handle];
+
             if (socket && info.callback) {
                 // Call the callback for each triggered event
                 if (hasEvent(triggeredEvents, IOEvent::Read) && hasEvent(info.events, IOEvent::Read)) {

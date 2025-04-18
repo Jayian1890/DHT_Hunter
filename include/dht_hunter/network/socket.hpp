@@ -5,6 +5,13 @@
 #include <string>
 #include <system_error>
 
+#ifdef _WIN32
+    #include <winsock2.h>
+    using SocketHandle = SOCKET;
+#else
+    using SocketHandle = int;
+#endif
+
 namespace dht_hunter::network {
 
 // Forward declarations
@@ -38,13 +45,15 @@ enum class SocketError {
     OperationInProgress,
     AlreadyConnected,
     NotBound,
+    ConnectionClosed,
+    Cancelled,
     Unknown
 };
 
 /**
  * @class Socket
  * @brief Abstract base class for all socket types.
- * 
+ *
  * This class provides a common interface for both TCP and UDP sockets,
  * abstracting away platform-specific details.
  */
@@ -54,26 +63,26 @@ public:
      * @brief Virtual destructor for proper cleanup.
      */
     virtual ~Socket() = default;
-    
+
     /**
      * @brief Binds the socket to a local endpoint.
      * @param localEndpoint The local endpoint to bind to.
      * @return True if successful, false otherwise.
      */
     virtual bool bind(const EndPoint& localEndpoint) = 0;
-    
+
     /**
      * @brief Connects the socket to a remote endpoint.
      * @param remoteEndpoint The remote endpoint to connect to.
      * @return True if successful, false otherwise.
      */
     virtual bool connect(const EndPoint& remoteEndpoint) = 0;
-    
+
     /**
      * @brief Closes the socket.
      */
     virtual void close() = 0;
-    
+
     /**
      * @brief Sends data through the socket.
      * @param data Pointer to the data to send.
@@ -81,7 +90,7 @@ public:
      * @return Number of bytes sent, or -1 on error.
      */
     virtual int send(const uint8_t* data, size_t length) = 0;
-    
+
     /**
      * @brief Receives data from the socket.
      * @param buffer Buffer to store received data.
@@ -89,39 +98,52 @@ public:
      * @return Number of bytes received, or -1 on error.
      */
     virtual int receive(uint8_t* buffer, size_t maxLength) = 0;
-    
+
     /**
      * @brief Sets the socket to blocking or non-blocking mode.
      * @param nonBlocking True for non-blocking mode, false for blocking mode.
      * @return True if successful, false otherwise.
      */
     virtual bool setNonBlocking(bool nonBlocking) = 0;
-    
+
     /**
      * @brief Sets the socket to reuse address.
      * @param reuse True to enable address reuse, false to disable.
      * @return True if successful, false otherwise.
      */
     virtual bool setReuseAddress(bool reuse) = 0;
-    
+
     /**
      * @brief Gets the last socket error.
      * @return The last socket error.
      */
     virtual SocketError getLastError() const = 0;
-    
+
     /**
      * @brief Gets the socket type.
      * @return The socket type (TCP or UDP).
      */
     virtual SocketType getType() const = 0;
-    
+
+    /**
+     * @brief Gets the native socket handle.
+     * @return The native socket handle.
+     */
+    virtual SocketHandle getHandle() const = 0;
+
+    /**
+     * @brief Accepts a connection on a listening socket.
+     * @param[out] endpoint The endpoint of the connecting client.
+     * @return A unique pointer to the accepted socket, or nullptr on error.
+     */
+    virtual std::unique_ptr<Socket> accept(EndPoint& endpoint) = 0;
+
     /**
      * @brief Checks if the socket is valid.
      * @return True if the socket is valid, false otherwise.
      */
     virtual bool isValid() const = 0;
-    
+
     /**
      * @brief Gets a string representation of a socket error.
      * @param error The socket error.

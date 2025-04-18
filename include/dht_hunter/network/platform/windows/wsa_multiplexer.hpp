@@ -2,8 +2,25 @@
 
 #include "../../io_multiplexer.hpp"
 #include "../../platform/socket_impl.hpp"
+
+#ifdef _WIN32
 #include <winsock2.h>
 #include <windows.h>
+#else
+// Placeholder definitions for non-Windows platforms
+typedef void* WSAEVENT;
+#define WSA_MAXIMUM_WAIT_EVENTS 64
+#define WSA_INVALID_EVENT nullptr
+#define WSA_WAIT_FAILED -1
+#define WSA_WAIT_EVENT_0 0
+#define WSA_WAIT_TIMEOUT 258
+#define WSA_INFINITE 0xFFFFFFFF
+#define FD_READ 0x01
+#define FD_WRITE 0x02
+#define FD_CLOSE 0x04
+#define FD_CONNECT 0x08
+#endif
+
 #include <unordered_map>
 #include <vector>
 

@@ -65,6 +65,7 @@ private:
     };
 
     std::unordered_map<SocketHandle, SocketInfo> m_sockets;  ///< Map of socket handles to socket info
+    std::unordered_map<SocketHandle, Socket*> m_socketPtrs;  ///< Map of socket handles to socket pointers
     fd_set m_readSet;                                       ///< Set of sockets to monitor for read events
     fd_set m_writeSet;                                      ///< Set of sockets to monitor for write events
     fd_set m_errorSet;                                      ///< Set of sockets to monitor for error events

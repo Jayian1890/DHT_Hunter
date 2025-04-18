@@ -80,7 +80,7 @@ public:
      * @brief Gets the native socket handle.
      * @return The native socket handle.
      */
-    SocketHandle getHandle() const;
+    SocketHandle getHandle() const override;
 
 protected:
     /**
@@ -134,6 +134,13 @@ public:
      * @return A unique pointer to the accepted socket, or nullptr on error.
      */
     std::unique_ptr<TCPSocketImpl> accept();
+
+    /**
+     * @brief Accepts a connection on a listening socket.
+     * @param[out] endpoint The endpoint of the connecting client.
+     * @return A unique pointer to the accepted socket, or nullptr on error.
+     */
+    std::unique_ptr<Socket> accept(EndPoint& endpoint) override;
 
     /**
      * @brief Sets the TCP no delay option (disables Nagle's algorithm).
@@ -206,6 +213,13 @@ public:
      */
     bool joinMulticastGroup(const NetworkAddress& groupAddress,
                            const NetworkAddress& interfaceAddress = NetworkAddress::any());
+
+    /**
+     * @brief Accepts a connection on a listening socket.
+     * @param[out] endpoint The endpoint of the connecting client.
+     * @return A unique pointer to the accepted socket, or nullptr on error.
+     */
+    std::unique_ptr<Socket> accept(EndPoint& endpoint) override;
 
     /**
      * @brief Leaves a multicast group.

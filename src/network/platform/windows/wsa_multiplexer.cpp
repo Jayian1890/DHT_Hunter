@@ -1,6 +1,8 @@
 #include "dht_hunter/network/platform/windows/wsa_multiplexer.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
 
+#ifdef _WIN32
+
 namespace dht_hunter::network {
 
 namespace {
@@ -27,7 +29,7 @@ bool WSAMultiplexer::addSocket(Socket* socket, int events, IOEventCallback callb
     }
 
     SocketHandle handle = socket->getHandle();
-    
+
     // Check if the socket is already in the multiplexer
     if (m_sockets.find(handle) != m_sockets.end()) {
         logger->warning("Socket already in multiplexer, use modifySocket instead");
@@ -73,7 +75,7 @@ bool WSAMultiplexer::modifySocket(Socket* socket, int events) {
     }
 
     SocketHandle handle = socket->getHandle();
-    
+
     // Check if the socket is in the multiplexer
     auto it = m_sockets.find(handle);
     if (it == m_sockets.end()) {
@@ -102,7 +104,7 @@ bool WSAMultiplexer::removeSocket(Socket* socket) {
     }
 
     SocketHandle handle = socket->getHandle();
-    
+
     // Check if the socket is in the multiplexer
     auto it = m_sockets.find(handle);
     if (it == m_sockets.end()) {
@@ -147,7 +149,7 @@ int WSAMultiplexer::wait(std::chrono::milliseconds timeout) {
     if (result == WSA_WAIT_TIMEOUT) {
         // Timeout
         logger->debug("WSAWaitForMultipleEvents timed out");
-        
+
         // Notify sockets that are interested in timeout events
         for (const auto& [handle, info] : m_sockets) {
             if (hasEvent(info.events, IOEvent::Timeout)) {
@@ -157,7 +159,7 @@ int WSAMultiplexer::wait(std::chrono::milliseconds timeout) {
                 }
             }
         }
-        
+
         return 0;
     }
 
@@ -184,7 +186,7 @@ int WSAMultiplexer::wait(std::chrono::milliseconds timeout) {
 
     // Process the events
     int triggeredEvents = 0;
-    
+
     if (networkEvents.lNetworkEvents & FD_READ) {
         triggeredEvents |= toInt(IOEvent::Read);
     }
@@ -216,18 +218,60 @@ int WSAMultiplexer::wait(std::chrono::milliseconds timeout) {
 
 long WSAMultiplexer::toWSAEvents(int events) const {
     long wsaEvents = 0;
-    
+
     if (hasEvent(events, IOEvent::Read)) {
         wsaEvents |= FD_READ;
     }
     if (hasEvent(events, IOEvent::Write)) {
         wsaEvents |= FD_WRITE;
     }
-    
+
     // Always monitor for close and connect events
     wsaEvents |= FD_CLOSE | FD_CONNECT;
-    
+
     return wsaEvents;
 }
+
+#else
+
+// Placeholder implementation for non-Windows platforms
+namespace dht_hunter::network {
+
+namespace {
+    static auto logger = dht_hunter::logforge::LogForge::getLogger("WSAMultiplexer");
+}
+
+WSAMultiplexer::WSAMultiplexer() {
+    logger->warning("WSAMultiplexer is not supported on this platform");
+}
+
+WSAMultiplexer::~WSAMultiplexer() {
+}
+
+bool WSAMultiplexer::addSocket(Socket* /* socket */, int /* events */, IOEventCallback /* callback */) {
+    logger->warning("WSAMultiplexer is not supported on this platform");
+    return false;
+}
+
+bool WSAMultiplexer::modifySocket(Socket* /* socket */, int /* events */) {
+    logger->warning("WSAMultiplexer is not supported on this platform");
+    return false;
+}
+
+bool WSAMultiplexer::removeSocket(Socket* /* socket */) {
+    logger->warning("WSAMultiplexer is not supported on this platform");
+    return false;
+}
+
+int WSAMultiplexer::wait(std::chrono::milliseconds /* timeout */) {
+    logger->warning("WSAMultiplexer is not supported on this platform");
+    return -1;
+}
+
+long WSAMultiplexer::toWSAEvents(int /* events */) const {
+    return 0;
+}
+
+#endif
 
 } // namespace dht_hunter::network

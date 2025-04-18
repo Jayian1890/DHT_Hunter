@@ -168,6 +168,13 @@ bool UDPSocketImpl::joinMulticastGroup(const NetworkAddress& groupAddress,
     return true;
 }
 
+std::unique_ptr<Socket> UDPSocketImpl::accept(EndPoint& /* endpoint */) {
+    auto logger = dht_hunter::logforge::LogForge::getLogger("UDPSocketImpl");
+
+    logger->error("Cannot accept on UDP socket");
+    return nullptr;
+}
+
 bool UDPSocketImpl::leaveMulticastGroup(const NetworkAddress& groupAddress,
                                       const NetworkAddress& interfaceAddress) {
     auto logger = dht_hunter::logforge::LogForge::getLogger("UDPSocketImpl");
