@@ -16,28 +16,32 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 - [x] Custom string formatter with placeholder support
 
 ### 2. Network Layer
-- [ ] UDP socket implementation for DHT communication
-- [ ] Cross-platform socket handling (Windows/Unix compatibility)
+- [x] UDP socket implementation for DHT communication
+- [x] TCP socket implementation for metadata exchange
+- [x] Cross-platform socket handling (Windows/Unix compatibility)
 - [ ] Asynchronous I/O handling for network operations
-- [ ] IP address and port management
+- [x] IP address and port management
 - [ ] Rate limiting and throttling mechanisms
+- [ ] Connection pooling and management
 
 ### 3. DHT Protocol Implementation (Kademlia)
-- [ ] Node ID generation and management
+- [x] Node ID generation and management
 - [ ] Routing table implementation (k-buckets)
 - [ ] XOR-based distance metric for node proximity
 - [ ] Node lookup algorithm
 - [ ] Key/value pair storage
-- [ ] DHT message handling (ping, find_node, get_peers, announce_peer)
-- [ ] KRPC protocol implementation (RPC over UDP using bencode)
+- [x] DHT message handling (ping, find_node, get_peers, announce_peer)
+- [x] KRPC protocol implementation (RPC over UDP using bencode)
 
 ### 4. Bencode Implementation
-- [ ] Bencode encoder (for outgoing messages)
-- [ ] Bencode decoder (for incoming messages)
-- [ ] Support for all bencode types (integers, strings, lists, dictionaries)
+- [x] Bencode encoder (for outgoing messages)
+- [x] Bencode decoder (for incoming messages)
+- [x] Support for all bencode types (integers, strings, lists, dictionaries)
 
 ### 5. BitTorrent Metadata Exchange
 - [ ] Implementation of BEP 9 (Extension for Peers to Send Metadata Files)
+- [ ] TCP connection handling for peer communication
+- [ ] BitTorrent protocol handshake with extension support
 - [ ] Metadata piece handling and assembly
 - [ ] Info dictionary parsing
 - [ ] Torrent file construction from metadata
@@ -72,16 +76,20 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 - [x] Implement asynchronous logging with background thread
 - [x] Create custom string formatter with placeholder support
 
-### Phase 2: Core Network and Protocol Implementation
-- [ ] Implement UDP socket handling
-- [ ] Implement bencode encoder/decoder
-- [ ] Implement basic KRPC message handling
+### Phase 2: Core Network and Protocol Implementation ✅
+- [x] Implement socket abstraction layer for cross-platform compatibility ✅
+- [x] Implement basic UDP socket handling for DHT ✅
+- [x] Implement basic TCP socket handling for metadata exchange ✅
+- [ ] Implement asynchronous I/O multiplexer
+- [x] Implement bencode encoder/decoder ✅
+- [x] Implement basic KRPC message handling ✅
 - [ ] Create routing table structure
 - [ ] Implement basic DHT node functionality (ping, find_node)
 
 ### Phase 3: DHT Node Functionality
-- [ ] Complete DHT protocol implementation
-- [ ] Implement get_peers and announce_peer
+- [x] Complete DHT protocol message types ✅
+- [ ] Implement DHT node operations
+- [ ] Implement get_peers and announce_peer functionality
 - [ ] Add bootstrap mechanism
 - [ ] Implement node lookup algorithm
 - [ ] Create persistent routing table
@@ -89,6 +97,8 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 
 ### Phase 4: Metadata Exchange and Crawling
 - [ ] Implement BEP 9 metadata exchange
+- [ ] Implement BitTorrent protocol handshake with extension support
+- [ ] Implement TCP connection management for peer communication
 - [ ] Create infohash collection mechanism
 - [ ] Implement metadata retrieval from peers
 - [ ] Add storage for collected metadata
@@ -120,10 +130,11 @@ Messages will be encoded using bencode and sent over UDP:
 
 ### Metadata Exchange (BEP 9)
 For retrieving torrent metadata:
-- Connect to peers using standard BitTorrent handshake
+- Connect to peers using TCP and standard BitTorrent handshake
 - Implement extension protocol handshake
 - Request metadata pieces using ut_metadata extension
 - Assemble pieces into complete metadata
+- Validate metadata against infohash
 
 ### Crawler Optimization
 - Maintain a queue of nodes to contact
