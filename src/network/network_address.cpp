@@ -46,7 +46,7 @@ NetworkAddress::NetworkAddress(const std::string& addressStr)
     : m_family(AddressFamily::Unspecified),
       m_ipv4Address(0),
       m_ipv6Address{} {
-    
+
     // Try to parse as IPv4
     struct in_addr addr4;
     if (inet_pton(AF_INET, addressStr.c_str(), &addr4) == 1) {
@@ -55,7 +55,7 @@ NetworkAddress::NetworkAddress(const std::string& addressStr)
         logger->debug("Parsed IPv4 address: {}", addressStr);
         return;
     }
-    
+
     // Try to parse as IPv6
     struct in6_addr addr6;
     if (inet_pton(AF_INET6, addressStr.c_str(), &addr6) == 1) {
@@ -64,7 +64,7 @@ NetworkAddress::NetworkAddress(const std::string& addressStr)
         logger->debug("Parsed IPv6 address: {}", addressStr);
         return;
     }
-    
+
     logger->warning("Failed to parse address: {}", addressStr);
 }
 
@@ -161,13 +161,13 @@ bool NetworkAddress::operator==(const NetworkAddress& other) const {
     if (m_family != other.m_family) {
         return false;
     }
-    
+
     if (m_family == AddressFamily::IPv4) {
         return m_ipv4Address == other.m_ipv4Address;
     } else if (m_family == AddressFamily::IPv6) {
         return m_ipv6Address == other.m_ipv6Address;
     }
-    
+
     return true;
 }
 
@@ -190,30 +190,30 @@ EndPoint::EndPoint(const NetworkAddress& address, uint16_t port)
 EndPoint::EndPoint(const std::string& endpointStr)
     : m_address(),
       m_port(0) {
-    
-    auto logger = dht_hunter::logforge::LogForge::getLogger("EndPoint");
-    
+
+    auto endpointLogger = dht_hunter::logforge::LogForge::getLogger("EndPoint");
+
     // Parse IPv4 endpoint (e.g., "192.168.1.1:8080")
     std::regex ipv4Regex(R"(^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)$)");
     std::smatch ipv4Match;
     if (std::regex_match(endpointStr, ipv4Match, ipv4Regex)) {
         m_address = NetworkAddress(ipv4Match[1].str());
         m_port = static_cast<uint16_t>(std::stoi(ipv4Match[2].str()));
-        logger->debug("Parsed IPv4 endpoint: {}", endpointStr);
+        endpointLogger->debug("Parsed IPv4 endpoint: {}", endpointStr);
         return;
     }
-    
+
     // Parse IPv6 endpoint (e.g., "[2001:db8::1]:8080")
     std::regex ipv6Regex(R"(^\[([^\]]+)\]:(\d+)$)");
     std::smatch ipv6Match;
     if (std::regex_match(endpointStr, ipv6Match, ipv6Regex)) {
         m_address = NetworkAddress(ipv6Match[1].str());
         m_port = static_cast<uint16_t>(std::stoi(ipv6Match[2].str()));
-        logger->debug("Parsed IPv6 endpoint: {}", endpointStr);
+        endpointLogger->debug("Parsed IPv6 endpoint: {}", endpointStr);
         return;
     }
-    
-    logger->warning("Failed to parse endpoint: {}", endpointStr);
+
+    endpointLogger->warning("Failed to parse endpoint: {}", endpointStr);
 }
 
 const NetworkAddress& EndPoint::getAddress() const {
@@ -254,16 +254,16 @@ bool EndPoint::operator!=(const EndPoint& other) const {
 
 // AddressResolver implementation
 
-std::vector<NetworkAddress> AddressResolver::resolve(const std::string& hostname, 
+std::vector<NetworkAddress> AddressResolver::resolve(const std::string& hostname,
                                                    AddressFamily family) {
-    auto logger = dht_hunter::logforge::LogForge::getLogger("AddressResolver");
+    auto resolverLogger = dht_hunter::logforge::LogForge::getLogger("AddressResolver");
     std::vector<NetworkAddress> addresses;
-    
+
     struct addrinfo hints{};
     struct addrinfo* result = nullptr;
-    
+
     std::memset(&hints, 0, sizeof(hints));
-    
+
     if (family == AddressFamily::IPv4) {
         hints.ai_family = AF_INET;
     } else if (family == AddressFamily::IPv6) {
@@ -271,16 +271,16 @@ std::vector<NetworkAddress> AddressResolver::resolve(const std::string& hostname
     } else {
         hints.ai_family = AF_UNSPEC;
     }
-    
+
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
-    
+
     int status = getaddrinfo(hostname.c_str(), nullptr, &hints, &result);
     if (status != 0) {
-        logger->error("Failed to resolve hostname: {}, error: {}", hostname, gai_strerror(status));
+        resolverLogger->error("Failed to resolve hostname: {}, error: {}", hostname, gai_strerror(status));
         return addresses;
     }
-    
+
     for (struct addrinfo* p = result; p != nullptr; p = p->ai_next) {
         if (p->ai_family == AF_INET) {
             struct sockaddr_in* ipv4 = reinterpret_cast<struct sockaddr_in*>(p->ai_addr);
@@ -292,23 +292,23 @@ std::vector<NetworkAddress> AddressResolver::resolve(const std::string& hostname
             addresses.emplace_back(addr);
         }
     }
-    
+
     freeaddrinfo(result);
-    
-    logger->debug("Resolved {} to {} addresses", hostname, addresses.size());
+
+    resolverLogger->debug("Resolved {} to {} addresses", hostname, addresses.size());
     return addresses;
 }
 
-std::vector<EndPoint> AddressResolver::resolveEndpoint(const std::string& hostname, 
+std::vector<EndPoint> AddressResolver::resolveEndpoint(const std::string& hostname,
                                                      uint16_t port,
                                                      AddressFamily family) {
     std::vector<EndPoint> endpoints;
     std::vector<NetworkAddress> addresses = resolve(hostname, family);
-    
+
     for (const auto& address : addresses) {
         endpoints.emplace_back(address, port);
     }
-    
+
     return endpoints;
 }
 

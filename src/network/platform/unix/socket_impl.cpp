@@ -8,7 +8,7 @@ namespace dht_hunter::network {
 namespace {
     // Get logger for socket implementation
     auto logger = dht_hunter::logforge::LogForge::getLogger("SocketImpl");
-    
+
     // Ignore SIGPIPE on Unix-like systems
     class SignalHandler {
     public:
@@ -17,7 +17,7 @@ namespace {
             logger->debug("SIGPIPE ignored");
         }
     };
-    
+
     // Static instance to ensure initialization
     static SignalHandler signalHandler;
 }
@@ -36,7 +36,6 @@ SocketError SocketImpl::translateError(int errorCode) {
         case ETIMEDOUT:
             return SocketError::TimedOut;
         case EWOULDBLOCK:
-        case EAGAIN:
             return SocketError::WouldBlock;
         case EHOSTUNREACH:
             return SocketError::HostUnreachable;
@@ -76,79 +75,86 @@ bool SocketImpl::setNonBlocking(bool nonBlocking) {
         logger->error("Cannot set non-blocking mode on invalid socket");
         return false;
     }
-    
+
     int flags = fcntl(m_handle, F_GETFL, 0);
     if (flags == -1) {
         m_lastError = translateError(getLastErrorCode());
         logger->error("Failed to get socket flags: {}", getErrorString(m_lastError));
         return false;
     }
-    
+
     if (nonBlocking) {
         flags |= O_NONBLOCK;
     } else {
         flags &= ~O_NONBLOCK;
     }
-    
+
     if (fcntl(m_handle, F_SETFL, flags) == -1) {
         m_lastError = translateError(getLastErrorCode());
         logger->error("Failed to set non-blocking mode: {}", getErrorString(m_lastError));
         return false;
     }
-    
+
     logger->debug("Socket set to {} mode", nonBlocking ? "non-blocking" : "blocking");
     return true;
 }
 
 // Unix-specific TCP keep alive implementation
-bool TCPSocketImpl::setKeepAlive(bool keepAlive, int idleTime, int interval, int count) {
-    auto logger = dht_hunter::logforge::LogForge::getLogger("TCPSocketImpl");
-    
+bool TCPSocketImpl::setKeepAlive(bool keepAlive, int /* idleTime */, int /* interval */, int /* count */) {
+    auto tcpLogger = dht_hunter::logforge::LogForge::getLogger("TCPSocketImpl");
+
     if (!isValid()) {
-        logger->error("Cannot set keep alive on invalid socket");
+        tcpLogger->error("Cannot set keep alive on invalid socket");
         return false;
     }
-    
+
     // Enable/disable keep alive
     int value = keepAlive ? 1 : 0;
-    if (setsockopt(getHandle(), SOL_SOCKET, SO_KEEPALIVE, 
+    if (setsockopt(getHandle(), SOL_SOCKET, SO_KEEPALIVE,
                   reinterpret_cast<char*>(&value), sizeof(value)) != 0) {
-        logger->error("Failed to set SO_KEEPALIVE: {}", 
+        tcpLogger->error("Failed to set SO_KEEPALIVE: {}",
                      Socket::getErrorString(translateError(getLastErrorCode())));
         return false;
     }
-    
+
     if (keepAlive) {
         // Unix-specific keep alive settings
+        // Platform-specific keep alive settings are commented out to avoid unused parameter warnings
+        // Uncomment and implement as needed for specific platforms
+        /*
         #ifdef TCP_KEEPIDLE
-        if (setsockopt(getHandle(), IPPROTO_TCP, TCP_KEEPIDLE, 
-                      &idleTime, sizeof(idleTime)) != 0) {
-            logger->error("Failed to set TCP_KEEPIDLE: {}", 
+        int keepIdleTime = idleTime;
+        if (setsockopt(getHandle(), IPPROTO_TCP, TCP_KEEPIDLE,
+                      &keepIdleTime, sizeof(keepIdleTime)) != 0) {
+            tcpLogger->error("Failed to set TCP_KEEPIDLE: {}",
                          Socket::getErrorString(translateError(getLastErrorCode())));
             return false;
         }
         #endif
-        
+
         #ifdef TCP_KEEPINTVL
-        if (setsockopt(getHandle(), IPPROTO_TCP, TCP_KEEPINTVL, 
-                      &interval, sizeof(interval)) != 0) {
-            logger->error("Failed to set TCP_KEEPINTVL: {}", 
+        int keepInterval = interval;
+        if (setsockopt(getHandle(), IPPROTO_TCP, TCP_KEEPINTVL,
+                      &keepInterval, sizeof(keepInterval)) != 0) {
+            tcpLogger->error("Failed to set TCP_KEEPINTVL: {}",
                          Socket::getErrorString(translateError(getLastErrorCode())));
             return false;
         }
         #endif
-        
+
         #ifdef TCP_KEEPCNT
-        if (setsockopt(getHandle(), IPPROTO_TCP, TCP_KEEPCNT, 
-                      &count, sizeof(count)) != 0) {
-            logger->error("Failed to set TCP_KEEPCNT: {}", 
+        int keepCount = count;
+        if (setsockopt(getHandle(), IPPROTO_TCP, TCP_KEEPCNT,
+                      &keepCount, sizeof(keepCount)) != 0) {
+            tcpLogger->error("Failed to set TCP_KEEPCNT: {}",
                          Socket::getErrorString(translateError(getLastErrorCode())));
             return false;
         }
         #endif
+        */
     }
-    
-    logger->debug("Socket keep alive {}", keepAlive ? "enabled" : "disabled");
+
+    tcpLogger->debug("Socket keep alive {}", keepAlive ? "enabled" : "disabled");
     return true;
 }
 

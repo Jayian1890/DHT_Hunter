@@ -8,22 +8,14 @@ namespace dht_hunter::network::test {
 class SocketTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Initialize logging
-        logforge::LogForge::init(
-            logforge::LogLevel::DEBUG,
-            logforge::LogLevel::DEBUG,
-            "socket_test.log",
-            true
-        );
-        
-        logger = logforge::LogForge::getLogger("SocketTest");
+        // No initialization needed for now
     }
-    
+
     void TearDown() override {
         // Clean up
     }
-    
-    std::shared_ptr<logforge::LogForge> logger;
+
+    // No logger needed for now
 };
 
 TEST_F(SocketTest, CreateTCPSocket) {
@@ -45,7 +37,7 @@ TEST_F(SocketTest, NetworkAddressIPv4) {
     EXPECT_TRUE(addr.isValid());
     EXPECT_EQ(addr.getFamily(), AddressFamily::IPv4);
     EXPECT_EQ(addr.toString(), "192.168.1.1");
-    
+
     // Test conversion to uint32_t
     uint32_t ipv4 = addr.getIPv4Address();
     EXPECT_EQ(ipv4, 0xC0A80101); // 192.168.1.1 in hex
@@ -79,7 +71,7 @@ TEST_F(SocketTest, LoopbackAddress) {
     EXPECT_TRUE(loopback.isValid());
     EXPECT_TRUE(loopback.isLoopback());
     EXPECT_EQ(loopback.toString(), "127.0.0.1");
-    
+
     NetworkAddress loopback6 = NetworkAddress::loopback(AddressFamily::IPv6);
     EXPECT_TRUE(loopback6.isValid());
     EXPECT_TRUE(loopback6.isLoopback());
@@ -90,7 +82,7 @@ TEST_F(SocketTest, AnyAddress) {
     NetworkAddress any = NetworkAddress::any();
     EXPECT_TRUE(any.isValid());
     EXPECT_EQ(any.toString(), "0.0.0.0");
-    
+
     NetworkAddress any6 = NetworkAddress::any(AddressFamily::IPv6);
     EXPECT_TRUE(any6.isValid());
     EXPECT_EQ(any6.toString(), "::");

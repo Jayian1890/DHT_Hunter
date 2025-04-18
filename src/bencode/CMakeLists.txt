@@ -1,14 +1,22 @@
 # Define the bencode library
-add_library(dht_hunter_bencode INTERFACE)
+add_library(dht_hunter_bencode
+    bencode.cpp
+)
 
 # Set include directories
 target_include_directories(dht_hunter_bencode
-    INTERFACE
+    PUBLIC
     ${CMAKE_SOURCE_DIR}/include
 )
 
 # Set compile features
 target_compile_features(dht_hunter_bencode
-    INTERFACE
+    PUBLIC
     cxx_std_17
+)
+
+# Link with the logging library
+target_link_libraries(dht_hunter_bencode
+    PUBLIC
+    dht_hunter_logforge
 )

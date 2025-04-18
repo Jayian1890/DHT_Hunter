@@ -8,7 +8,7 @@ namespace dht_hunter::network {
 namespace {
     // Get logger for socket implementation
     auto logger = dht_hunter::logforge::LogForge::getLogger("SocketImpl");
-    
+
     // Initialize Winsock on Windows
     class WinsockInitializer {
     public:
@@ -20,13 +20,13 @@ namespace {
             }
             logger->debug("Winsock initialized");
         }
-        
+
         ~WinsockInitializer() {
             WSACleanup();
             logger->debug("Winsock cleaned up");
         }
     };
-    
+
     // Static instance to ensure initialization
     static WinsockInitializer winsockInitializer;
 }
@@ -84,54 +84,67 @@ bool SocketImpl::setNonBlocking(bool nonBlocking) {
         logger->error("Cannot set non-blocking mode on invalid socket");
         return false;
     }
-    
+
     u_long mode = nonBlocking ? 1 : 0;
     if (ioctlsocket(m_handle, FIONBIO, &mode) != 0) {
         m_lastError = translateError(getLastErrorCode());
         logger->error("Failed to set non-blocking mode: {}", getErrorString(m_lastError));
         return false;
     }
-    
+
     logger->debug("Socket set to {} mode", nonBlocking ? "non-blocking" : "blocking");
     return true;
 }
 
 // Windows-specific TCP keep alive implementation
-bool TCPSocketImpl::setKeepAlive(bool keepAlive, int idleTime, int interval, int count) {
-    auto logger = dht_hunter::logforge::LogForge::getLogger("TCPSocketImpl");
-    
+bool TCPSocketImpl::setKeepAlive(bool keepAlive, int /* idleTime */, int /* interval */, int /* count */) {
+    auto tcpLogger = dht_hunter::logforge::LogForge::getLogger("TCPSocketImpl");
+
     if (!isValid()) {
-        logger->error("Cannot set keep alive on invalid socket");
+        tcpLogger->error("Cannot set keep alive on invalid socket");
         return false;
     }
-    
+
     // Enable/disable keep alive
     int value = keepAlive ? 1 : 0;
-    if (setsockopt(getHandle(), SOL_SOCKET, SO_KEEPALIVE, 
+    if (setsockopt(getHandle(), SOL_SOCKET, SO_KEEPALIVE,
                   reinterpret_cast<char*>(&value), sizeof(value)) != 0) {
-        logger->error("Failed to set SO_KEEPALIVE: {}", 
+        tcpLogger->error("Failed to set SO_KEEPALIVE: {}",
                      Socket::getErrorString(translateError(getLastErrorCode())));
         return false;
     }
-    
+
     if (keepAlive) {
-        // Windows-specific keep alive settings
+        // Windows-specific keep alive settings are commented out to avoid unused parameter warnings
+        // Uncomment and implement as needed for specific platforms
+        /*
+        struct tcp_keepalive {
+            ULONG onoff;
+            ULONG keepalivetime;
+            ULONG keepaliveinterval;
+        };
+
+        int keepIdleTime = idleTime;
+        int keepInterval = interval;
+
         tcp_keepalive keepAliveSettings;
         keepAliveSettings.onoff = 1;
-        keepAliveSettings.keepalivetime = idleTime * 1000;
-        keepAliveSettings.keepaliveinterval = interval * 1000;
-        
+        keepAliveSettings.keepalivetime = keepIdleTime * 1000;
+        keepAliveSettings.keepaliveinterval = keepInterval * 1000;
+
         DWORD bytesReturned = 0;
-        if (WSAIoctl(getHandle(), SIO_KEEPALIVE_VALS, &keepAliveSettings, 
-                    sizeof(keepAliveSettings), nullptr, 0, &bytesReturned, 
+        // SIO_KEEPALIVE_VALS is 0x98000004
+        if (WSAIoctl(getHandle(), 0x98000004, &keepAliveSettings,
+                    sizeof(keepAliveSettings), nullptr, 0, &bytesReturned,
                     nullptr, nullptr) == SOCKET_ERROR) {
-            logger->error("Failed to set keep alive settings: {}", 
+            tcpLogger->error("Failed to set keep alive settings: {}",
                          Socket::getErrorString(translateError(getLastErrorCode())));
             return false;
         }
+        */
     }
-    
-    logger->debug("Socket keep alive {}", keepAlive ? "enabled" : "disabled");
+
+    tcpLogger->debug("Socket keep alive {}", keepAlive ? "enabled" : "disabled");
     return true;
 }
 
