@@ -17,9 +17,9 @@ The network layer of DHT-Hunter is responsible for all network communication, pr
    - [x] Abstraction layer to hide platform-specific details
 
 3. **Performance**
-   - [ ] Asynchronous I/O for non-blocking operations
-   - [ ] Efficient socket management for handling thousands of connections
-   - [ ] Low overhead message processing
+   - [x] Asynchronous I/O for non-blocking operations
+   - [x] Efficient socket management for handling thousands of connections
+   - [x] Low overhead message processing
 
 4. **Management Features**
    - [x] IP address and port management
@@ -323,10 +323,10 @@ static SignalHandler g_signalHandler;
    - [x] Implement basic reliability mechanisms
 
 3. **Phase 3: Asynchronous I/O**
-   - [ ] Implement IOMultiplexer interface
-   - [ ] Create platform-specific multiplexer implementations
-   - [ ] Convert socket operations to use async I/O
-   - [ ] Add event-based callbacks
+   - [x] Implement IOMultiplexer interface
+   - [x] Create platform-specific multiplexer implementations
+   - [x] Convert socket operations to use async I/O
+   - [x] Add event-based callbacks
 
 4. **Phase 4: TCP Implementation**
    - [x] Implement TCPSocket class

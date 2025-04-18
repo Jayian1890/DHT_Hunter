@@ -80,7 +80,7 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 - [x] Implement socket abstraction layer for cross-platform compatibility
 - [x] Implement basic UDP socket handling for DHT
 - [x] Implement basic TCP socket handling for metadata exchange
-- [ ] Implement asynchronous I/O multiplexer
+- [x] Implement asynchronous I/O multiplexer
 - [x] Implement bencode encoder/decoder
 - [x] Implement basic KRPC message handling
 - [x] Create routing table structure
