@@ -216,8 +216,8 @@ The DHT protocol implementation provides the necessary components for communicat
    - [x] `QueryMessage` - Base class for all query messages
    - [x] `ResponseMessage` - Base class for all response messages
    - [x] `ErrorMessage` - Class for error messages
-   - [ ] `DHTNode` - Represents a node in the DHT network
-   - [ ] `RoutingTable` - Manages known nodes in the DHT network
+   - [x] `DHTNode` - Represents a node in the DHT network
+   - [x] `RoutingTable` - Manages known nodes in the DHT network
 
 3. **Operations**
    - [ ] Node discovery and bootstrap

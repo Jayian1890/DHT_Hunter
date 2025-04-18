@@ -26,8 +26,8 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 
 ### 3. DHT Protocol Implementation (Kademlia)
 - [x] Node ID generation and management
-- [ ] Routing table implementation (k-buckets)
-- [ ] XOR-based distance metric for node proximity
+- [x] Routing table implementation (k-buckets)
+- [x] XOR-based distance metric for node proximity
 - [ ] Node lookup algorithm
 - [ ] Key/value pair storage
 - [x] DHT message handling (ping, find_node, get_peers, announce_peer)
@@ -83,11 +83,11 @@ DHT-Hunter will be a cross-platform terminal-based application that functions as
 - [ ] Implement asynchronous I/O multiplexer
 - [x] Implement bencode encoder/decoder ✅
 - [x] Implement basic KRPC message handling ✅
-- [ ] Create routing table structure
-- [ ] Implement basic DHT node functionality (ping, find_node)
+- [x] Create routing table structure ✅
+- [x] Implement basic DHT node functionality (ping, find_node) ✅
 
 ### Phase 3: DHT Node Functionality
-- [x] Complete DHT protocol message types ✅
+- [x] Complete DHT protocol message types
 - [ ] Implement DHT node operations
 - [ ] Implement get_peers and announce_peer functionality
 - [ ] Add bootstrap mechanism
