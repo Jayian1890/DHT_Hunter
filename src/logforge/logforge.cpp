@@ -80,12 +80,14 @@ namespace {
         }
     }
 
+    // Flag to track if worker thread is initialized
+    std::atomic<bool> g_workerThreadInitialized{false};
+
     // Initialize the worker thread
     void initWorkerThread() {
-        static std::once_flag flag;
-        std::call_once(flag, [] {
+        if (!g_workerThreadInitialized.exchange(true)) {
             g_workerThread = std::thread(processQueue);
-        });
+        }
     }
 
     // Cleanup function to be called at program exit
@@ -120,6 +122,38 @@ void LogForge::flush() {
 // Implementation of the isAsyncLoggingEnabled method
 bool LogForge::isAsyncLoggingEnabled() {
     return s_asyncLoggingEnabled;
+}
+
+// Implementation of the shutdown method
+void LogForge::shutdown() {
+    // First, flush any pending messages
+    if (s_asyncLoggingEnabled) {
+        flush();
+    }
+
+    // Stop the worker thread
+    g_running = false;
+    g_queueCV.notify_one();
+
+    // Wait for the worker thread to finish
+    if (g_workerThread.joinable()) {
+        g_workerThread.join();
+    }
+
+    // Clear all sinks and loggers
+    const std::lock_guard lock(s_mutex);
+    s_sinks.clear();
+    s_loggers.clear();
+    s_initialized = false;
+
+    // Reset the worker thread initialization flag
+    g_workerThreadInitialized = false;
+
+    // Reset async state
+    g_messageQueue.clear();
+    g_flushRequested = false;
+    g_running = true;
+    g_messagesDropped = 0;
 }
 
 // Implementation of the queueAsyncMessage method

@@ -24,12 +24,7 @@ include_directories(include)
 # Add subdirectories
 add_subdirectory(src)
 
-# Enable testing
-option(BUILD_TESTS "Build the tests" ON)
-if(BUILD_TESTS)
-  enable_testing()
-  add_subdirectory(tests)
-endif()
+# Testing has been removed from this project
 
 # Build examples
 option(BUILD_EXAMPLES "Build the examples" ON)

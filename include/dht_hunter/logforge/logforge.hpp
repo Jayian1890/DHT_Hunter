@@ -486,6 +486,15 @@ public:
      */
     static bool isAsyncLoggingEnabled();
 
+    /**
+     * @brief Shuts down the logging system.
+     *
+     * This method stops the async logging thread if it's running,
+     * flushes any pending messages, and clears all sinks and loggers.
+     * It's particularly useful for testing and when you need to reset the logger state.
+     */
+    static void shutdown();
+
 private:
     /**
      * @brief Constructs a LogForge with the specified name.
