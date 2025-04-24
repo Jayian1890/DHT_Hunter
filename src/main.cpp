@@ -49,8 +49,7 @@ int main(int argc, char* argv[]) {
     dht_hunter::logforge::LogForge::setGlobalLevel(dht_hunter::logforge::LogLevel::TRACE);
 
     // Log the actual log filename being used
-    auto logger = getLogger();
-    logger->info("Using log file: {}.log", dht_hunter::util::FilesystemUtils::getExecutableName());
+    getLogger()->info("Using log file: {}.log", dht_hunter::util::FilesystemUtils::getExecutableName());
 
     // Parse command line arguments
     uint16_t port = 6881;
@@ -81,7 +80,7 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    logger->info("Starting DHT node on port {} with config directory {}", port, configDir);
+    getLogger()->info("Starting DHT node on port {} with config directory {}", port, configDir);
 
     // Create and start the DHT node
     auto dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(port, configDir);
@@ -92,7 +91,7 @@ int main(int argc, char* argv[]) {
 
     // Start the DHT node
     if (!dhtNode->start()) {
-        logger->error("Failed to start DHT node");
+        getLogger()->error("Failed to start DHT node");
         return 1;
     }
 
@@ -103,14 +102,14 @@ int main(int argc, char* argv[]) {
         "router.utorrent.com:6881"
     };
 
-    logger->info("Bootstrapping DHT node with {} bootstrap nodes", bootstrapNodes.size());
+    getLogger()->info("Bootstrapping DHT node with {} bootstrap nodes", bootstrapNodes.size());
 
     std::vector<dht_hunter::network::EndPoint> bootstrapEndpoints;
     for (const auto& node : bootstrapNodes) {
         // Parse host:port
         size_t colonPos = node.find(':');
         if (colonPos == std::string::npos) {
-            logger->warning("Invalid bootstrap node format: {}", node);
+            getLogger()->warning("Invalid bootstrap node format: {}", node);
             continue;
         }
 
@@ -122,28 +121,28 @@ int main(int argc, char* argv[]) {
             auto addresses = dht_hunter::network::AddressResolver::resolve(host);
             if (!addresses.empty()) {
                 bootstrapEndpoints.emplace_back(addresses[0], bootstrapPort);
-                logger->info("Resolved bootstrap node {} to {}", node, bootstrapEndpoints.back().toString());
+                getLogger()->info("Resolved bootstrap node {} to {}", node, bootstrapEndpoints.back().toString());
             } else {
-                logger->warning("Failed to resolve bootstrap node: {}", host);
+                getLogger()->warning("Failed to resolve bootstrap node: {}", host);
             }
         } catch (const std::exception& e) {
-            logger->warning("Exception resolving bootstrap node {}: {}", host, e.what());
+            getLogger()->warning("Exception resolving bootstrap node {}: {}", host, e.what());
         }
     }
 
     // Bootstrap with the resolved endpoints
     if (!bootstrapEndpoints.empty()) {
         if (!dhtNode->bootstrap(bootstrapEndpoints)) {
-            logger->warning("Failed to bootstrap DHT node");
+            getLogger()->warning("Failed to bootstrap DHT node");
         } else {
-            logger->info("DHT node bootstrapped successfully");
+            getLogger()->info("DHT node bootstrapped successfully");
         }
     } else {
-        logger->warning("No valid bootstrap nodes found");
+        getLogger()->warning("No valid bootstrap nodes found");
     }
 
     // Main loop
-    logger->info("DHT node running, press Ctrl+C to exit");
+    getLogger()->info("DHT node running, press Ctrl+C to exit");
 
     // Statistics variables
     size_t lastInfoHashCount = 0;
@@ -166,13 +165,13 @@ int main(int argc, char* argv[]) {
             lastInfoHashCount = infoHashCount;
 
             // Log statistics
-            logger->info("DHT Statistics: {} nodes in {} buckets, {} info hashes (+{} new)",
+            getLogger()->info("DHT Statistics: {} nodes in {} buckets, {} info hashes (+{} new)",
                         nodeCount, bucketCount, infoHashCount, newInfoHashes);
 
             // Perform a random lookup to keep the routing table fresh
             dht_hunter::dht::NodeID randomID = dht_hunter::dht::generateRandomNodeID();
-            dhtNode->findClosestNodes(randomID, [logger](const std::vector<std::shared_ptr<dht_hunter::dht::Node>>& nodes) {
-                logger->debug("Random lookup completed, found {} nodes", nodes.size());
+            dhtNode->findClosestNodes(randomID, [](const std::vector<std::shared_ptr<dht_hunter::dht::Node>>& nodes) {
+                getLogger()->debug("Random lookup completed, found {} nodes", nodes.size());
             });
 
             lastStatsTime = now;
@@ -180,16 +179,16 @@ int main(int argc, char* argv[]) {
     }
 
     // Stop the DHT node
-    logger->info("Stopping DHT node");
+    getLogger()->info("Stopping DHT node");
     dhtNode->stop();
 
     // Save the routing table
-    logger->info("Saving routing table");
+    getLogger()->info("Saving routing table");
     dhtNode->saveRoutingTable(configDir + "/routing_table.dat");
 
     // Flush logs before exit
     dht_hunter::logforge::LogForge::flush();
 
-    logger->info("DHT node stopped");
+    getLogger()->info("DHT node stopped");
     return 0;
 }
