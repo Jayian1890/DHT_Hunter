@@ -912,7 +912,7 @@ void DHTNode::checkTimeouts() {
         std::vector<std::pair<TransactionID, TimeoutCallback>> timedOutCallbacks;
 
         {
-            std::lock_guard<std::mutex> lock(m_transactionsMutex);
+            std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
             for (const auto& [idStr, transaction] : m_transactions) {
                 auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - transaction->timestamp).count();
                 if (elapsed >= TRANSACTION_TIMEOUT) {
