@@ -23,7 +23,7 @@ struct hash<dht_hunter::network::NetworkAddress> {
         } else if (address.getFamily() == dht_hunter::network::AddressFamily::IPv6) {
             // For IPv6, compute a hash from the 16-byte array
             const auto& ipv6 = address.getIPv6Address();
-            
+
             // Use FNV-1a hash algorithm
             size_t hash = 14695981039346656037ULL; // FNV offset basis
             for (size_t i = 0; i < ipv6.size(); ++i) {
@@ -36,6 +36,10 @@ struct hash<dht_hunter::network::NetworkAddress> {
             return 0;
         }
     }
+
+    // Required for C++11 hash requirements
+    typedef dht_hunter::network::NetworkAddress argument_type;
+    typedef std::size_t result_type;
 };
 
 /**
@@ -53,6 +57,10 @@ struct hash<dht_hunter::network::EndPoint> {
         size_t addressHash = std::hash<dht_hunter::network::NetworkAddress>{}(endpoint.getAddress());
         return addressHash ^ (static_cast<size_t>(endpoint.getPort()) + 0x9e3779b9 + (addressHash << 6) + (addressHash >> 2));
     }
+
+    // Required for C++11 hash requirements
+    typedef dht_hunter::network::EndPoint argument_type;
+    typedef std::size_t result_type;
 };
 
 } // namespace std

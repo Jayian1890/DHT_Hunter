@@ -1,36 +1,32 @@
 #include "dht_hunter/network/platform/socket_impl.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
-
+#include "dht_hunter/logforge/logger_macros.hpp"
 #ifdef _WIN32
+
+DEFINE_COMPONENT_LOGGER("Network", "SocketImpl")
 
 namespace dht_hunter::network {
 
+// Windows-specific socket initialization
 namespace {
-    // Get logger for socket implementation
-    auto logger = dht_hunter::logforge::LogForge::getLogger("SocketImpl");
-
-    // Initialize Winsock on Windows
     class WinsockInitializer {
     public:
         WinsockInitializer() {
             WSADATA wsaData;
             if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-                logger->critical("Failed to initialize Winsock");
                 throw std::runtime_error("Failed to initialize Winsock");
             }
-            logger->debug("Winsock initialized");
+            getLogger()->debug("Winsock initialized");
         }
-
         ~WinsockInitializer() {
             WSACleanup();
-            logger->debug("Winsock cleaned up");
+            getLogger()->debug("Winsock cleaned up");
         }
     };
-
     // Static instance to ensure initialization
     static WinsockInitializer winsockInitializer;
 }
-
+}
 // Windows-specific error code translation
 SocketError SocketImpl::translateError(int errorCode) {
     switch (errorCode) {
@@ -62,49 +58,48 @@ SocketError SocketImpl::translateError(int errorCode) {
             return SocketError::Unknown;
     }
 }
-
 // Windows-specific error code retrieval
 int SocketImpl::getLastErrorCode() {
     return WSAGetLastError();
 }
-
 // Windows-specific socket close
 void SocketImpl::close() {
     if (m_handle != INVALID_SOCKET_HANDLE) {
         closesocket(m_handle);
-        logger->debug("Socket closed: {}", static_cast<int>(m_handle));
+        getLogger()->debug("Socket closed: {}", static_cast<int>(m_handle));
         m_handle = INVALID_SOCKET_HANDLE;
     }
 }
-
 // Windows-specific non-blocking mode setting
 bool SocketImpl::setNonBlocking(bool nonBlocking) {
-    if (m_handle == INVALID_SOCKET_HANDLE) {
+    getLogger()->trace("Setting socket to {} mode", nonBlocking ? "non-blocking" : "blocking");
+    
+    if (!isValid()) {
+        getLogger()->error("Cannot set non-blocking mode on invalid socket");
         m_lastError = SocketError::InvalidSocket;
-        logger->error("Cannot set non-blocking mode on invalid socket");
         return false;
     }
-
+    
+    // Windows uses ioctlsocket with FIONBIO
     u_long mode = nonBlocking ? 1 : 0;
     if (ioctlsocket(m_handle, FIONBIO, &mode) != 0) {
-        m_lastError = translateError(getLastErrorCode());
-        logger->error("Failed to set non-blocking mode: {}", getErrorString(m_lastError));
+        int errorCode = WSAGetLastError();
+        getLogger()->error("Failed to set non-blocking mode: {}", getErrorString(translateError(errorCode)));
+        m_lastError = translateError(errorCode);
         return false;
     }
-
-    logger->debug("Socket set to {} mode", nonBlocking ? "non-blocking" : "blocking");
+    
+    getLogger()->debug("Successfully set socket to {} mode", 
+                     nonBlocking ? "non-blocking" : "blocking");
     return true;
 }
-
 // Windows-specific TCP keep alive implementation
 bool TCPSocketImpl::setKeepAlive(bool keepAlive, int /* idleTime */, int /* interval */, int /* count */) {
     auto tcpLogger = dht_hunter::logforge::LogForge::getLogger("TCPSocketImpl");
-
     if (!isValid()) {
         tcpLogger->error("Cannot set keep alive on invalid socket");
         return false;
     }
-
     // Enable/disable keep alive
     int value = keepAlive ? 1 : 0;
     if (setsockopt(getHandle(), SOL_SOCKET, SO_KEEPALIVE,
@@ -113,7 +108,6 @@ bool TCPSocketImpl::setKeepAlive(bool keepAlive, int /* idleTime */, int /* inte
                      Socket::getErrorString(translateError(getLastErrorCode())));
         return false;
     }
-
     if (keepAlive) {
         // Windows-specific keep alive settings are commented out to avoid unused parameter warnings
         // Uncomment and implement as needed for specific platforms
@@ -123,31 +117,25 @@ bool TCPSocketImpl::setKeepAlive(bool keepAlive, int /* idleTime */, int /* inte
             ULONG keepalivetime;
             ULONG keepaliveinterval;
         };
-
         int keepIdleTime = idleTime;
         int keepInterval = interval;
-
         tcp_keepalive keepAliveSettings;
         keepAliveSettings.onoff = 1;
         keepAliveSettings.keepalivetime = keepIdleTime * 1000;
         keepAliveSettings.keepaliveinterval = keepInterval * 1000;
-
         DWORD bytesReturned = 0;
         // SIO_KEEPALIVE_VALS is 0x98000004
         if (WSAIoctl(getHandle(), 0x98000004, &keepAliveSettings,
                     sizeof(keepAliveSettings), nullptr, 0, &bytesReturned,
                     nullptr, nullptr) == SOCKET_ERROR) {
-            tcpLogger->error("Failed to set keep alive settings: {}",
+            getLogger()->error("Failed to set keep alive settings: {}",
                          Socket::getErrorString(translateError(getLastErrorCode())));
             return false;
         }
         */
     }
-
-    tcpLogger->debug("Socket keep alive {}", keepAlive ? "enabled" : "disabled");
+    getLogger()->debug("Socket keep alive {}", keepAlive ? "enabled" : "disabled");
     return true;
 }
-
 } // namespace dht_hunter::network
-
 #endif // _WIN32

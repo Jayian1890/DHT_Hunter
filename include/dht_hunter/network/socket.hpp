@@ -100,6 +100,24 @@ public:
     virtual int receive(uint8_t* buffer, size_t maxLength) = 0;
 
     /**
+     * @brief Sends data to a specific endpoint.
+     * @param data Pointer to the data to send.
+     * @param length Length of the data to send.
+     * @param endpoint The endpoint to send to.
+     * @return Number of bytes sent, or -1 on error.
+     */
+    virtual int sendTo(const uint8_t* data, size_t length, const EndPoint& endpoint) = 0;
+
+    /**
+     * @brief Receives data from a specific endpoint.
+     * @param buffer Buffer to store received data.
+     * @param maxLength Maximum length of data to receive.
+     * @param[out] endpoint The endpoint that sent the data.
+     * @return Number of bytes received, or -1 on error.
+     */
+    virtual int receiveFrom(uint8_t* buffer, size_t maxLength, EndPoint& endpoint) = 0;
+
+    /**
      * @brief Sets the socket to blocking or non-blocking mode.
      * @param nonBlocking True for non-blocking mode, false for blocking mode.
      * @return True if successful, false otherwise.

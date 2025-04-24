@@ -47,11 +47,18 @@ using AsyncConnectCallback = std::function<void(Socket* socket, SocketError erro
 class AsyncSocket {
 public:
     /**
-     * @brief Constructor.
-     * @param socket The socket to wrap.
+     * @brief Constructor with unique_ptr.
+     * @param socket The socket to wrap (unique_ptr).
      * @param multiplexer The I/O multiplexer to use.
      */
     AsyncSocket(std::unique_ptr<Socket> socket, std::shared_ptr<IOMultiplexer> multiplexer);
+
+    /**
+     * @brief Constructor with shared_ptr.
+     * @param socket The socket to wrap (shared_ptr).
+     * @param multiplexer The I/O multiplexer to use.
+     */
+    AsyncSocket(std::shared_ptr<Socket> socket, std::shared_ptr<IOMultiplexer> multiplexer);
 
     /**
      * @brief Destructor.
@@ -71,7 +78,7 @@ public:
      * @param callback The callback to invoke when the read completes.
      * @return True if the read was initiated successfully, false otherwise.
      */
-    bool asyncRead(uint8_t* buffer, int size, AsyncReadCallback callback);
+    bool asyncRead(uint8_t* buffer, size_t size, AsyncReadCallback callback);
 
     /**
      * @brief Asynchronously writes data to the socket.
@@ -115,7 +122,7 @@ private:
      */
     struct PendingRead {
         uint8_t* buffer;           ///< Buffer to read into
-        int size;                  ///< Maximum number of bytes to read
+        size_t size;               ///< Maximum number of bytes to read
         AsyncReadCallback callback; ///< Callback to invoke when the read completes
     };
 
@@ -124,11 +131,16 @@ private:
      */
     struct PendingWrite {
         std::vector<uint8_t> data; ///< Data to write
-        int offset;               ///< Offset into the data
+        size_t offset;            ///< Offset into the data
         AsyncWriteCallback callback; ///< Callback to invoke when the write completes
     };
 
-    std::unique_ptr<Socket> m_socket;                ///< The underlying socket
+    // Custom deleter for the socket
+    struct NoDelete {
+        void operator()(Socket*) const {}
+    };
+
+    std::unique_ptr<Socket, NoDelete> m_socket;       ///< The underlying socket
     std::shared_ptr<IOMultiplexer> m_multiplexer;    ///< The I/O multiplexer
     PendingRead m_pendingRead;                      ///< The pending read operation
     PendingWrite m_pendingWrite;                    ///< The pending write operation

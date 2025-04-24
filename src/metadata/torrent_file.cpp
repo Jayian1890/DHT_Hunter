@@ -1,5 +1,6 @@
 #include "dht_hunter/metadata/torrent_file.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
+#include "dht_hunter/logforge/logger_macros.hpp"
 #include "dht_hunter/util/hash.hpp"
 
 #include <fstream>
@@ -8,11 +9,9 @@
 #include <algorithm>
 #include <chrono>
 
-namespace dht_hunter::metadata {
+DEFINE_COMPONENT_LOGGER("Metadata", "TorrentFile")
 
-namespace {
-    auto logger = dht_hunter::logforge::LogForge::getLogger("Metadata.TorrentFile");
-}
+namespace dht_hunter::metadata {
 
 TorrentFile::TorrentFile()
     : m_pieceLength(0),
@@ -29,38 +28,38 @@ TorrentFile::TorrentFile(const bencode::BencodeValue& metadata, const std::strin
       m_length(0),
       m_creationDate(-1),
       m_isPrivate(false) {
-    
+
     // Check if the metadata is a dictionary
-    if (!metadata.isDictionary()) {
-        logger->error("Metadata is not a dictionary");
+    if (metadata.getDictionary().empty()) {
+        getLogger()->error("Metadata is not a dictionary");
         return;
     }
-    
+
     // Get the info dictionary
     auto info = metadata.getDictionary().find("info");
-    if (info == metadata.getDictionary().end() || !info->second.isDictionary()) {
-        logger->error("Metadata does not contain an info dictionary");
+    if (info == metadata.getDictionary().end() || !info->second || info->second->getDictionary().empty()) {
+        getLogger()->error("Metadata does not contain an info dictionary");
         return;
     }
-    
+
     // Parse the info dictionary
-    parseInfo(info->second);
-    
+    parseInfo(*info->second);
+
     // Get the announce URL
     auto announce = metadata.getDictionary().find("announce");
-    if (announce != metadata.getDictionary().end() && announce->second.isString()) {
-        m_announce = announce->second.getString();
+    if (announce != metadata.getDictionary().end() && announce->second->isString()) {
+        m_announce = announce->second->getString();
     }
-    
+
     // Get the announce list
     auto announceList = metadata.getDictionary().find("announce-list");
-    if (announceList != metadata.getDictionary().end() && announceList->second.isList()) {
-        for (const auto& tier : announceList->second.getList()) {
-            if (tier.isList()) {
+    if (announceList != metadata.getDictionary().end() && announceList->second->isList()) {
+        for (const auto& tier : announceList->second->getList()) {
+            if (tier->isList()) {
                 std::vector<std::string> tierList;
-                for (const auto& url : tier.getList()) {
-                    if (url.isString()) {
-                        tierList.push_back(url.getString());
+                for (const auto& url : tier->getList()) {
+                    if (url->isString()) {
+                        tierList.push_back(url->getString());
                     }
                 }
                 if (!tierList.empty()) {
@@ -69,32 +68,32 @@ TorrentFile::TorrentFile(const bencode::BencodeValue& metadata, const std::strin
             }
         }
     }
-    
+
     // Get the creation date
     auto creationDate = metadata.getDictionary().find("creation date");
-    if (creationDate != metadata.getDictionary().end() && creationDate->second.isInteger()) {
-        m_creationDate = creationDate->second.getInteger();
+    if (creationDate != metadata.getDictionary().end() && creationDate->second->isInteger()) {
+        m_creationDate = creationDate->second->getInteger();
     }
-    
+
     // Get the comment
     auto comment = metadata.getDictionary().find("comment");
-    if (comment != metadata.getDictionary().end() && comment->second.isString()) {
-        m_comment = comment->second.getString();
+    if (comment != metadata.getDictionary().end() && comment->second->isString()) {
+        m_comment = comment->second->getString();
     }
-    
+
     // Get the created by
     auto createdBy = metadata.getDictionary().find("created by");
-    if (createdBy != metadata.getDictionary().end() && createdBy->second.isString()) {
-        m_createdBy = createdBy->second.getString();
+    if (createdBy != metadata.getDictionary().end() && createdBy->second->isString()) {
+        m_createdBy = createdBy->second->getString();
     }
-    
+
     // Get the encoding
     auto encoding = metadata.getDictionary().find("encoding");
-    if (encoding != metadata.getDictionary().end() && encoding->second.isString()) {
-        m_encoding = encoding->second.getString();
+    if (encoding != metadata.getDictionary().end() && encoding->second->isString()) {
+        m_encoding = encoding->second->getString();
     }
-    
-    logger->debug("Parsed torrent file: {}", m_name);
+
+    getLogger()->debug("Parsed torrent file: {}", m_name);
 }
 
 bool TorrentFile::loadFromFile(const std::filesystem::path& filePath) {
@@ -102,40 +101,41 @@ bool TorrentFile::loadFromFile(const std::filesystem::path& filePath) {
         // Open the file
         std::ifstream file(filePath, std::ios::binary);
         if (!file) {
-            logger->error("Failed to open file: {}", filePath.string());
+            getLogger()->error("Failed to open file: {}", filePath.string());
             return false;
         }
-        
+
         // Read the file contents
         std::stringstream buffer;
         buffer << file.rdbuf();
         std::string contents = buffer.str();
-        
+
         // Parse the bencode data
-        bencode::BencodeParser parser;
-        auto result = parser.parse(contents);
-        if (!result.first) {
-            logger->error("Failed to parse torrent file: {}", result.second);
+        bencode::BencodeDecoder decoder;
+        auto result = decoder.decode(contents);
+        if (!result) {
+            getLogger()->error("Failed to parse torrent file");
             return false;
         }
-        
+
         // Calculate the info hash
-        auto info = result.first.getDictionary().find("info");
-        if (info == result.first.getDictionary().end() || !info->second.isDictionary()) {
-            logger->error("Torrent file does not contain an info dictionary");
+        auto info = result->getDictionary().find("info");
+        if (info == result->getDictionary().end() || !info->second->isDictionary()) {
+            getLogger()->error("Torrent file does not contain an info dictionary");
             return false;
         }
-        
-        std::string infoStr = bencode::BencodeEncoder::encode(info->second);
-        std::string infoHash = util::bytesToHex(util::sha1(infoStr));
-        
+
+        std::string infoStr = bencode::BencodeEncoder::encode(*info->second);
+        auto hash = util::sha1(infoStr);
+        std::string infoHash = util::bytesToHex(hash.data(), hash.size());
+
         // Create a new torrent file from the metadata
-        *this = TorrentFile(result.first, infoHash);
-        
-        logger->debug("Loaded torrent file: {}", filePath.string());
+        *this = TorrentFile(*result, infoHash);
+
+        getLogger()->debug("Loaded torrent file: {}", filePath.string());
         return true;
     } catch (const std::exception& e) {
-        logger->error("Exception while loading torrent file: {}", e.what());
+        getLogger()->error("Exception while loading torrent file: {}", e.what());
         return false;
     }
 }
@@ -144,24 +144,24 @@ bool TorrentFile::saveToFile(const std::filesystem::path& filePath) const {
     try {
         // Create the metadata
         auto metadata = getRawMetadata();
-        
+
         // Encode the metadata
         std::string encoded = bencode::BencodeEncoder::encode(metadata);
-        
+
         // Open the file
         std::ofstream file(filePath, std::ios::binary);
         if (!file) {
-            logger->error("Failed to open file for writing: {}", filePath.string());
+            getLogger()->error("Failed to open file for writing: {}", filePath.string());
             return false;
         }
-        
+
         // Write the encoded metadata to the file
-        file.write(encoded.c_str(), encoded.size());
-        
-        logger->debug("Saved torrent file: {}", filePath.string());
+        file.write(encoded.c_str(), static_cast<std::streamsize>(encoded.size()));
+
+        getLogger()->debug("Saved torrent file: {}", filePath.string());
         return true;
     } catch (const std::exception& e) {
-        logger->error("Exception while saving torrent file: {}", e.what());
+        getLogger()->error("Exception while saving torrent file: {}", e.what());
         return false;
     }
 }
@@ -198,7 +198,7 @@ size_t TorrentFile::getPieceCount() const {
     if (m_pieceLength == 0) {
         return 0;
     }
-    
+
     uint64_t totalSize = getTotalSize();
     return static_cast<size_t>((totalSize + m_pieceLength - 1) / m_pieceLength);
 }
@@ -207,14 +207,14 @@ std::string TorrentFile::getPieceHash(size_t index) const {
     if (index >= getPieceCount()) {
         return "";
     }
-    
+
     size_t hashSize = 20; // SHA-1 hash size
     size_t offset = index * hashSize;
-    
+
     if (offset + hashSize > m_pieces.size()) {
         return "";
     }
-    
+
     return m_pieces.substr(offset, hashSize);
 }
 
@@ -268,12 +268,12 @@ void TorrentFile::setPieces(const std::string& pieces) {
 
 void TorrentFile::addFile(const std::string& path, uint64_t length, const std::string& md5sum) {
     m_isMultiFile = true;
-    
+
     TorrentFileInfo fileInfo;
     fileInfo.path = path;
     fileInfo.length = length;
     fileInfo.md5sum = md5sum;
-    
+
     m_files.push_back(fileInfo);
 }
 
@@ -295,7 +295,7 @@ void TorrentFile::addAnnounce(const std::string& announce, size_t tier) {
     while (m_announceList.size() <= tier) {
         m_announceList.push_back({});
     }
-    
+
     // Add the announce URL to the specified tier
     m_announceList[tier].push_back(announce);
 }
@@ -321,122 +321,123 @@ void TorrentFile::setPrivate(bool isPrivate) {
 }
 
 bencode::BencodeValue TorrentFile::getRawMetadata() const {
-    bencode::BencodeValue metadata(bencode::BencodeValue::Type::Dictionary);
-    
+    // Create a dictionary for the metadata
+    bencode::BencodeValue metadata;
+
     // Add the announce URL
     if (!m_announce.empty()) {
-        metadata.getDictionary()["announce"] = bencode::BencodeValue(m_announce);
+        metadata.setString("announce", m_announce);
     }
-    
+
     // Add the announce list
     if (!m_announceList.empty()) {
-        bencode::BencodeValue announceList(bencode::BencodeValue::Type::List);
-        
+        auto announceList = std::make_shared<bencode::BencodeValue>();
+
         for (const auto& tier : m_announceList) {
-            bencode::BencodeValue tierList(bencode::BencodeValue::Type::List);
-            
+            auto tierList = std::make_shared<bencode::BencodeValue>();
+
             for (const auto& url : tier) {
-                tierList.getList().push_back(bencode::BencodeValue(url));
+                tierList->add(std::make_shared<bencode::BencodeValue>(url));
             }
-            
-            announceList.getList().push_back(tierList);
+
+            announceList->add(tierList);
         }
-        
-        metadata.getDictionary()["announce-list"] = announceList;
+
+        metadata.set("announce-list", announceList);
     }
-    
+
     // Add the creation date
     if (m_creationDate >= 0) {
-        metadata.getDictionary()["creation date"] = bencode::BencodeValue(m_creationDate);
+        metadata.setInteger("creation date", m_creationDate);
     }
-    
+
     // Add the comment
     if (!m_comment.empty()) {
-        metadata.getDictionary()["comment"] = bencode::BencodeValue(m_comment);
+        metadata.setString("comment", m_comment);
     }
-    
+
     // Add the created by
     if (!m_createdBy.empty()) {
-        metadata.getDictionary()["created by"] = bencode::BencodeValue(m_createdBy);
+        metadata.setString("created by", m_createdBy);
     }
-    
+
     // Add the encoding
     if (!m_encoding.empty()) {
-        metadata.getDictionary()["encoding"] = bencode::BencodeValue(m_encoding);
+        metadata.setString("encoding", m_encoding);
     }
-    
+
     // Create the info dictionary
-    bencode::BencodeValue info(bencode::BencodeValue::Type::Dictionary);
-    
+    auto info = std::make_shared<bencode::BencodeValue>();
+
     // Add the name
-    info.getDictionary()["name"] = bencode::BencodeValue(m_name);
-    
+    info->setString("name", m_name);
+
     // Add the piece length
-    info.getDictionary()["piece length"] = bencode::BencodeValue(static_cast<int64_t>(m_pieceLength));
-    
+    info->setInteger("piece length", static_cast<int64_t>(m_pieceLength));
+
     // Add the pieces
-    info.getDictionary()["pieces"] = bencode::BencodeValue(m_pieces);
-    
+    info->setString("pieces", m_pieces);
+
     // Add the private flag
     if (m_isPrivate) {
-        info.getDictionary()["private"] = bencode::BencodeValue(static_cast<int64_t>(1));
+        info->setInteger("private", 1);
     }
-    
+
     // Add the files or length
     if (m_isMultiFile) {
-        bencode::BencodeValue files(bencode::BencodeValue::Type::List);
-        
+        auto files = std::make_shared<bencode::BencodeValue>();
+
         for (const auto& file : m_files) {
-            bencode::BencodeValue fileDict(bencode::BencodeValue::Type::Dictionary);
-            
+            auto fileDict = std::make_shared<bencode::BencodeValue>();
+
             // Add the length
-            fileDict.getDictionary()["length"] = bencode::BencodeValue(static_cast<int64_t>(file.length));
-            
+            fileDict->setInteger("length", static_cast<int64_t>(file.length));
+
             // Add the MD5 sum
             if (!file.md5sum.empty()) {
-                fileDict.getDictionary()["md5sum"] = bencode::BencodeValue(file.md5sum);
+                fileDict->setString("md5sum", file.md5sum);
             }
-            
+
             // Add the path
-            bencode::BencodeValue path(bencode::BencodeValue::Type::List);
-            
+            auto path = std::make_shared<bencode::BencodeValue>();
+
             // Split the path by '/'
             std::string pathStr = file.path;
             std::replace(pathStr.begin(), pathStr.end(), '\\', '/');
-            
+
             size_t pos = 0;
             std::string token;
             while ((pos = pathStr.find('/')) != std::string::npos) {
                 token = pathStr.substr(0, pos);
                 if (!token.empty()) {
-                    path.getList().push_back(bencode::BencodeValue(token));
+                    path->add(std::make_shared<bencode::BencodeValue>(token));
                 }
                 pathStr.erase(0, pos + 1);
             }
-            
+
             if (!pathStr.empty()) {
-                path.getList().push_back(bencode::BencodeValue(pathStr));
+                path->add(std::make_shared<bencode::BencodeValue>(pathStr));
             }
-            
-            fileDict.getDictionary()["path"] = path;
-            
-            files.getList().push_back(fileDict);
+
+            fileDict->set("path", path);
+
+            files->add(fileDict);
         }
-        
-        info.getDictionary()["files"] = files;
+
+        info->set("files", files);
     } else {
         // Add the length
-        info.getDictionary()["length"] = bencode::BencodeValue(static_cast<int64_t>(m_length));
-        
+        info->setInteger("length", static_cast<int64_t>(m_length));
+
         // Add the MD5 sum
         if (!m_md5sum.empty()) {
-            info.getDictionary()["md5sum"] = bencode::BencodeValue(m_md5sum);
+            info->setString("md5sum", m_md5sum);
         }
     }
-    
+
     // Add the info dictionary to the metadata
-    metadata.getDictionary()["info"] = info;
-    
+    metadata.set("info", info);
+
     return metadata;
 }
 
@@ -444,224 +445,225 @@ std::string TorrentFile::calculateInfoHash() const {
     // Get the info dictionary
     auto metadata = getRawMetadata();
     auto info = metadata.getDictionary().find("info");
-    if (info == metadata.getDictionary().end() || !info->second.isDictionary()) {
-        logger->error("Metadata does not contain an info dictionary");
+    if (info == metadata.getDictionary().end() || !info->second || info->second->getDictionary().empty()) {
+        getLogger()->error("Metadata does not contain an info dictionary");
         return "";
     }
-    
+
     // Encode the info dictionary
-    std::string infoStr = bencode::BencodeEncoder::encode(info->second);
-    
+    std::string infoStr = bencode::BencodeEncoder::encode(*info->second);
+
     // Calculate the SHA-1 hash
-    return util::bytesToHex(util::sha1(infoStr));
+    auto hash = util::sha1(infoStr);
+    return util::bytesToHex(hash.data(), hash.size());
 }
 
 bool TorrentFile::validate() const {
     // Check if the name is set
     if (m_name.empty()) {
-        logger->error("Torrent name is not set");
+        getLogger()->error("Torrent name is not set");
         return false;
     }
-    
+
     // Check if the piece length is set
     if (m_pieceLength == 0) {
-        logger->error("Piece length is not set");
+        getLogger()->error("Piece length is not set");
         return false;
     }
-    
+
     // Check if the pieces are set
     if (m_pieces.empty()) {
-        logger->error("Pieces are not set");
+        getLogger()->error("Pieces are not set");
         return false;
     }
-    
+
     // Check if the pieces length is a multiple of 20 (SHA-1 hash size)
     if (m_pieces.size() % 20 != 0) {
-        logger->error("Pieces length is not a multiple of 20");
+        getLogger()->error("Pieces length is not a multiple of 20");
         return false;
     }
-    
+
     // Check if the files or length is set
     if (m_isMultiFile) {
         if (m_files.empty()) {
-            logger->error("No files in multi-file torrent");
+            getLogger()->error("No files in multi-file torrent");
             return false;
         }
-        
+
         for (const auto& file : m_files) {
             if (file.path.empty()) {
-                logger->error("File path is empty");
+                getLogger()->error("File path is empty");
                 return false;
             }
-            
+
             if (file.length == 0) {
-                logger->error("File length is 0");
+                getLogger()->error("File length is 0");
                 return false;
             }
         }
     } else {
         if (m_length == 0) {
-            logger->error("Length is not set");
+            getLogger()->error("Length is not set");
             return false;
         }
     }
-    
+
     return true;
 }
 
 std::string TorrentFile::toString() const {
     std::stringstream ss;
-    
+
     ss << "Torrent File:" << std::endl;
     ss << "  Name: " << m_name << std::endl;
     ss << "  Info Hash: " << m_infoHash << std::endl;
     ss << "  Piece Length: " << m_pieceLength << " bytes" << std::endl;
     ss << "  Piece Count: " << getPieceCount() << std::endl;
-    
+
     if (m_isMultiFile) {
         ss << "  Files: " << m_files.size() << std::endl;
-        
+
         uint64_t totalSize = 0;
         for (const auto& file : m_files) {
             totalSize += file.length;
             ss << "    " << file.path << " (" << file.length << " bytes)" << std::endl;
         }
-        
+
         ss << "  Total Size: " << totalSize << " bytes" << std::endl;
     } else {
         ss << "  Length: " << m_length << " bytes" << std::endl;
     }
-    
+
     if (!m_announce.empty()) {
         ss << "  Announce: " << m_announce << std::endl;
     }
-    
+
     if (!m_announceList.empty()) {
         ss << "  Announce List:" << std::endl;
-        
+
         for (size_t i = 0; i < m_announceList.size(); ++i) {
             ss << "    Tier " << i << ":" << std::endl;
-            
+
             for (const auto& url : m_announceList[i]) {
                 ss << "      " << url << std::endl;
             }
         }
     }
-    
+
     if (m_creationDate >= 0) {
         // Convert the UNIX timestamp to a human-readable date
         std::time_t time = static_cast<std::time_t>(m_creationDate);
         std::tm* tm = std::gmtime(&time);
-        
+
         char buffer[32];
         std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S UTC", tm);
-        
+
         ss << "  Creation Date: " << buffer << std::endl;
     }
-    
+
     if (!m_comment.empty()) {
         ss << "  Comment: " << m_comment << std::endl;
     }
-    
+
     if (!m_createdBy.empty()) {
         ss << "  Created By: " << m_createdBy << std::endl;
     }
-    
+
     if (!m_encoding.empty()) {
         ss << "  Encoding: " << m_encoding << std::endl;
     }
-    
+
     if (m_isPrivate) {
         ss << "  Private: Yes" << std::endl;
     }
-    
+
     return ss.str();
 }
 
 void TorrentFile::parseInfo(const bencode::BencodeValue& info) {
     // Get the name
     auto name = info.getDictionary().find("name");
-    if (name != info.getDictionary().end() && name->second.isString()) {
-        m_name = name->second.getString();
+    if (name != info.getDictionary().end() && name->second && name->second->isString()) {
+        m_name = name->second->getString();
     }
-    
+
     // Get the piece length
     auto pieceLength = info.getDictionary().find("piece length");
-    if (pieceLength != info.getDictionary().end() && pieceLength->second.isInteger()) {
-        m_pieceLength = static_cast<uint64_t>(pieceLength->second.getInteger());
+    if (pieceLength != info.getDictionary().end() && pieceLength->second && pieceLength->second->isInteger()) {
+        m_pieceLength = static_cast<uint64_t>(pieceLength->second->getInteger());
     }
-    
+
     // Get the pieces
     auto pieces = info.getDictionary().find("pieces");
-    if (pieces != info.getDictionary().end() && pieces->second.isString()) {
-        m_pieces = pieces->second.getString();
+    if (pieces != info.getDictionary().end() && pieces->second && pieces->second->isString()) {
+        m_pieces = pieces->second->getString();
     }
-    
+
     // Get the private flag
     auto isPrivate = info.getDictionary().find("private");
-    if (isPrivate != info.getDictionary().end() && isPrivate->second.isInteger()) {
-        m_isPrivate = (isPrivate->second.getInteger() == 1);
+    if (isPrivate != info.getDictionary().end() && isPrivate->second && isPrivate->second->isInteger()) {
+        m_isPrivate = (isPrivate->second->getInteger() == 1);
     }
-    
+
     // Check if this is a multi-file torrent
     auto files = info.getDictionary().find("files");
-    if (files != info.getDictionary().end() && files->second.isList()) {
+    if (files != info.getDictionary().end() && files->second && !files->second->getList().empty()) {
         m_isMultiFile = true;
-        parseFiles(files->second);
+        parseFiles(*files->second);
     } else {
         m_isMultiFile = false;
-        
+
         // Get the length
         auto length = info.getDictionary().find("length");
-        if (length != info.getDictionary().end() && length->second.isInteger()) {
-            m_length = static_cast<uint64_t>(length->second.getInteger());
+        if (length != info.getDictionary().end() && length->second && length->second->isInteger()) {
+            m_length = static_cast<uint64_t>(length->second->getInteger());
         }
-        
+
         // Get the MD5 sum
         auto md5sum = info.getDictionary().find("md5sum");
-        if (md5sum != info.getDictionary().end() && md5sum->second.isString()) {
-            m_md5sum = md5sum->second.getString();
+        if (md5sum != info.getDictionary().end() && md5sum->second && md5sum->second->isString()) {
+            m_md5sum = md5sum->second->getString();
         }
     }
 }
 
 void TorrentFile::parseFiles(const bencode::BencodeValue& files) {
     for (const auto& file : files.getList()) {
-        if (!file.isDictionary()) {
+        if (!file || file->getDictionary().empty()) {
             continue;
         }
-        
+
         TorrentFileInfo fileInfo;
-        
+
         // Get the length
-        auto length = file.getDictionary().find("length");
-        if (length != file.getDictionary().end() && length->second.isInteger()) {
-            fileInfo.length = static_cast<uint64_t>(length->second.getInteger());
+        auto length = file->getDictionary().find("length");
+        if (length != file->getDictionary().end() && length->second && length->second->isInteger()) {
+            fileInfo.length = static_cast<uint64_t>(length->second->getInteger());
         }
-        
+
         // Get the MD5 sum
-        auto md5sum = file.getDictionary().find("md5sum");
-        if (md5sum != file.getDictionary().end() && md5sum->second.isString()) {
-            fileInfo.md5sum = md5sum->second.getString();
+        auto md5sum = file->getDictionary().find("md5sum");
+        if (md5sum != file->getDictionary().end() && md5sum->second && md5sum->second->isString()) {
+            fileInfo.md5sum = md5sum->second->getString();
         }
-        
+
         // Get the path
-        auto path = file.getDictionary().find("path");
-        if (path != file.getDictionary().end() && path->second.isList()) {
+        auto path = file->getDictionary().find("path");
+        if (path != file->getDictionary().end() && path->second && !path->second->getList().empty()) {
             std::string pathStr;
-            
-            for (const auto& pathPart : path->second.getList()) {
-                if (pathPart.isString()) {
+
+            for (const auto& pathPart : path->second->getList()) {
+                if (pathPart && pathPart->isString()) {
                     if (!pathStr.empty()) {
                         pathStr += "/";
                     }
-                    pathStr += pathPart.getString();
+                    pathStr += pathPart->getString();
                 }
             }
-            
+
             fileInfo.path = pathStr;
         }
-        
+
         if (!fileInfo.path.empty() && fileInfo.length > 0) {
             m_files.push_back(fileInfo);
         }

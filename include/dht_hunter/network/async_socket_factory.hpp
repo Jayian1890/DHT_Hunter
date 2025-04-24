@@ -3,6 +3,8 @@
 #include "async_socket.hpp"
 #include "socket_factory.hpp"
 #include "io_multiplexer.hpp"
+#include "socket.hpp"
+#include "network_address.hpp"
 #include <memory>
 
 namespace dht_hunter::network {

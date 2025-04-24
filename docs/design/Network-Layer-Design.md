@@ -25,8 +25,8 @@ The network layer of DHT-Hunter is responsible for all network communication, pr
 4. **Management Features**
    - [x] IP address and port management
    - [x] Rate limiting and throttling mechanisms
-   - [ ] Connection pooling and reuse
-   - [ ] Timeout handling and retry logic
+   - [x] Connection pooling and reuse
+   - [x] Timeout handling and retry logic
 
 ## Architecture
 
@@ -297,9 +297,9 @@ static SignalHandler g_signalHandler;
 
 1. **Unit Tests**
    - [x] Socket creation and basic operations
-   - [ ] Address parsing and validation
-   - [ ] Buffer management
-   - [ ] Rate limiting algorithms
+   - [x] Address parsing and validation
+   - [x] Buffer management
+   - [x] Rate limiting algorithms
 
 2. **Integration Tests**
    - [ ] End-to-end UDP message exchange

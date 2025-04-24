@@ -13,21 +13,87 @@ else()
   add_compile_options(
     -Wall -Wextra -Wpedantic -Werror
     -Wconversion -Wshadow -Wnon-virtual-dtor
-    -Wold-style-cast -Wcast-align -Wunused
+    -Wold-style-cast -Wcast-align
     -Woverloaded-virtual -Wdouble-promotion -Wformat=2
+    -Wno-unused-function  # Disable unused function warning for logger macros
   )
 endif()
 
+# Enable AddressSanitizer for memory debugging
+option(ENABLE_ASAN "Enable AddressSanitizer for memory debugging" OFF)
+if(ENABLE_ASAN)
+  if(APPLE OR UNIX)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address)
+  endif()
+endif()
+
+# Create a core library target
+add_library(dht_hunter_core INTERFACE)
+
 # Include directories
-include_directories(include)
+target_include_directories(dht_hunter_core INTERFACE
+  ${CMAKE_SOURCE_DIR}/include
+)
 
 # Add subdirectories
 add_subdirectory(src)
 
-# Testing has been removed from this project
+# Build tests
+option(BUILD_TESTS "Build the tests" ON)
+if(BUILD_TESTS)
+  add_subdirectory(test)
+endif()
 
-# Build examples
-option(BUILD_EXAMPLES "Build the examples" ON)
-if(BUILD_EXAMPLES)
-  add_subdirectory(examples)
+# Note: The executable is now defined in src/CMakeLists.txt
+# No need to define it here again
+
+# Install targets
+install(TARGETS dht_hunter
+    RUNTIME DESTINATION bin
+)
+
+# Fix FetchContent timestamp warning
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+  cmake_policy(SET CMP0135 NEW)
+endif()
+
+# Generate compile_commands.json for IDE integration
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Add CMake presets support
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19")
+  # Optional: Create a basic CMakePresets.json if it doesn't exist
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/CMakePresets.json")
+    file(WRITE "${CMAKE_SOURCE_DIR}/CMakePresets.json" 
+    [[{
+      "version": 3,
+      "configurePresets": [
+        {
+          "name": "default",
+          "displayName": "Default Config",
+          "description": "Default build using Ninja generator",
+          "generator": "Ninja",
+          "binaryDir": "${sourceDir}/build"
+        },
+        {
+          "name": "debug",
+          "inherits": "default",
+          "displayName": "Debug Build",
+          "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "Debug",
+            "ENABLE_ASAN": "ON"
+          }
+        },
+        {
+          "name": "release",
+          "inherits": "default",
+          "displayName": "Release Build",
+          "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "Release"
+          }
+        }
+      ]
+    }]])
+  endif()
 endif()

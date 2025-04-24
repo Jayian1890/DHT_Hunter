@@ -1,5 +1,6 @@
 # Add subdirectories for each component
 add_subdirectory(logforge)
+add_subdirectory(util)
 add_subdirectory(network)
 add_subdirectory(dht)
 add_subdirectory(bencode)
@@ -11,10 +12,11 @@ add_subdirectory(storage)
 # Main executable
 add_executable(dht_hunter main.cpp)
 
-# Link with all libraries
+# Minimal dependencies
 target_link_libraries(dht_hunter
     PRIVATE
     dht_hunter_logforge
+    dht_hunter_util
     dht_hunter_network
     dht_hunter_dht
     dht_hunter_bencode
@@ -34,3 +36,5 @@ target_include_directories(dht_hunter
 install(TARGETS dht_hunter
     RUNTIME DESTINATION bin
 )
+
+# DHT Server executable has been removed

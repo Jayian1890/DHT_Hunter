@@ -123,6 +123,24 @@ public:
     explicit TCPSocketImpl(SocketHandle handle);
 
     /**
+     * @brief Sends data to a specific endpoint.
+     * @param data Pointer to the data to send.
+     * @param length Length of the data to send.
+     * @param destination The destination endpoint.
+     * @return Number of bytes sent, or -1 on error.
+     */
+    int sendTo(const uint8_t* data, size_t length, const EndPoint& destination) override;
+
+    /**
+     * @brief Receives data from a socket and gets the source endpoint.
+     * @param buffer Buffer to store received data.
+     * @param maxLength Maximum length of data to receive.
+     * @param source Will be filled with the source endpoint.
+     * @return Number of bytes received, or -1 on error.
+     */
+    int receiveFrom(uint8_t* buffer, size_t maxLength, EndPoint& source) override;
+
+    /**
      * @brief Listens for incoming connections.
      * @param backlog The maximum length of the queue of pending connections.
      * @return True if successful, false otherwise.
@@ -187,7 +205,7 @@ public:
      * @param destination The destination endpoint.
      * @return Number of bytes sent, or -1 on error.
      */
-    int sendTo(const uint8_t* data, size_t length, const EndPoint& destination);
+    int sendTo(const uint8_t* data, size_t length, const EndPoint& destination) override;
 
     /**
      * @brief Receives data from a socket and gets the source endpoint.
@@ -196,7 +214,7 @@ public:
      * @param source Will be filled with the source endpoint.
      * @return Number of bytes received, or -1 on error.
      */
-    int receiveFrom(uint8_t* buffer, size_t maxLength, EndPoint& source);
+    int receiveFrom(uint8_t* buffer, size_t maxLength, EndPoint& source) override;
 
     /**
      * @brief Sets the broadcast option.

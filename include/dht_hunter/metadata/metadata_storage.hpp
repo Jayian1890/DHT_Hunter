@@ -18,12 +18,15 @@ namespace dht_hunter::metadata {
  * @brief Configuration for the metadata storage
  */
 struct MetadataStorageConfig {
-    std::string storageDirectory = "metadata";      ///< Directory to store metadata
-    bool persistMetadata = true;                    ///< Whether to persist metadata to disk
-    bool createTorrentFiles = true;                 ///< Whether to create torrent files
-    std::string torrentFilesDirectory = "torrents"; ///< Directory to save torrent files
-    uint32_t maxMetadataItems = 100000;             ///< Maximum number of metadata items to store
-    bool deduplicateMetadata = true;                ///< Whether to deduplicate metadata
+    std::string storageDirectory = "config/metadata";      ///< Directory to store metadata
+    bool persistMetadata = true;                          ///< Whether to persist metadata to disk
+    bool createTorrentFiles = true;                       ///< Whether to create torrent files
+    std::string torrentFilesDirectory = "config/torrents"; ///< Directory to save torrent files
+    uint32_t maxMetadataItems = 100000;                   ///< Maximum number of metadata items to store
+    bool deduplicateMetadata = true;                      ///< Whether to deduplicate metadata
+    uint32_t maxLoadItems = 10000;                        ///< Maximum number of metadata items to load at startup
+    bool loadMetadataOnDemand = true;                     ///< Whether to load metadata on demand instead of all at once
+    uint32_t maxMemoryUsageMB = 1024;                     ///< Maximum memory usage in MB before throttling metadata loading
 };
 
 /**
@@ -47,29 +50,29 @@ public:
      * @param config The configuration
      */
     explicit MetadataStorage(const MetadataStorageConfig& config = MetadataStorageConfig());
-    
+
     /**
      * @brief Destructor
      */
     ~MetadataStorage();
-    
+
     /**
      * @brief Initializes the metadata storage
      * @return True if initialized successfully, false otherwise
      */
     bool initialize();
-    
+
     /**
      * @brief Shuts down the metadata storage
      */
     void shutdown();
-    
+
     /**
      * @brief Checks if the metadata storage is initialized
      * @return True if initialized, false otherwise
      */
     bool isInitialized() const;
-    
+
     /**
      * @brief Adds metadata to the storage
      * @param infoHash The info hash of the torrent
@@ -81,88 +84,88 @@ public:
         const std::array<uint8_t, 20>& infoHash,
         const std::vector<uint8_t>& metadata,
         uint32_t size);
-    
+
     /**
      * @brief Gets metadata from the storage
      * @param infoHash The info hash of the torrent
      * @return A pair containing the metadata and its size, or empty if not found
      */
     std::pair<std::vector<uint8_t>, uint32_t> getMetadata(const std::array<uint8_t, 20>& infoHash) const;
-    
+
     /**
      * @brief Gets a torrent file from the storage
      * @param infoHash The info hash of the torrent
      * @return A shared pointer to the torrent file, or nullptr if not found
      */
     std::shared_ptr<TorrentFile> getTorrentFile(const std::array<uint8_t, 20>& infoHash) const;
-    
+
     /**
      * @brief Checks if the storage contains metadata for a torrent
      * @param infoHash The info hash of the torrent
      * @return True if the storage contains metadata for the torrent, false otherwise
      */
     bool hasMetadata(const std::array<uint8_t, 20>& infoHash) const;
-    
+
     /**
      * @brief Gets the number of metadata items in the storage
      * @return The number of metadata items in the storage
      */
     size_t getMetadataCount() const;
-    
+
     /**
      * @brief Gets all info hashes in the storage
      * @return A vector of all info hashes in the storage
      */
     std::vector<std::array<uint8_t, 20>> getAllInfoHashes() const;
-    
+
     /**
      * @brief Gets all torrent files in the storage
      * @return A vector of all torrent files in the storage
      */
     std::vector<std::shared_ptr<TorrentFile>> getAllTorrentFiles() const;
-    
+
     /**
      * @brief Removes metadata from the storage
      * @param infoHash The info hash of the torrent
      * @return True if the metadata was removed, false if it wasn't found
      */
     bool removeMetadata(const std::array<uint8_t, 20>& infoHash);
-    
+
     /**
      * @brief Clears all metadata from the storage
      */
     void clearMetadata();
-    
+
     /**
      * @brief Sets the callback for metadata storage events
      * @param callback The callback function
      */
     void setCallback(MetadataStorageCallback callback);
-    
+
     /**
      * @brief Gets the configuration
      * @return The configuration
      */
     MetadataStorageConfig getConfig() const;
-    
+
     /**
      * @brief Sets the configuration
      * @param config The configuration
      */
     void setConfig(const MetadataStorageConfig& config);
-    
+
     /**
      * @brief Saves all metadata to disk
      * @return True if saved successfully, false otherwise
      */
     bool saveAllMetadata();
-    
+
     /**
      * @brief Loads all metadata from disk
      * @return True if loaded successfully, false otherwise
      */
     bool loadAllMetadata();
-    
+
 private:
     /**
      * @brief Structure for a metadata item
@@ -176,35 +179,35 @@ private:
         bool isMultiFile;                  ///< Whether the torrent is a multi-file torrent
         std::chrono::system_clock::time_point addedTime; ///< Time when the metadata was added
     };
-    
+
     /**
      * @brief Gets the path to the metadata file for a torrent
      * @param infoHash The info hash of the torrent
      * @return The path to the metadata file
      */
     std::filesystem::path getMetadataFilePath(const std::array<uint8_t, 20>& infoHash) const;
-    
+
     /**
      * @brief Gets the path to the torrent file for a torrent
      * @param infoHash The info hash of the torrent
      * @return The path to the torrent file
      */
     std::filesystem::path getTorrentFilePath(const std::array<uint8_t, 20>& infoHash) const;
-    
+
     /**
      * @brief Saves metadata to disk
      * @param infoHash The info hash of the torrent
      * @return True if saved successfully, false otherwise
      */
     bool saveMetadata(const std::array<uint8_t, 20>& infoHash);
-    
+
     /**
      * @brief Loads metadata from disk
      * @param infoHash The info hash of the torrent
      * @return True if loaded successfully, false otherwise
      */
     bool loadMetadata(const std::array<uint8_t, 20>& infoHash);
-    
+
     /**
      * @brief Creates a torrent file from metadata
      * @param infoHash The info hash of the torrent
@@ -216,7 +219,7 @@ private:
         const std::array<uint8_t, 20>& infoHash,
         const std::vector<uint8_t>& metadata,
         uint32_t size);
-    
+
     /**
      * @brief Extracts metadata information
      * @param metadata The metadata
@@ -232,11 +235,59 @@ private:
         std::string& name,
         uint64_t& totalSize,
         bool& isMultiFile);
-    
+
+    /**
+     * @brief Converts an info hash to a hex string
+     * @param infoHash The info hash
+     * @return The hex string
+     */
+    std::string infoHashToString(const std::array<uint8_t, 20>& infoHash) const;
+
+    /**
+     * @brief Gets the current memory usage of the process
+     * @return The memory usage in bytes
+     */
+    size_t getCurrentMemoryUsage() const;
+
+    /**
+     * @brief Loads metadata on demand
+     * @param infoHash The info hash of the torrent
+     * @return True if the metadata was loaded successfully, false otherwise
+     */
+    bool loadMetadataOnDemand(const std::array<uint8_t, 20>& infoHash);
+
+    /**
+     * @brief Checks if memory usage is above the threshold
+     * @return True if memory usage is above the threshold, false otherwise
+     */
+    bool isMemoryUsageAboveThreshold() const;
+
+    /**
+     * @brief Evicts least recently used metadata to free memory
+     * @param count Number of items to evict
+     * @return Number of items evicted
+     */
+    size_t evictLeastRecentlyUsedMetadata(size_t count = 10);
+
+    /**
+     * @brief Gets a list of all metadata file paths
+     * @return A vector of metadata file paths
+     */
+    std::vector<std::filesystem::path> getAllMetadataFilePaths() const;
+
+    /**
+     * @brief Updates the access time for a metadata item
+     * @param infoHashStr The info hash string
+     */
+    void updateAccessTime(const std::string& infoHashStr);
+
     MetadataStorageConfig m_config;                                 ///< Configuration
     std::atomic<bool> m_initialized{false};                         ///< Whether the storage is initialized
     mutable std::mutex m_mutex;                                     ///< Mutex for thread safety
     std::unordered_map<std::string, MetadataItem> m_metadata;       ///< Metadata by info hash (hex string)
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_accessTimes; ///< Last access time for each metadata item
+    std::vector<std::string> m_knownInfoHashes;                     ///< List of known info hashes (for on-demand loading)
+    std::atomic<size_t> m_loadedItemCount{0};                       ///< Number of loaded metadata items
     MetadataStorageCallback m_callback;                             ///< Callback for metadata storage events
 };
 

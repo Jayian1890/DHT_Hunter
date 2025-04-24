@@ -2,7 +2,7 @@
 
 #include "dht_hunter/network/socket.hpp"
 #include "dht_hunter/network/async_socket.hpp"
-#include "dht_hunter/network/end_point.hpp"
+#include "dht_hunter/network/network_address.hpp"
 #include "dht_hunter/metadata/bt_handshake.hpp"
 #include "dht_hunter/metadata/extension_protocol.hpp"
 #include "dht_hunter/metadata/ut_metadata.hpp"
@@ -63,11 +63,15 @@ public:
      * @param infoHash The info hash of the torrent
      * @param stateCallback Callback for connection state changes
      * @param metadataCallback Callback for metadata completion
+     * @param peerIdPrefix The prefix to use for the peer ID (default: "-DH0001-")
+     * @param clientVersion The client version string to use (default: "DHT-Hunter 0.1.0")
      */
     BTConnection(std::unique_ptr<network::AsyncSocket> socket,
                 const std::array<uint8_t, BT_INFOHASH_LENGTH>& infoHash,
                 BTConnectionStateCallback stateCallback,
-                BTMetadataCallback metadataCallback);
+                BTMetadataCallback metadataCallback,
+                const std::string& peerIdPrefix = "-DH0001-",
+                const std::string& clientVersion = "DHT-Hunter 0.1.0");
 
     /**
      * @brief Destructor
@@ -232,18 +236,19 @@ private:
     network::EndPoint m_remoteEndpoint;             ///< Remote endpoint
     BTConnectionStateCallback m_stateCallback;      ///< Callback for state changes
     BTMetadataCallback m_metadataCallback;          ///< Callback for metadata completion
-    
+    std::string m_clientVersion;                    ///< Client version string
+
     ExtensionProtocol m_extensionProtocol;          ///< Extension protocol handler
     UTMetadata m_utMetadata;                        ///< ut_metadata extension handler
-    
+
     std::vector<uint8_t> m_receiveBuffer;           ///< Buffer for received data
     size_t m_receiveBufferPos;                      ///< Current position in the receive buffer
-    
+
     std::vector<std::vector<uint8_t>> m_metadataPieces; ///< Received metadata pieces
     std::vector<bool> m_metadataPiecesReceived;     ///< Flags for received pieces
     uint32_t m_metadataSize;                        ///< Total metadata size
     uint32_t m_metadataPiecesRequested;             ///< Number of pieces requested
-    uint32_t m_metadataPiecesReceived;              ///< Number of pieces received
+    uint32_t m_receivedPieceCount;                  ///< Number of pieces received
 };
 
 } // namespace dht_hunter::metadata

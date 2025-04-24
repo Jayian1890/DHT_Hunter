@@ -26,6 +26,7 @@ struct InfoHashCollectorConfig {
     bool deduplicateInfoHashes = true;       ///< Whether to deduplicate infohashes
     bool filterInvalidInfoHashes = true;     ///< Whether to filter out invalid infohashes (all zeros, etc.)
     std::chrono::seconds saveInterval = std::chrono::seconds(300); ///< Interval for saving infohashes to disk
+    std::string savePath = "config/infohashes.dat"; ///< Path for saving infohashes to disk
 };
 
 /**
@@ -150,7 +151,7 @@ private:
 
     InfoHashCollectorConfig m_config;                  ///< Configuration
     std::atomic<bool> m_running{false};                ///< Whether the collector is running
-    std::mutex m_mutex;                                ///< Mutex for thread safety
+    mutable std::mutex m_mutex;                        ///< Mutex for thread safety
     std::unordered_set<std::string> m_infoHashes;      ///< Set of collected infohashes (as hex strings for deduplication)
     std::queue<dht_hunter::dht::InfoHash> m_queue;     ///< Queue of infohashes to process
     std::thread m_processingThread;                    ///< Thread for processing the queue

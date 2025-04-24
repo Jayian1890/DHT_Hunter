@@ -1,6 +1,8 @@
-# Define the util library
+# Utility library
 add_library(dht_hunter_util
-    hash.cpp
+        filesystem_utils.cpp
+        hash.cpp
+    # Other utility source files
 )
 
 # Set include directories
@@ -9,14 +11,14 @@ target_include_directories(dht_hunter_util
     ${CMAKE_SOURCE_DIR}/include
 )
 
-# Set compile features
-target_compile_features(dht_hunter_util
-    PUBLIC
-    cxx_std_17
-)
-
-# Link with the logging library
+# Link dependencies
 target_link_libraries(dht_hunter_util
     PUBLIC
     dht_hunter_logforge
+)
+
+# Install the library
+install(TARGETS dht_hunter_util
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
 )

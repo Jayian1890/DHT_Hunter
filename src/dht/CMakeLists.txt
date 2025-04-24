@@ -7,6 +7,11 @@ add_library(dht_hunter_dht
     error_message.cpp
     routing_table.cpp
     dht_node.cpp
+    node_lookup.cpp
+    get_peers_lookup.cpp
+    peer_storage.cpp
+    routing_table_persistence.cpp
+    dht_node_persistence.cpp
 )
 
 # Set include directories

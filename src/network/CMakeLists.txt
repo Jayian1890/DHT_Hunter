@@ -7,8 +7,22 @@ add_library(dht_hunter_network
     socket_impl_core.cpp
     tcp_socket_impl.cpp
     udp_socket_impl.cpp
+    io_multiplexer.cpp
+    async_socket.cpp
+    async_socket_factory.cpp
+    rate_limiter.cpp
+    connection_throttler.cpp
+    burst_controller.cpp
+    udp_reliability.cpp
+    buffer_pool.cpp
+    connection_pool.cpp
+    connection_pool_manager.cpp
+    retry_manager.cpp
+    udp_message_batcher.cpp
     platform/windows/socket_impl.cpp
     platform/unix/socket_impl.cpp
+    platform/windows/wsa_multiplexer.cpp
+    platform/unix/select_multiplexer.cpp
 )
 
 # Set include directories

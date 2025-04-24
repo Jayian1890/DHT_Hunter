@@ -7,12 +7,16 @@ AsyncSocketFactory::AsyncSocketFactory(std::shared_ptr<IOMultiplexer> multiplexe
 }
 
 std::unique_ptr<AsyncSocket> AsyncSocketFactory::createTCPSocket(AddressFamily family) {
-    auto socket = SocketFactory::createTCPSocket(family);
+    // Convert AddressFamily to bool for IPv6
+    bool ipv6 = (family == AddressFamily::IPv6);
+    auto socket = SocketFactory::createTCPSocket(ipv6);
     return std::make_unique<AsyncSocket>(std::move(socket), m_multiplexer);
 }
 
 std::unique_ptr<AsyncSocket> AsyncSocketFactory::createUDPSocket(AddressFamily family) {
-    auto socket = SocketFactory::createUDPSocket(family);
+    // Convert AddressFamily to bool for IPv6
+    bool ipv6 = (family == AddressFamily::IPv6);
+    auto socket = SocketFactory::createUDPSocket(ipv6);
     return std::make_unique<AsyncSocket>(std::move(socket), m_multiplexer);
 }
 

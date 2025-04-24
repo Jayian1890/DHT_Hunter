@@ -2,6 +2,7 @@
 
 #include "dht_hunter/network/socket.hpp"
 #include "dht_hunter/network/network_address.hpp"
+#include "dht_hunter/network/network_address_hash.hpp"
 #include "dht_hunter/network/rate_limiter.hpp"
 
 #include <unordered_map>
@@ -40,58 +41,58 @@ public:
      * @param endpoint The endpoint
      */
     PooledConnection(std::shared_ptr<Socket> socket, const EndPoint& endpoint);
-    
+
     /**
      * @brief Destructor
      */
     ~PooledConnection();
-    
+
     /**
      * @brief Gets the socket
      * @return The socket
      */
     std::shared_ptr<Socket> getSocket() const;
-    
+
     /**
      * @brief Gets the endpoint
      * @return The endpoint
      */
     EndPoint getEndpoint() const;
-    
+
     /**
      * @brief Gets the creation time
      * @return The creation time
      */
     std::chrono::steady_clock::time_point getCreationTime() const;
-    
+
     /**
      * @brief Gets the last used time
      * @return The last used time
      */
     std::chrono::steady_clock::time_point getLastUsedTime() const;
-    
+
     /**
      * @brief Updates the last used time
      */
     void updateLastUsedTime();
-    
+
     /**
      * @brief Checks if the connection is valid
      * @return True if the connection is valid, false otherwise
      */
     bool isValid() const;
-    
+
     /**
      * @brief Validates the connection
      * @return True if the connection is valid, false otherwise
      */
     bool validate();
-    
+
     /**
      * @brief Closes the connection
      */
     void close();
-    
+
 private:
     std::shared_ptr<Socket> m_socket;                           ///< The socket
     EndPoint m_endpoint;                                        ///< The endpoint
@@ -110,70 +111,70 @@ public:
      * @param config The configuration
      */
     explicit ConnectionPool(const ConnectionPoolConfig& config = ConnectionPoolConfig());
-    
+
     /**
      * @brief Destructor
      */
     ~ConnectionPool();
-    
+
     /**
      * @brief Gets a connection from the pool
      * @param endpoint The endpoint to connect to
      * @param timeout The connection timeout
      * @return A shared pointer to a pooled connection, or nullptr if no connection could be established
      */
-    std::shared_ptr<PooledConnection> getConnection(const EndPoint& endpoint, 
+    std::shared_ptr<PooledConnection> getConnection(const EndPoint& endpoint,
                                                    std::chrono::milliseconds timeout = std::chrono::milliseconds(5000));
-    
+
     /**
      * @brief Returns a connection to the pool
      * @param connection The connection to return
      */
     void returnConnection(std::shared_ptr<PooledConnection> connection);
-    
+
     /**
      * @brief Closes all connections
      */
     void closeAll();
-    
+
     /**
      * @brief Gets the number of active connections
      * @return The number of active connections
      */
     size_t getActiveConnectionCount() const;
-    
+
     /**
      * @brief Gets the number of idle connections
      * @return The number of idle connections
      */
     size_t getIdleConnectionCount() const;
-    
+
     /**
      * @brief Gets the number of connections for a specific host
      * @param host The host
      * @return The number of connections
      */
     size_t getConnectionCountForHost(const NetworkAddress& host) const;
-    
+
     /**
      * @brief Sets the configuration
      * @param config The configuration
      */
     void setConfig(const ConnectionPoolConfig& config);
-    
+
     /**
      * @brief Gets the configuration
      * @return The configuration
      */
     ConnectionPoolConfig getConfig() const;
-    
+
     /**
      * @brief Performs maintenance on the connection pool
-     * 
+     *
      * This method should be called periodically to clean up idle and expired connections.
      */
     void maintenance();
-    
+
 private:
     /**
      * @brief Creates a new connection
@@ -182,24 +183,24 @@ private:
      * @return A shared pointer to a pooled connection, or nullptr if no connection could be established
      */
     std::shared_ptr<PooledConnection> createConnection(const EndPoint& endpoint, std::chrono::milliseconds timeout);
-    
+
     /**
      * @brief Gets an idle connection for the specified endpoint
      * @param endpoint The endpoint
      * @return A shared pointer to a pooled connection, or nullptr if no idle connection is available
      */
     std::shared_ptr<PooledConnection> getIdleConnection(const EndPoint& endpoint);
-    
+
     /**
      * @brief Removes expired connections
      */
     void removeExpiredConnections();
-    
+
     ConnectionPoolConfig m_config;                                                  ///< The configuration
-    
+
     std::unordered_map<NetworkAddress, std::vector<std::shared_ptr<PooledConnection>>> m_activeConnections;  ///< Active connections by host
     std::unordered_map<NetworkAddress, std::queue<std::shared_ptr<PooledConnection>>> m_idleConnections;     ///< Idle connections by host
-    
+
     mutable std::mutex m_mutex;                                                     ///< Mutex for thread safety
     std::atomic<size_t> m_totalConnections;                                         ///< Total number of connections
 };

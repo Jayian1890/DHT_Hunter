@@ -33,59 +33,59 @@ public:
      * @param endpoint The node's endpoint
      */
     Node(const NodeID& id, const network::EndPoint& endpoint);
-    
+
     /**
      * @brief Gets the node ID
      * @return The node ID
      */
     const NodeID& getID() const;
-    
+
     /**
      * @brief Gets the node's endpoint
      * @return The node's endpoint
      */
     const network::EndPoint& getEndpoint() const;
-    
+
     /**
      * @brief Gets the last time the node was seen
      * @return The last time the node was seen
      */
     std::chrono::steady_clock::time_point getLastSeen() const;
-    
+
     /**
      * @brief Updates the last seen time to now
      */
     void updateLastSeen();
-    
+
     /**
      * @brief Checks if the node is good (responsive)
      * @return True if the node is good, false otherwise
      */
     bool isGood() const;
-    
+
     /**
      * @brief Sets whether the node is good (responsive)
      * @param good True if the node is good, false otherwise
      */
     void setGood(bool good);
-    
+
     /**
      * @brief Gets the number of failed queries to this node
      * @return The number of failed queries
      */
     int getFailedQueries() const;
-    
+
     /**
      * @brief Increments the number of failed queries to this node
      * @return The new number of failed queries
      */
     int incrementFailedQueries();
-    
+
     /**
      * @brief Resets the number of failed queries to this node
      */
     void resetFailedQueries();
-    
+
 private:
     NodeID m_id;
     network::EndPoint m_endpoint;
@@ -119,64 +119,64 @@ public:
      * @param index The bucket index
      */
     explicit KBucket(int index);
-    
+
     /**
      * @brief Gets the bucket index
      * @return The bucket index
      */
     int getIndex() const;
-    
+
     /**
      * @brief Gets the nodes in the bucket
      * @return The nodes in the bucket
      */
     const std::list<std::shared_ptr<Node>>& getNodes() const;
-    
+
     /**
      * @brief Gets the number of nodes in the bucket
      * @return The number of nodes in the bucket
      */
     size_t size() const;
-    
+
     /**
      * @brief Checks if the bucket is full
      * @return True if the bucket is full, false otherwise
      */
     bool isFull() const;
-    
+
     /**
      * @brief Adds a node to the bucket
      * @param node The node to add
      * @return True if the node was added, false otherwise
      */
     bool addNode(std::shared_ptr<Node> node);
-    
+
     /**
      * @brief Removes a node from the bucket
      * @param node The node to remove
      * @return True if the node was removed, false otherwise
      */
     bool removeNode(std::shared_ptr<Node> node);
-    
+
     /**
      * @brief Finds a node in the bucket by ID
      * @param id The node ID to find
      * @return The node, or nullptr if not found
      */
     std::shared_ptr<Node> findNode(const NodeID& id);
-    
+
     /**
      * @brief Gets the least recently seen node in the bucket
      * @return The least recently seen node, or nullptr if the bucket is empty
      */
     std::shared_ptr<Node> getLeastRecentlySeenNode();
-    
+
     /**
      * @brief Gets the oldest node in the bucket
      * @return The oldest node, or nullptr if the bucket is empty
      */
     std::shared_ptr<Node> getOldestNode();
-    
+
 private:
     int m_index;
     std::list<std::shared_ptr<Node>> m_nodes;
@@ -192,54 +192,60 @@ public:
      * @param ownID The ID of the local node
      */
     explicit RoutingTable(const NodeID& ownID);
-    
+
     /**
      * @brief Gets the ID of the local node
      * @return The ID of the local node
      */
     const NodeID& getOwnID() const;
-    
+
+    /**
+     * @brief Updates the own node ID
+     * @param ownID The new own node ID
+     */
+    void updateOwnID(const NodeID& ownID);
+
     /**
      * @brief Adds a node to the routing table
      * @param node The node to add
      * @return True if the node was added, false otherwise
      */
     bool addNode(std::shared_ptr<Node> node);
-    
+
     /**
      * @brief Removes a node from the routing table
      * @param id The ID of the node to remove
      * @return True if the node was removed, false otherwise
      */
     bool removeNode(const NodeID& id);
-    
+
     /**
      * @brief Finds a node in the routing table by ID
      * @param id The node ID to find
      * @return The node, or nullptr if not found
      */
     std::shared_ptr<Node> findNode(const NodeID& id);
-    
+
     /**
      * @brief Gets the bucket for a given node ID
      * @param id The node ID
      * @return The bucket
      */
     KBucket& getBucket(const NodeID& id);
-    
+
     /**
      * @brief Gets the bucket at a given index
      * @param index The bucket index
      * @return The bucket
      */
     KBucket& getBucketByIndex(int index);
-    
+
     /**
      * @brief Gets all buckets in the routing table
      * @return The buckets
      */
     const std::vector<KBucket>& getBuckets() const;
-    
+
     /**
      * @brief Gets the closest nodes to a given ID
      * @param id The target ID
@@ -247,30 +253,44 @@ public:
      * @return The closest nodes
      */
     std::vector<std::shared_ptr<Node>> getClosestNodes(const NodeID& id, size_t count);
-    
+
     /**
      * @brief Gets all nodes in the routing table
      * @return The nodes
      */
     std::vector<std::shared_ptr<Node>> getAllNodes();
-    
+
     /**
      * @brief Gets the number of nodes in the routing table
      * @return The number of nodes
      */
     size_t size() const;
-    
+
     /**
      * @brief Checks if the routing table is empty
      * @return True if the routing table is empty, false otherwise
      */
     bool isEmpty() const;
-    
+
     /**
      * @brief Clears the routing table
      */
     void clear();
-    
+
+    /**
+     * @brief Saves the routing table to a file
+     * @param filePath The path to the file
+     * @return True if the routing table was saved successfully, false otherwise
+     */
+    bool saveToFile(const std::string& filePath) const;
+
+    /**
+     * @brief Loads the routing table from a file
+     * @param filePath The path to the file
+     * @return True if the routing table was loaded successfully, false otherwise
+     */
+    bool loadFromFile(const std::string& filePath);
+
 private:
     NodeID m_ownID;
     std::vector<KBucket> m_buckets;

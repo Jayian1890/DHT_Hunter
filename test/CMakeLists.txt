@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.14)
 # Enable testing
 enable_testing()
 
+# Disable strict warnings for tests
+if(NOT MSVC)
+  add_compile_options(-Wno-double-promotion)
+endif()
+
 # Add GoogleTest
 include(FetchContent)
 FetchContent_Declare(
@@ -17,4 +22,4 @@ FetchContent_MakeAvailable(googletest)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Add test subdirectories
-add_subdirectory(network)
+add_subdirectory(unit)

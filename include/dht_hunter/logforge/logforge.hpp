@@ -196,7 +196,7 @@ public:
                     const LogLevel fileLevel = LogLevel::DEBUG,
                     const std::string& filename = "dht_hunter.log",
                     bool useColors = true,
-                    const bool async = true) {
+                    const bool async = false) {
         const std::lock_guard lock(s_mutex);
 
         // Create default sinks if not already initialized
@@ -207,17 +207,21 @@ public:
         // Create console sink with color support
         const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
         consoleSink->setLevel(consoleLevel);
-        addSink(consoleSink);
+        addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
         // Create file sink
         const auto fileSink = std::make_shared<FileSink>(filename);
         fileSink->setLevel(fileLevel);
-        addSink(fileSink);
+        addSink(fileSink, false); // Don't lock mutex, it's already locked
 
         // Set async mode
         s_asyncLoggingEnabled = async;
-        std::cout << "LogForge::init called with async=" << (async ? "true" : "false") << std::endl;
-        std::cout << "s_asyncLoggingEnabled set to " << (s_asyncLoggingEnabled ? "true" : "false") << std::endl;
+
+        // Initialize the worker thread if async logging is enabled
+        if (async) {
+            initWorkerThread();
+            registerCleanupFunction();
+        }
 
         s_initialized = true;
     }
@@ -238,7 +242,7 @@ public:
                                     size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
                                     size_t maxFiles = 5,
                                     bool useColors = true,
-                                    const bool async = true) {
+                                    const bool async = false) { // Changed default to false to avoid hanging
         const std::lock_guard lock(s_mutex);
 
         // Create default sinks if not already initialized
@@ -249,15 +253,21 @@ public:
         // Create console sink with color support
         const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
         consoleSink->setLevel(consoleLevel);
-        addSink(consoleSink);
+        addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
         // Create rotating file sink with size-based rotation
         const auto fileSink = std::make_shared<RotatingFileSink>(filename, maxSizeBytes, maxFiles);
         fileSink->setLevel(fileLevel);
-        addSink(fileSink);
+        addSink(fileSink, false); // Don't lock mutex, it's already locked
 
         // Set async mode
         s_asyncLoggingEnabled = async;
+
+        // Initialize the worker thread if async logging is enabled
+        if (async) {
+            initWorkerThread();
+            registerCleanupFunction();
+        }
 
         s_initialized = true;
     }
@@ -278,7 +288,7 @@ public:
                                     int rotationHours = 24,  // 24 hours default
                                     size_t maxFiles = 5,
                                     bool useColors = true,
-                                    const bool async = true) {
+                                    const bool async = false) { // Changed default to false to avoid hanging
         const std::lock_guard lock(s_mutex);
 
         // Create default sinks if not already initialized
@@ -289,15 +299,21 @@ public:
         // Create console sink with color support
         const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
         consoleSink->setLevel(consoleLevel);
-        addSink(consoleSink);
+        addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
         // Create rotating file sink with time-based rotation
         const auto fileSink = std::make_shared<RotatingFileSink>(filename, std::chrono::hours(rotationHours), maxFiles);
         fileSink->setLevel(fileLevel);
-        addSink(fileSink);
+        addSink(fileSink, false); // Don't lock mutex, it's already locked
 
         // Set async mode
         s_asyncLoggingEnabled = async;
+
+        // Initialize the worker thread if async logging is enabled
+        if (async) {
+            initWorkerThread();
+            registerCleanupFunction();
+        }
 
         s_initialized = true;
     }
@@ -320,7 +336,7 @@ public:
                                            int rotationHours = 24,  // 24 hours default
                                            size_t maxFiles = 5,
                                            bool useColors = true,
-                                           const bool async = true) {
+                                           const bool async = false) { // Changed default to false to avoid hanging
         const std::lock_guard lock(s_mutex);
 
         // Create default sinks if not already initialized
@@ -331,15 +347,21 @@ public:
         // Create console sink with color support
         const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
         consoleSink->setLevel(consoleLevel);
-        addSink(consoleSink);
+        addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
         // Create rotating file sink with both size and time-based rotation
         const auto fileSink = std::make_shared<RotatingFileSink>(filename, maxSizeBytes, std::chrono::hours(rotationHours), maxFiles);
         fileSink->setLevel(fileLevel);
-        addSink(fileSink);
+        addSink(fileSink, false); // Don't lock mutex, it's already locked
 
         // Set async mode
         s_asyncLoggingEnabled = async;
+
+        // Initialize the worker thread if async logging is enabled
+        if (async) {
+            initWorkerThread();
+            registerCleanupFunction();
+        }
 
         s_initialized = true;
     }
@@ -371,12 +393,17 @@ public:
     /**
      * @brief Adds a sink to the logging system.
      * @param sink The sink to add.
+     * @param lockMutex Whether to lock the mutex (set to false if the caller already holds the lock)
      */
     template<typename T>
-    static void addSink(const std::shared_ptr<T> &sink) {
+    static void addSink(const std::shared_ptr<T> &sink, bool lockMutex = true) {
         static_assert(std::is_base_of_v<LogSink, T>, "Sink must inherit from LogSink");
-        const std::lock_guard lock(s_mutex);
-        s_sinks.push_back(sink);
+        if (lockMutex) {
+            const std::lock_guard lock(s_mutex);
+            s_sinks.push_back(sink);
+        } else {
+            s_sinks.push_back(sink);
+        }
     }
 
     /**
@@ -500,7 +527,8 @@ private:
      * @brief Constructs a LogForge with the specified name.
      * @param name The name of the logger.
      */
-    explicit LogForge(std::string name) : m_name(std::move(name)) {}
+    explicit LogForge(std::string name) : m_name(std::move(name)) {
+    }
 
     /**
      * @brief Logs a message at the specified level.
@@ -556,6 +584,16 @@ private:
     static void queueAsyncMessage(LogLevel level, const std::string& loggerName,
                                  const std::string& message,
                                  const std::chrono::system_clock::time_point& timestamp);
+
+    /**
+     * @brief Initializes the worker thread for asynchronous logging.
+     */
+    static void initWorkerThread();
+
+    /**
+     * @brief Registers a cleanup function with atexit to ensure proper shutdown.
+     */
+    static void registerCleanupFunction();
 
     std::string m_name;
     LogLevel m_level = LogLevel::TRACE;

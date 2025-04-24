@@ -1,6 +1,8 @@
 #pragma once
 
 #include "dht_hunter/metadata/bt_connection.hpp"
+#include "dht_hunter/metadata/torrent_file_builder.hpp"
+#include "dht_hunter/metadata/metadata_storage.hpp"
 #include "dht_hunter/network/connection_pool_manager.hpp"
 #include "dht_hunter/network/async_socket_factory.hpp"
 #include "dht_hunter/network/io_multiplexer.hpp"
@@ -41,12 +43,29 @@ struct MetadataFetcherConfig {
     std::chrono::seconds fetchTimeout{120};             ///< Fetch timeout
     std::string connectionPoolName = "metadata";        ///< Name of the connection pool to use
     bool reuseConnections = true;                       ///< Whether to reuse connections
+
+    // Client identification
+    std::string peerIdPrefix = "-DH0001-";              ///< Peer ID prefix for BitTorrent handshakes
+    std::string clientVersion = "DHT-Hunter 0.1.0";     ///< Client version string for extension protocol
+
+    // Torrent file construction options
+    bool createTorrentFiles = true;                     ///< Whether to create torrent files
+    std::string torrentFilesDirectory = "config/torrents";     ///< Directory to save torrent files
+    std::string announceUrl = "";                       ///< Announce URL for created torrent files
+    std::vector<std::vector<std::string>> announceList; ///< Announce list for created torrent files
+    std::string createdBy = "DHT-Hunter";               ///< Created by string for created torrent files
+    std::string comment = "";                           ///< Comment for created torrent files
+
+    // Metadata storage options
+    bool useMetadataStorage = true;                     ///< Whether to use metadata storage
+    std::string metadataStorageDirectory = "config/metadata";  ///< Directory to store metadata
+    bool persistMetadata = true;                        ///< Whether to persist metadata to disk
 };
 
 /**
  * @class MetadataFetcher
  * @brief Fetches metadata for torrents using the BitTorrent protocol
- * 
+ *
  * This class manages multiple concurrent metadata fetches, using a connection
  * pool to efficiently reuse connections.
  */
@@ -57,29 +76,29 @@ public:
      * @param config The configuration
      */
     explicit MetadataFetcher(const MetadataFetcherConfig& config = MetadataFetcherConfig());
-    
+
     /**
      * @brief Destructor
      */
     ~MetadataFetcher();
-    
+
     /**
      * @brief Starts the metadata fetcher
      * @return True if started successfully, false otherwise
      */
     bool start();
-    
+
     /**
      * @brief Stops the metadata fetcher
      */
     void stop();
-    
+
     /**
      * @brief Checks if the metadata fetcher is running
      * @return True if running, false otherwise
      */
     bool isRunning() const;
-    
+
     /**
      * @brief Fetches metadata for a torrent
      * @param infoHash The info hash of the torrent
@@ -91,38 +110,50 @@ public:
         const std::array<uint8_t, BT_INFOHASH_LENGTH>& infoHash,
         const std::vector<network::EndPoint>& endpoints,
         MetadataFetchCallback callback);
-    
+
     /**
      * @brief Cancels a metadata fetch
      * @param infoHash The info hash of the torrent
      * @return True if the fetch was canceled, false if it wasn't found
      */
     bool cancelFetch(const std::array<uint8_t, BT_INFOHASH_LENGTH>& infoHash);
-    
+
     /**
      * @brief Gets the number of active fetches
      * @return The number of active fetches
      */
     size_t getActiveFetchCount() const;
-    
+
     /**
      * @brief Gets the number of queued fetches
      * @return The number of queued fetches
      */
     size_t getQueuedFetchCount() const;
-    
+
     /**
      * @brief Sets the configuration
      * @param config The configuration
      */
     void setConfig(const MetadataFetcherConfig& config);
-    
+
     /**
      * @brief Gets the configuration
      * @return The configuration
      */
     MetadataFetcherConfig getConfig() const;
-    
+
+    /**
+     * @brief Gets the metadata storage
+     * @return The metadata storage
+     */
+    std::shared_ptr<MetadataStorage> getMetadataStorage() const;
+
+    /**
+     * @brief Sets the metadata storage
+     * @param metadataStorage The metadata storage to use
+     */
+    void setMetadataStorage(std::shared_ptr<MetadataStorage> metadataStorage);
+
 private:
     /**
      * @brief Structure for a metadata fetch request
@@ -136,27 +167,27 @@ private:
         std::atomic<uint32_t> activeConnections{0};        ///< Number of active connections
         std::atomic<bool> completed{false};                ///< Whether the fetch has completed
     };
-    
+
     /**
      * @brief Processes the fetch queue
      */
     void processFetchQueue();
-    
+
     /**
      * @brief Checks for timed out fetches
      */
     void checkTimeouts();
-    
+
     /**
      * @brief Thread function for processing the fetch queue
      */
     void fetchQueueThread();
-    
+
     /**
      * @brief Thread function for checking timeouts
      */
     void timeoutThread();
-    
+
     /**
      * @brief Handles a connection state change
      * @param infoHash The info hash of the torrent
@@ -169,7 +200,7 @@ private:
         std::shared_ptr<BTConnection> connection,
         BTConnectionState state,
         const std::string& message);
-    
+
     /**
      * @brief Handles metadata reception
      * @param infoHash The info hash of the torrent
@@ -182,7 +213,7 @@ private:
         std::shared_ptr<BTConnection> connection,
         const std::vector<uint8_t>& metadata,
         uint32_t size);
-    
+
     /**
      * @brief Completes a fetch
      * @param infoHash The info hash of the torrent
@@ -195,17 +226,18 @@ private:
         const std::vector<uint8_t>& metadata,
         uint32_t size,
         bool success);
-    
+
     MetadataFetcherConfig m_config;                                 ///< Configuration
     std::shared_ptr<network::IOMultiplexer> m_multiplexer;          ///< I/O multiplexer
     std::shared_ptr<network::ConnectionPool> m_connectionPool;      ///< Connection pool
-    
+    std::shared_ptr<MetadataStorage> m_metadataStorage;             ///< Metadata storage
+
     std::unordered_map<std::string, std::shared_ptr<FetchRequest>> m_activeFetches; ///< Active fetches by info hash (hex string)
     std::queue<std::shared_ptr<FetchRequest>> m_fetchQueue;         ///< Queue of fetch requests
-    
+
     mutable std::mutex m_mutex;                                     ///< Mutex for thread safety
     std::condition_variable m_queueCondition;                       ///< Condition variable for the fetch queue
-    
+
     std::atomic<bool> m_running{false};                             ///< Whether the fetcher is running
     std::thread m_fetchQueueThread;                                 ///< Thread for processing the fetch queue
     std::thread m_timeoutThread;                                    ///< Thread for checking timeouts
