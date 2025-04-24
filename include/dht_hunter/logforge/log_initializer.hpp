@@ -1,13 +1,14 @@
 #pragma once
 
 #include "dht_hunter/logforge/logforge.hpp"
+#include "dht_hunter/util/filesystem_utils.hpp"
 
 namespace dht_hunter::logforge {
 
 /**
  * @class LogInitializer
  * @brief Singleton class to ensure logger is initialized before any other action.
- * 
+ *
  * This class uses the Meyers singleton pattern to ensure that the logger
  * is initialized during static initialization, before main() is called.
  */
@@ -33,7 +34,7 @@ public:
     void initializeLogger(
         const LogLevel consoleLevel = LogLevel::INFO,
         const LogLevel fileLevel = LogLevel::DEBUG,
-        const std::string& filename = "dht_hunter.log",
+        const std::string& filename = "",  // Empty string means use executable name
         bool useColors = true,
         const bool async = false
     ) {

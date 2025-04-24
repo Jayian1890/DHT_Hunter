@@ -3,6 +3,7 @@
 #include <string>
 #include <filesystem>
 #include <functional>
+#include <optional>
 
 namespace dht_hunter::util {
 
@@ -13,7 +14,7 @@ class FilesystemUtils {
 public:
     /**
      * Creates a directory if it doesn't exist
-     * 
+     *
      * @param path The directory path to create
      * @param loggerCallback Optional callback for logging
      * @return true if the directory exists or was created successfully, false otherwise
@@ -21,10 +22,10 @@ public:
     static bool ensureDirectoryExists(
         const std::filesystem::path& path,
         const std::function<void(const std::string&, const std::string&)>& loggerCallback = nullptr);
-    
+
     /**
      * Creates all parent directories for a file path if they don't exist
-     * 
+     *
      * @param filePath The file path whose parent directories should be created
      * @param loggerCallback Optional callback for logging
      * @return true if the parent directories exist or were created successfully, false otherwise
@@ -32,10 +33,10 @@ public:
     static bool ensureParentDirectoryExists(
         const std::filesystem::path& filePath,
         const std::function<void(const std::string&, const std::string&)>& loggerCallback = nullptr);
-    
+
     /**
      * Checks if a directory is writable by creating a temporary file
-     * 
+     *
      * @param path The directory path to check
      * @param loggerCallback Optional callback for logging
      * @return true if the directory is writable, false otherwise
@@ -43,6 +44,20 @@ public:
     static bool isDirectoryWritable(
         const std::filesystem::path& path,
         const std::function<void(const std::string&, const std::string&)>& loggerCallback = nullptr);
+
+    /**
+     * Gets the name of the current executable without extension
+     *
+     * @return The executable name without extension, or empty string if it cannot be determined
+     */
+    static std::string getExecutableName();
+
+    /**
+     * Gets the full path to the current executable
+     *
+     * @return The full path to the executable, or empty optional if it cannot be determined
+     */
+    static std::optional<std::filesystem::path> getExecutablePath();
 };
 
 } // namespace dht_hunter::util

@@ -14,6 +14,7 @@
 #include "formatter.hpp"
 #include "log_common.hpp"
 #include "rotating_file_sink.hpp"
+#include "dht_hunter/util/filesystem_utils.hpp"
 
 namespace dht_hunter::logforge {
 
@@ -194,7 +195,7 @@ public:
      */
     static void init(const LogLevel consoleLevel = LogLevel::INFO,
                     const LogLevel fileLevel = LogLevel::DEBUG,
-                    const std::string& filename = "dht_hunter.log",
+                    const std::string& filename = "",  // Empty string means use executable name
                     bool useColors = true,
                     const bool async = false) {
         const std::lock_guard lock(s_mutex);
@@ -209,8 +210,15 @@ public:
         consoleSink->setLevel(consoleLevel);
         addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
+        // Determine log filename
+        std::string logFilename = filename;
+        if (logFilename.empty()) {
+            // Use executable name if no filename provided
+            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
+        }
+
         // Create file sink
-        const auto fileSink = std::make_shared<FileSink>(filename);
+        const auto fileSink = std::make_shared<FileSink>(logFilename);
         fileSink->setLevel(fileLevel);
         addSink(fileSink, false); // Don't lock mutex, it's already locked
 
@@ -238,7 +246,7 @@ public:
      */
     static void initWithSizeRotation(const LogLevel consoleLevel = LogLevel::INFO,
                                     const LogLevel fileLevel = LogLevel::DEBUG,
-                                    const std::string& filename = "dht_hunter.log",
+                                    const std::string& filename = "",  // Empty string means use executable name
                                     size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
                                     size_t maxFiles = 5,
                                     bool useColors = true,
@@ -255,8 +263,15 @@ public:
         consoleSink->setLevel(consoleLevel);
         addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
+        // Determine log filename
+        std::string logFilename = filename;
+        if (logFilename.empty()) {
+            // Use executable name if no filename provided
+            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
+        }
+
         // Create rotating file sink with size-based rotation
-        const auto fileSink = std::make_shared<RotatingFileSink>(filename, maxSizeBytes, maxFiles);
+        const auto fileSink = std::make_shared<RotatingFileSink>(logFilename, maxSizeBytes, maxFiles);
         fileSink->setLevel(fileLevel);
         addSink(fileSink, false); // Don't lock mutex, it's already locked
 
@@ -284,7 +299,7 @@ public:
      */
     static void initWithTimeRotation(const LogLevel consoleLevel = LogLevel::INFO,
                                     const LogLevel fileLevel = LogLevel::DEBUG,
-                                    const std::string& filename = "dht_hunter.log",
+                                    const std::string& filename = "",  // Empty string means use executable name
                                     int rotationHours = 24,  // 24 hours default
                                     size_t maxFiles = 5,
                                     bool useColors = true,
@@ -301,8 +316,15 @@ public:
         consoleSink->setLevel(consoleLevel);
         addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
+        // Determine log filename
+        std::string logFilename = filename;
+        if (logFilename.empty()) {
+            // Use executable name if no filename provided
+            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
+        }
+
         // Create rotating file sink with time-based rotation
-        const auto fileSink = std::make_shared<RotatingFileSink>(filename, std::chrono::hours(rotationHours), maxFiles);
+        const auto fileSink = std::make_shared<RotatingFileSink>(logFilename, std::chrono::hours(rotationHours), maxFiles);
         fileSink->setLevel(fileLevel);
         addSink(fileSink, false); // Don't lock mutex, it's already locked
 
@@ -331,7 +353,7 @@ public:
      */
     static void initWithSizeAndTimeRotation(const LogLevel consoleLevel = LogLevel::INFO,
                                            const LogLevel fileLevel = LogLevel::DEBUG,
-                                           const std::string& filename = "dht_hunter.log",
+                                           const std::string& filename = "",  // Empty string means use executable name
                                            size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
                                            int rotationHours = 24,  // 24 hours default
                                            size_t maxFiles = 5,
@@ -349,8 +371,15 @@ public:
         consoleSink->setLevel(consoleLevel);
         addSink(consoleSink, false); // Don't lock mutex, it's already locked
 
+        // Determine log filename
+        std::string logFilename = filename;
+        if (logFilename.empty()) {
+            // Use executable name if no filename provided
+            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
+        }
+
         // Create rotating file sink with both size and time-based rotation
-        const auto fileSink = std::make_shared<RotatingFileSink>(filename, maxSizeBytes, std::chrono::hours(rotationHours), maxFiles);
+        const auto fileSink = std::make_shared<RotatingFileSink>(logFilename, maxSizeBytes, std::chrono::hours(rotationHours), maxFiles);
         fileSink->setLevel(fileLevel);
         addSink(fileSink, false); // Don't lock mutex, it's already locked
 

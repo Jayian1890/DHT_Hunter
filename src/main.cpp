@@ -12,7 +12,6 @@
 #include "dht_hunter/crawler/infohash_collector.hpp"
 #include "dht_hunter/util/filesystem_utils.hpp"
 
-// Initialize logger before any other code runs
 namespace {
     // This will be initialized during static initialization, before main() is called
     const auto& g_logInitializer = dht_hunter::logforge::LogInitializer::getInstance();
@@ -34,16 +33,21 @@ int main(int argc, char* argv[]) {
 
 
     // Initialize logging if not already initialized
+    // Empty filename means use executable name as log filename
     dht_hunter::logforge::getLogInitializer().initializeLogger(
         dht_hunter::logforge::LogLevel::TRACE,
         dht_hunter::logforge::LogLevel::TRACE,
-        "dht_hunter.log",
+        "",  // Empty string means use executable name for log file
         true,
         false
     );
 
     // Set global log level to TRACE
     dht_hunter::logforge::LogForge::setGlobalLevel(dht_hunter::logforge::LogLevel::TRACE);
+
+    // Log the actual log filename being used
+    auto logger = getLogger();
+    logger->info("Using log file: {}.log", dht_hunter::util::FilesystemUtils::getExecutableName());
 
     // Parse command line arguments
     uint16_t port = 6881;
@@ -69,8 +73,6 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to create config directory: " << configDir << std::endl;
         return 1;
     }
-
-    auto logger = getLogger();
 
     // Register signal handlers
     std::signal(SIGINT, signalHandler);
