@@ -13,8 +13,22 @@
 #include "dht_hunter/util/filesystem_utils.hpp"
 
 namespace {
-    // This will be initialized during static initialization, before main() is called
-    const auto& g_logInitializer = dht_hunter::logforge::LogInitializer::getInstance();
+    // Initialize the logger during static initialization, before main() is called
+    // Set both console and file log levels to TRACE, and async to false
+    struct LogInitializer {
+        LogInitializer() {
+            dht_hunter::logforge::getLogInitializer().initializeLogger(
+                dht_hunter::logforge::LogLevel::TRACE,  // Console level
+                dht_hunter::logforge::LogLevel::TRACE,  // File level
+                "",  // Empty string means use executable name for log file
+                true,  // Use colors
+                false  // Async logging disabled
+            );
+        }
+    };
+
+    // This static instance will be initialized before main() is called
+    static LogInitializer g_logInitializer;
 }
 
 DEFINE_COMPONENT_LOGGER("Main", "Application")
@@ -31,18 +45,7 @@ void signalHandler(int signal) {
 int main(int argc, char* argv[]) {
     std::string configDir = "config";
 
-
-    // Initialize logging if not already initialized
-    // Empty filename means use executable name as log filename
-    dht_hunter::logforge::getLogInitializer().initializeLogger(
-        dht_hunter::logforge::LogLevel::TRACE,
-        dht_hunter::logforge::LogLevel::TRACE,
-        "",  // Empty string means use executable name for log file
-        true,
-        false
-    );
-
-    // Set global log level to TRACE
+    // Set global log level
     dht_hunter::logforge::LogForge::setGlobalLevel(dht_hunter::logforge::LogLevel::TRACE);
 
     // Log the actual log filename being used
