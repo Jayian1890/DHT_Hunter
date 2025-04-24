@@ -25,6 +25,7 @@ namespace dht_hunter::crawler {
 #include <condition_variable>
 #include <queue>
 #include <chrono>
+#include "dht_hunter/util/mutex_utils.hpp"
 
 namespace dht_hunter::dht {
 
@@ -150,7 +151,7 @@ struct NodeLookup {
     size_t activeQueries;                  ///< Number of active queries
     size_t iterations;                     ///< Number of iterations performed
     NodeLookupCallback callback;           ///< Callback for lookup completion
-    std::mutex mutex;                      ///< Mutex for thread safety
+    util::CheckedMutex mutex;              ///< Mutex for thread safety
     bool completed;                        ///< Whether the lookup has completed
 };
 
@@ -165,7 +166,7 @@ struct GetPeersLookup {
     size_t activeQueries;                  ///< Number of active queries
     size_t iterations;                     ///< Number of iterations performed
     GetPeersLookupCallback callback;       ///< Callback for lookup completion
-    std::mutex mutex;                      ///< Mutex for thread safety
+    util::CheckedMutex mutex;              ///< Mutex for thread safety
     bool completed;                        ///< Whether the lookup has completed
 };
 
@@ -647,7 +648,7 @@ private:
     uint16_t m_port;
     RoutingTable m_routingTable;
     std::unique_ptr<network::Socket> m_socket;
-    std::mutex m_socketMutex; // Mutex for socket access
+    util::CheckedMutex m_socketMutex; // Mutex for socket access
     std::unique_ptr<network::UDPMessageBatcher> m_messageBatcher;
     std::string m_routingTablePath;
 
@@ -656,18 +657,18 @@ private:
 
     // Peer storage
     std::unordered_map<std::string, std::unordered_set<StoredPeer, StoredPeerHash, StoredPeerEqual>> m_peers;
-    mutable std::mutex m_peersLock;
+    mutable util::CheckedMutex m_peersLock;
     std::thread m_peerCleanupThread;
     std::thread m_routingTableSaveThread;
 
     std::unordered_map<std::string, std::shared_ptr<Transaction>> m_transactions;
-    std::mutex m_transactionsMutex;
+    util::CheckedMutex m_transactionsMutex;
 
     std::unordered_map<std::string, std::shared_ptr<NodeLookup>> m_nodeLookups;
-    std::mutex m_nodeLookupsLock;
+    util::CheckedMutex m_nodeLookupsLock;
 
     std::unordered_map<std::string, std::shared_ptr<GetPeersLookup>> m_getPeersLookups;
-    std::mutex m_getPeersLookupsLock;
+    util::CheckedMutex m_getPeersLookupsLock;
 
     std::atomic<bool> m_running{false};
     std::thread m_receiveThread;
@@ -677,7 +678,7 @@ private:
     std::string m_secret;
     std::chrono::steady_clock::time_point m_secretLastChanged;
     std::string m_previousSecret;
-    std::mutex m_secretMutex;
+    util::CheckedMutex m_secretMutex;
 };
 
 } // namespace dht_hunter::dht

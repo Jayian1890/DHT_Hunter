@@ -19,7 +19,7 @@ std::string nodeIDToString(const dht_hunter::dht::NodeID& nodeID) {
 
 namespace dht_hunter::dht {
 bool RoutingTable::saveToFile(const std::string& filePath) const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     try {
         // Check if the directory exists and create it if needed
         std::string directory = filePath.substr(0, filePath.find_last_of('/'));
@@ -88,7 +88,7 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
     }
 }
 bool RoutingTable::loadFromFile(const std::string& filePath) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     try {
         // Check if the file exists first
         std::ifstream checkFile(filePath);

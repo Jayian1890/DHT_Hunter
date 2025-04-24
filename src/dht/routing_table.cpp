@@ -149,7 +149,7 @@ const NodeID& RoutingTable::getOwnID() const {
 }
 
 void RoutingTable::updateOwnID(const NodeID& ownID) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     m_ownID = ownID;
     getLogger()->info("Updated routing table own node ID");
 }
@@ -158,7 +158,15 @@ bool RoutingTable::addNode(std::shared_ptr<Node> node) {
     if (node->getID() == m_ownID) {
         return false;
     }
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
+    return addNodeNoLock(node);
+}
+
+bool RoutingTable::addNodeNoLock(std::shared_ptr<Node> node) {
+    // Don't add ourselves
+    if (node->getID() == m_ownID) {
+        return false;
+    }
     // Get the appropriate bucket
     NodeID distance = calculateDistance(m_ownID, node->getID());
     int bucketIndex = getBucketIndex(distance);
@@ -170,7 +178,7 @@ bool RoutingTable::addNode(std::shared_ptr<Node> node) {
     return m_buckets[static_cast<size_t>(bucketIndex)].addNode(node);
 }
 bool RoutingTable::removeNode(const NodeID& id) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     // Get the appropriate bucket
     NodeID distance = calculateDistance(m_ownID, id);
     int bucketIndex = getBucketIndex(distance);
@@ -187,7 +195,11 @@ bool RoutingTable::removeNode(const NodeID& id) {
     return m_buckets[static_cast<size_t>(bucketIndex)].removeNode(node);
 }
 std::shared_ptr<Node> RoutingTable::findNode(const NodeID& id) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
+    return findNodeNoLock(id);
+}
+
+std::shared_ptr<Node> RoutingTable::findNodeNoLock(const NodeID& id) const {
     // Get the appropriate bucket
     NodeID distance = calculateDistance(m_ownID, id);
     int bucketIndex = getBucketIndex(distance);
@@ -215,7 +227,11 @@ const std::vector<KBucket>& RoutingTable::getBuckets() const {
     return m_buckets;
 }
 std::vector<std::shared_ptr<Node>> RoutingTable::getClosestNodes(const NodeID& id, size_t count) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
+    return getClosestNodesNoLock(id, count);
+}
+
+std::vector<std::shared_ptr<Node>> RoutingTable::getClosestNodesNoLock(const NodeID& id, size_t count) const {
     // Get all nodes
     std::vector<std::shared_ptr<Node>> allNodes;
     for (const auto& bucket : m_buckets) {
@@ -239,7 +255,7 @@ std::vector<std::shared_ptr<Node>> RoutingTable::getClosestNodes(const NodeID& i
     return allNodes;
 }
 std::vector<std::shared_ptr<Node>> RoutingTable::getAllNodes() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     std::vector<std::shared_ptr<Node>> allNodes;
     for (const auto& bucket : m_buckets) {
         for (const auto& node : bucket.getNodes()) {
@@ -249,7 +265,7 @@ std::vector<std::shared_ptr<Node>> RoutingTable::getAllNodes() {
     return allNodes;
 }
 size_t RoutingTable::size() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     size_t totalNodes = 0;
     for (const auto& bucket : m_buckets) {
         totalNodes += bucket.size();
@@ -257,7 +273,7 @@ size_t RoutingTable::size() const {
     return totalNodes;
 }
 bool RoutingTable::isEmpty() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     for (const auto& bucket : m_buckets) {
         if (!bucket.getNodes().empty()) {
             return false;
@@ -266,7 +282,7 @@ bool RoutingTable::isEmpty() const {
     return true;
 }
 void RoutingTable::clear() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     clearNoLock();
 }
 

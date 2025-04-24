@@ -9,6 +9,7 @@
 #include <mutex>
 #include <chrono>
 #include <functional>
+#include "dht_hunter/util/mutex_utils.hpp"
 
 namespace dht_hunter::dht {
 
@@ -284,6 +285,31 @@ public:
     void clearNoLock();
 
     /**
+     * @brief Gets the closest nodes to a target ID without locking the mutex
+     * @param id The target ID
+     * @param count The maximum number of nodes to return
+     * @return The closest nodes to the target ID
+     * @note This method should only be called when the mutex is already locked
+     */
+    std::vector<std::shared_ptr<Node>> getClosestNodesNoLock(const NodeID& id, size_t count) const;
+
+    /**
+     * @brief Adds a node to the routing table without locking the mutex
+     * @param node The node to add
+     * @return True if the node was added, false otherwise
+     * @note This method should only be called when the mutex is already locked
+     */
+    bool addNodeNoLock(std::shared_ptr<Node> node);
+
+    /**
+     * @brief Finds a node in the routing table without locking the mutex
+     * @param id The ID of the node to find
+     * @return The node, or nullptr if not found
+     * @note This method should only be called when the mutex is already locked
+     */
+    std::shared_ptr<Node> findNodeNoLock(const NodeID& id) const;
+
+    /**
      * @brief Saves the routing table to a file
      * @param filePath The path to the file
      * @return True if the routing table was saved successfully, false otherwise
@@ -300,7 +326,7 @@ public:
 private:
     NodeID m_ownID;
     std::vector<KBucket> m_buckets;
-    mutable std::mutex m_mutex;
+    mutable util::CheckedMutex m_mutex;
 };
 
 } // namespace dht_hunter::dht
