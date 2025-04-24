@@ -3,6 +3,7 @@
 #include "dht_hunter/logforge/logger_macros.hpp"
 #include "dht_hunter/network/platform/socket_impl.hpp"
 #include "dht_hunter/crawler/infohash_collector.hpp"
+#include "dht_hunter/util/mutex_utils.hpp"
 #include <random>
 #include <sstream>
 #include <iomanip>

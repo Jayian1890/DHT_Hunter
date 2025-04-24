@@ -1,6 +1,7 @@
 #include "dht_hunter/dht/dht_node.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
 #include "dht_hunter/logforge/logger_macros.hpp"
+#include "dht_hunter/util/mutex_utils.hpp"
 #include <algorithm>
 #include <sstream>
 

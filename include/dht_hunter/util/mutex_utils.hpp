@@ -2,6 +2,8 @@
 
 #include <mutex>
 #include <thread>
+#include <atomic>
+#include <iostream>
 
 namespace dht_hunter::util {
 
@@ -48,37 +50,54 @@ private:
 };
 
 /**
- * @brief A mutex wrapper that checks for recursive locking
+ * @brief A recursive mutex wrapper with debugging capabilities
  *
- * This class wraps a std::mutex and adds checking to prevent recursive locking.
- * It's useful for debugging and preventing deadlocks.
+ * This class wraps a std::recursive_mutex and adds tracking to help with debugging.
+ * It allows recursive locking (same thread can lock multiple times) which helps
+ * prevent deadlocks in complex callback scenarios.
  */
 class CheckedMutex {
 public:
     /**
+     * @brief Constructor
+     */
+    CheckedMutex() : m_lockCount(0) {}
+
+    /**
      * @brief Lock the mutex
-     * @throws std::runtime_error if the mutex is already locked by the current thread
+     *
+     * This method can be called multiple times by the same thread.
+     * Each call to lock() must be matched by a call to unlock().
      */
     void lock() {
-        if (m_checker.isLockedByCurrentThread()) {
-            throw std::runtime_error("Recursive mutex lock detected");
-        }
         m_mutex.lock();
-        m_checker.lock();
+        if (m_checker.isLockedByCurrentThread()) {
+            // This is a recursive lock - just increment the count
+            m_lockCount++;
+            // Uncomment for debugging
+            // std::cerr << "Recursive lock detected, count: " << m_lockCount << std::endl;
+        } else {
+            // First lock by this thread
+            m_checker.lock();
+            m_lockCount = 1;
+        }
     }
 
     /**
      * @brief Try to lock the mutex
      * @return True if the mutex was locked, false otherwise
-     * @throws std::runtime_error if the mutex is already locked by the current thread
      */
     bool try_lock() {
-        if (m_checker.isLockedByCurrentThread()) {
-            throw std::runtime_error("Recursive mutex lock detected");
-        }
         bool locked = m_mutex.try_lock();
         if (locked) {
-            m_checker.lock();
+            if (m_checker.isLockedByCurrentThread()) {
+                // This is a recursive lock - just increment the count
+                m_lockCount++;
+            } else {
+                // First lock by this thread
+                m_checker.lock();
+                m_lockCount = 1;
+            }
         }
         return locked;
     }
@@ -87,7 +106,13 @@ public:
      * @brief Unlock the mutex
      */
     void unlock() {
-        m_checker.unlock();
+        if (m_checker.isLockedByCurrentThread()) {
+            m_lockCount--;
+            if (m_lockCount == 0) {
+                // Last unlock by this thread
+                m_checker.unlock();
+            }
+        }
         m_mutex.unlock();
     }
 
@@ -100,17 +125,26 @@ public:
     }
 
     /**
-     * @brief Get the underlying std::mutex
-     * @return Reference to the underlying std::mutex
+     * @brief Get the lock count for the current thread
+     * @return The number of times the current thread has locked this mutex
+     */
+    int getLockCount() const {
+        return m_checker.isLockedByCurrentThread() ? static_cast<int>(m_lockCount.load()) : 0;
+    }
+
+    /**
+     * @brief Get the underlying std::recursive_mutex
+     * @return Reference to the underlying std::recursive_mutex
      * @note This is needed for compatibility with std::lock_guard
      */
     operator std::mutex&() {
-        return m_mutex;
+        return reinterpret_cast<std::mutex&>(m_mutex);
     }
 
 private:
-    std::mutex m_mutex;
+    std::recursive_mutex m_mutex;
     MutexOwnershipChecker m_checker;
+    std::atomic<int> m_lockCount;
 };
 
 } // namespace dht_hunter::util

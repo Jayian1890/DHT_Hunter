@@ -1,6 +1,7 @@
 #include "dht_hunter/dht/routing_table.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
 #include "dht_hunter/logforge/logger_macros.hpp"
+#include "dht_hunter/util/mutex_utils.hpp"
 #include <algorithm>
 #include <cassert>
 
