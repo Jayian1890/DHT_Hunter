@@ -26,7 +26,6 @@ A pragmatic, phased approach to implementing a scalable storage system for DHT H
 ### Goals
 - Implement a simple, reliable storage system for torrent metadata
 - Replace the current in-memory storage with persistent storage
-- Ensure backward compatibility with existing code
 
 ### Implementation Checklist
 
@@ -45,7 +44,6 @@ A pragmatic, phased approach to implementing a scalable storage system for DHT H
 | - Periodic flushing mechanism | Not Started | 0% | |
 | **Integration** | Not Started | 0% | |
 | - Update `MetadataStorage` class | Not Started | 0% | |
-| - Backward compatibility | Not Started | 0% | |
 | **Testing** | Not Started | 0% | |
 | - Unit tests | Not Started | 0% | |
 | - Performance tests | Not Started | 0% | |
@@ -67,7 +65,6 @@ A pragmatic, phased approach to implementing a scalable storage system for DHT H
 
 4. **Integration**:
    - Update the existing `MetadataStorage` class to use the new storage backend
-   - Maintain the same interface for backward compatibility
 
 ## Phase 2: Memory-Optimized Storage (2-3 weeks)
 
@@ -246,7 +243,6 @@ struct ExtractedMetadata {
 
 1. **Update MetadataStorage Class**:
    - Modify the existing class to use the new storage backend
-   - Maintain the same interface for backward compatibility
 
 2. **Add New Query Methods**:
    - Extend the API with new search and filtering capabilities
