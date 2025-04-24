@@ -193,8 +193,8 @@ public:
      * @param useColors Whether to use colored output in the console.
      * @param async Whether to use asynchronous logging.
      */
-    static void init(const LogLevel consoleLevel = LogLevel::INFO,
-                    const LogLevel fileLevel = LogLevel::DEBUG,
+    static void init(const LogLevel consoleLevel = LogLevel::TRACE,
+                    const LogLevel fileLevel = LogLevel::TRACE,
                     const std::string& filename = "",  // Empty string means use executable name
                     bool useColors = true,
                     const bool async = false) {
@@ -244,8 +244,8 @@ public:
      * @param useColors Whether to use colored output in the console.
      * @param async Whether to use asynchronous logging.
      */
-    static void initWithSizeRotation(const LogLevel consoleLevel = LogLevel::INFO,
-                                    const LogLevel fileLevel = LogLevel::DEBUG,
+    static void initWithSizeRotation(const LogLevel consoleLevel = LogLevel::TRACE,
+                                    const LogLevel fileLevel = LogLevel::TRACE,
                                     const std::string& filename = "",  // Empty string means use executable name
                                     size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
                                     size_t maxFiles = 5,
@@ -297,8 +297,8 @@ public:
      * @param useColors Whether to use colored output in the console.
      * @param async Whether to use asynchronous logging.
      */
-    static void initWithTimeRotation(const LogLevel consoleLevel = LogLevel::INFO,
-                                    const LogLevel fileLevel = LogLevel::DEBUG,
+    static void initWithTimeRotation(const LogLevel consoleLevel = LogLevel::TRACE,
+                                    const LogLevel fileLevel = LogLevel::TRACE,
                                     const std::string& filename = "",  // Empty string means use executable name
                                     int rotationHours = 24,  // 24 hours default
                                     size_t maxFiles = 5,
@@ -351,8 +351,8 @@ public:
      * @param useColors Whether to use colored output in the console.
      * @param async Whether to use asynchronous logging.
      */
-    static void initWithSizeAndTimeRotation(const LogLevel consoleLevel = LogLevel::INFO,
-                                           const LogLevel fileLevel = LogLevel::DEBUG,
+    static void initWithSizeAndTimeRotation(const LogLevel consoleLevel = LogLevel::TRACE,
+                                           const LogLevel fileLevel = LogLevel::TRACE,
                                            const std::string& filename = "",  // Empty string means use executable name
                                            size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
                                            int rotationHours = 24,  // 24 hours default

@@ -32,8 +32,8 @@ public:
      * @param async Whether to use asynchronous logging.
      */
     void initializeLogger(
-        const LogLevel consoleLevel = LogLevel::INFO,
-        const LogLevel fileLevel = LogLevel::DEBUG,
+        const LogLevel consoleLevel = LogLevel::TRACE,
+        const LogLevel fileLevel = LogLevel::TRACE,
         const std::string& filename = "",  // Empty string means use executable name
         bool useColors = true,
         const bool async = false
