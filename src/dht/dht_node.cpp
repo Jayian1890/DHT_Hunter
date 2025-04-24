@@ -122,7 +122,7 @@ bool DHTNode::start() {
     }
     // Create UDP socket with proper locking
     {
-        std::lock_guard<std::mutex> lock(m_socketMutex);
+        std::lock_guard lock(m_socketMutex);
         m_socket = network::SocketFactory::createUDPSocket();
         // Bind to port
         if (!m_socket->bind(network::EndPoint(network::NetworkAddress::any(), m_port))) {
@@ -273,7 +273,7 @@ void DHTNode::stop() {
 
     // Clear transactions
     try {
-        std::lock_guard<std::mutex> lock(m_transactionsMutex);
+        std::lock_guard lock(m_transactionsMutex);
         m_transactions.clear();
     } catch (const std::exception& e) {
         getLogger()->error("Exception while clearing transactions: {}", e.what());

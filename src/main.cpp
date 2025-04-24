@@ -13,8 +13,7 @@
 #include "dht_hunter/util/filesystem_utils.hpp"
 
 namespace {
-    // Initialize the logger during static initialization, before main() is called
-    // Set both console and file log levels to TRACE, and async to false
+    // This struct will be initialized during static initialization,
     struct LogInitializer {
         LogInitializer() {
             dht_hunter::logforge::getLogInitializer().initializeLogger(
@@ -28,7 +27,7 @@ namespace {
     };
 
     // This static instance will be initialized before main() is called
-    static LogInitializer g_logInitializer;
+    [[maybe_unused]] LogInitializer g_logInitializer;
 }
 
 DEFINE_COMPONENT_LOGGER("Main", "Application")
@@ -44,9 +43,6 @@ void signalHandler(int signal) {
 
 int main(int argc, char* argv[]) {
     std::string configDir = "config";
-
-    // Set global log level
-    dht_hunter::logforge::LogForge::setGlobalLevel(dht_hunter::logforge::LogLevel::TRACE);
 
     // Log the actual log filename being used
     getLogger()->info("Using log file: {}.log", dht_hunter::util::FilesystemUtils::getExecutableName());
@@ -80,7 +76,7 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    getLogger()->info("Starting DHT node on port {} with config directory {}", port, configDir);
+    getLogger()->info("Starting DHT node on port '{}' with config directory '{}'", port, configDir);
 
     // Create and start the DHT node
     auto dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(port, configDir);
@@ -184,7 +180,9 @@ int main(int argc, char* argv[]) {
 
     // Save the routing table
     getLogger()->info("Saving routing table");
-    dhtNode->saveRoutingTable(configDir + "/routing_table.dat");
+    if (dhtNode->saveRoutingTable(configDir + "/routing_table.dat")) {
+        getLogger()->info("Routing table saved successfully");
+    }
 
     // Flush logs before exit
     dht_hunter::logforge::LogForge::flush();
