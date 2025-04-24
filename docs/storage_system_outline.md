@@ -8,7 +8,7 @@ A pragmatic, phased approach to implementing a scalable storage system for DHT H
 
 | Phase | Description | Status | Completion % | Notes |
 |-------|-------------|--------|--------------|-------|
-| 1     | Basic File-Based Storage | Not Started | 0% | |
+| 1     | Basic File-Based Storage | In Progress | 25% | File organization implemented |
 | 2     | Memory-Optimized Storage | Not Started | 0% | |
 | 3     | Indexed Storage | Not Started | 0% | |
 | 4     | Advanced Features | Not Started | 0% | |
@@ -31,22 +31,22 @@ A pragmatic, phased approach to implementing a scalable storage system for DHT H
 
 | Task | Status | Completion % | Notes |
 |------|--------|--------------|-------|
-| **File Organization** | Not Started | 0% | |
-| - Directory structure with sharding | Not Started | 0% | |
-| - File naming convention | Not Started | 0% | |
-| **Core Operations** | Not Started | 0% | |
-| - `bool addMetadata(infoHash, data, size)` | Not Started | 0% | |
-| - `std::pair<data, size> getMetadata(infoHash)` | Not Started | 0% | |
-| - `bool removeMetadata(infoHash)` | Not Started | 0% | |
-| - `bool exists(infoHash)` | Not Started | 0% | |
-| **Index File** | Not Started | 0% | |
-| - Info hash to file mapping | Not Started | 0% | |
-| - Periodic flushing mechanism | Not Started | 0% | |
-| **Integration** | Not Started | 0% | |
-| - Update `MetadataStorage` class | Not Started | 0% | |
-| **Testing** | Not Started | 0% | |
-| - Unit tests | Not Started | 0% | |
-| - Performance tests | Not Started | 0% | |
+| **File Organization** | Completed | 100% | Implemented with configurable sharding levels |
+| - Directory structure with sharding | Completed | 100% | Uses first N hex chars of info hash for subdirectories |
+| - File naming convention | Completed | 100% | Uses full hex info hash as filename |
+| **Core Operations** | Completed | 100% | All core operations implemented and tested |
+| - `bool addMetadata(infoHash, data, size)` | Completed | 100% | Stores metadata with size header |
+| - `std::pair<data, size> getMetadata(infoHash)` | Completed | 100% | Returns data and size as optional pair |
+| - `bool removeMetadata(infoHash)` | Completed | 100% | Removes file and updates index |
+| - `bool exists(infoHash)` | Completed | 100% | Checks if file exists |
+| **Index File** | Completed | 100% | Simple text-based index implemented |
+| - Info hash to file mapping | Completed | 100% | Stores hex info hashes in text file |
+| - Periodic flushing mechanism | Completed | 100% | Flushes every 100 operations |
+| **Integration** | In Progress | 50% | Basic class implemented |
+| - Update `MetadataStorage` class | Completed | 100% | Created new class with all required functionality |
+| **Testing** | Completed | 100% | Basic tests implemented |
+| - Unit tests | Completed | 100% | Test program verifies all operations |
+| - Performance tests | Completed | 100% | Performance metrics included in test |
 
 ### Implementation Details
 1. **File Organization**:
