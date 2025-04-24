@@ -267,6 +267,10 @@ bool RoutingTable::isEmpty() const {
 }
 void RoutingTable::clear() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    clearNoLock();
+}
+
+void RoutingTable::clearNoLock() {
     for (auto& bucket : m_buckets) {
         bucket = KBucket(bucket.getIndex());
     }

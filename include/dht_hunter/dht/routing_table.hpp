@@ -278,6 +278,12 @@ public:
     void clear();
 
     /**
+     * @brief Clears the routing table without locking the mutex
+     * @note This method should only be called when the mutex is already locked
+     */
+    void clearNoLock();
+
+    /**
      * @brief Saves the routing table to a file
      * @param filePath The path to the file
      * @return True if the routing table was saved successfully, false otherwise

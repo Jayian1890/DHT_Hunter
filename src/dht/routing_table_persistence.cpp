@@ -120,8 +120,8 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
         // Read the number of nodes
         size_t totalNodes;
         file.read(reinterpret_cast<char*>(&totalNodes), static_cast<std::streamsize>(sizeof(totalNodes)));
-        // Clear the routing table
-        clear();
+        // Clear the routing table without trying to lock the mutex again
+        clearNoLock();
         // Read each node
         size_t nodesLoaded = 0;
         for (size_t i = 0; i < totalNodes; ++i) {
