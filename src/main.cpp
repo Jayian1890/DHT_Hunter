@@ -32,6 +32,7 @@ void signalHandler(int signal) {
 int main(int argc, char* argv[]) {
     std::string configDir = "config";
 
+
     // Initialize logging if not already initialized
     dht_hunter::logforge::getLogInitializer().initializeLogger(
         dht_hunter::logforge::LogLevel::TRACE,
@@ -40,6 +41,9 @@ int main(int argc, char* argv[]) {
         true,
         false
     );
+
+    // Set global log level to TRACE
+    dht_hunter::logforge::LogForge::setGlobalLevel(dht_hunter::logforge::LogLevel::TRACE);
 
     // Parse command line arguments
     uint16_t port = 6881;
