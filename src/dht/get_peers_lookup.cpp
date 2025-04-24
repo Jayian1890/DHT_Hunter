@@ -20,7 +20,7 @@ bool DHTNode::startGetPeersLookup(const InfoHash& infoHash, GetPeersLookupCallba
     std::string lookupID = nodeIDToString(infoHash);
     // Add the lookup to the map
     {
-        std::lock_guard<std::mutex> lock(m_getPeersLookupsLock);
+        std::lock_guard<util::CheckedMutex> lock(m_getPeersLookupsLock);
         m_getPeersLookups[lookupID] = lookup;
     }
     // Start with nodes from our routing table
@@ -30,14 +30,14 @@ bool DHTNode::startGetPeersLookup(const InfoHash& infoHash, GetPeersLookupCallba
         getLogger()->error("Cannot start get_peers lookup: No nodes in routing table");
         // Remove the lookup from the map
         {
-            std::lock_guard<std::mutex> lock(m_getPeersLookupsLock);
+            std::lock_guard<util::CheckedMutex> lock(m_getPeersLookupsLock);
             m_getPeersLookups.erase(lookupID);
         }
         return false;
     }
     // Add the nodes to the lookup
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         for (const auto& node : closestNodes) {
             LookupNode lookupNode;
             lookupNode.node = node;
@@ -62,7 +62,7 @@ bool DHTNode::startGetPeersLookup(const InfoHash& infoHash, GetPeersLookupCallba
 void DHTNode::continueGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
     // Check if the lookup has completed
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         if (lookup->completed) {
             return;
         }
@@ -79,7 +79,7 @@ void DHTNode::continueGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
     // Find the closest nodes that haven't been queried yet
     std::vector<LookupNode*> nodesToQuery;
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         for (auto& node : lookup->nodes) {
             if (!node.queried) {
                 nodesToQuery.push_back(&node);
@@ -96,7 +96,7 @@ void DHTNode::continueGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
     }
     // If there are no nodes to query, check if we're done
     if (nodesToQuery.empty()) {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         // If there are no active queries, we're done
         if (lookup->activeQueries == 0) {
             getLogger()->debug("Get_peers lookup completed: no more nodes to query");
@@ -118,7 +118,7 @@ void DHTNode::continueGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
                 }
                 // Decrement the active queries count
                 {
-                    std::lock_guard<std::mutex> lock(lookup->mutex);
+                    std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
                     lookup->activeQueries--;
                     // Mark the node as responded
                     node->responded = true;
@@ -132,7 +132,7 @@ void DHTNode::continueGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
                              error->getMessage(), error->getCode());
                 // Decrement the active queries count
                 {
-                    std::lock_guard<std::mutex> lock(lookup->mutex);
+                    std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
                     lookup->activeQueries--;
                 }
                 // Continue the lookup
@@ -143,7 +143,7 @@ void DHTNode::continueGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
                              node->node->getEndpoint().toString());
                 // Decrement the active queries count
                 {
-                    std::lock_guard<std::mutex> lock(lookup->mutex);
+                    std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
                     lookup->activeQueries--;
                 }
                 // Continue the lookup
@@ -158,7 +158,7 @@ void DHTNode::handleGetPeersLookupResponse(std::shared_ptr<GetPeersLookup> looku
     if (m_infoHashCollector) {
         m_infoHashCollector->addInfoHash(lookup->infoHash);
     }
-    std::lock_guard<std::mutex> lock(lookup->mutex);
+    std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
     // Check if we got peers
     const auto& peers = response->getPeers();
     if (!peers.empty()) {
@@ -235,7 +235,7 @@ void DHTNode::completeGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
     std::vector<std::shared_ptr<Node>> closestNodes;
     std::string token;
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         // Copy the peers
         peers = lookup->peers;
         // Get the token
@@ -273,7 +273,7 @@ void DHTNode::completeGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
     lookup->callback(peers, closestNodes, token);
     // Remove the lookup from the map
     {
-        std::lock_guard<std::mutex> lock(m_getPeersLookupsLock);
+        std::lock_guard<util::CheckedMutex> lock(m_getPeersLookupsLock);
         m_getPeersLookups.erase(nodeIDToString(lookup->infoHash));
     }
 }

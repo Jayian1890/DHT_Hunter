@@ -101,7 +101,7 @@ bool DHTNode::startNodeLookup(const NodeID& targetID, NodeLookupCallback callbac
     std::string lookupID = nodeIDToString(targetID);
     // Add the lookup to the map
     {
-        std::lock_guard<std::mutex> lock(m_nodeLookupsLock);
+        std::lock_guard<util::CheckedMutex> lock(m_nodeLookupsLock);
         m_nodeLookups[lookupID] = lookup;
     }
     // Start with nodes from our routing table
@@ -111,14 +111,14 @@ bool DHTNode::startNodeLookup(const NodeID& targetID, NodeLookupCallback callbac
         getLogger()->error("Cannot start node lookup: No nodes in routing table");
         // Remove the lookup from the map
         {
-            std::lock_guard<std::mutex> lock(m_nodeLookupsLock);
+            std::lock_guard<util::CheckedMutex> lock(m_nodeLookupsLock);
             m_nodeLookups.erase(lookupID);
         }
         return false;
     }
     // Add the nodes to the lookup
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         for (const auto& node : closestNodes) {
             LookupNode lookupNode;
             lookupNode.node = node;
@@ -143,7 +143,7 @@ bool DHTNode::startNodeLookup(const NodeID& targetID, NodeLookupCallback callbac
 void DHTNode::continueNodeLookup(std::shared_ptr<NodeLookup> lookup) {
     // Check if the lookup has completed
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         if (lookup->completed) {
             return;
         }
@@ -160,7 +160,7 @@ void DHTNode::continueNodeLookup(std::shared_ptr<NodeLookup> lookup) {
     // Find the closest nodes that haven't been queried yet
     std::vector<LookupNode*> nodesToQuery;
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         for (auto& node : lookup->nodes) {
             if (!node.queried) {
                 nodesToQuery.push_back(&node);
@@ -177,7 +177,7 @@ void DHTNode::continueNodeLookup(std::shared_ptr<NodeLookup> lookup) {
     }
     // If there are no nodes to query, check if we're done
     if (nodesToQuery.empty()) {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         // If there are no active queries, we're done
         if (lookup->activeQueries == 0) {
             getLogger()->debug("Node lookup completed: no more nodes to query");
@@ -224,7 +224,7 @@ void DHTNode::continueNodeLookup(std::shared_ptr<NodeLookup> lookup) {
                              error->getMessage(), error->getCode());
                 // Decrement the active queries count
                 {
-                    std::lock_guard<std::mutex> lock(lookup->mutex);
+                    std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
                     lookup->activeQueries--;
 
                     // Find the node by ID and mark it as responded
@@ -243,7 +243,7 @@ void DHTNode::continueNodeLookup(std::shared_ptr<NodeLookup> lookup) {
                              nodeEndpoint.toString());
                 // Decrement the active queries count
                 {
-                    std::lock_guard<std::mutex> lock(lookup->mutex);
+                    std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
                     lookup->activeQueries--;
 
                     // Find the node by ID and mark it as responded
@@ -271,7 +271,7 @@ void DHTNode::handleNodeLookupResponse(std::shared_ptr<NodeLookup> lookup,
     }
     // Add the nodes to the lookup
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         for (const auto& node : nodes) {
             // Skip nodes with our own ID
             if (node.id == m_nodeID) {
@@ -314,7 +314,7 @@ void DHTNode::completeNodeLookup(std::shared_ptr<NodeLookup> lookup) {
     // Get the closest nodes
     std::vector<std::shared_ptr<Node>> closestNodes;
     {
-        std::lock_guard<std::mutex> lock(lookup->mutex);
+        std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         // Sort nodes by distance to the target
         std::sort(lookup->nodes.begin(), lookup->nodes.end(),
             [](const LookupNode& a, const LookupNode& b) {
@@ -348,7 +348,7 @@ void DHTNode::completeNodeLookup(std::shared_ptr<NodeLookup> lookup) {
     lookup->callback(closestNodes);
     // Remove the lookup from the map
     {
-        std::lock_guard<std::mutex> lock(m_nodeLookupsLock);
+        std::lock_guard<util::CheckedMutex> lock(m_nodeLookupsLock);
         m_nodeLookups.erase(nodeIDToString(lookup->targetID));
     }
 }
