@@ -164,7 +164,7 @@ public:
      * @param id The node ID to find
      * @return The node, or nullptr if not found
      */
-    std::shared_ptr<Node> findNode(const NodeID& id);
+    std::shared_ptr<Node> findNode(const NodeID& id) const;
 
     /**
      * @brief Gets the least recently seen node in the bucket

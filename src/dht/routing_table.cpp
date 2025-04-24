@@ -107,7 +107,7 @@ bool KBucket::removeNode(std::shared_ptr<Node> node) {
     }
     return false;
 }
-std::shared_ptr<Node> KBucket::findNode(const NodeID& id) {
+std::shared_ptr<Node> KBucket::findNode(const NodeID& id) const {
     for (const auto& node : m_nodes) {
         if (node->getID() == id) {
             return node;

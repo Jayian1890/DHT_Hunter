@@ -7,7 +7,7 @@ namespace dht_hunter::util {
 
 /**
  * @brief Utility class to check if the current thread owns a mutex
- * 
+ *
  * This class is used to prevent recursive locking of a mutex, which can lead to deadlocks.
  * It's a debugging tool that helps identify potential deadlock situations.
  */
@@ -49,7 +49,7 @@ private:
 
 /**
  * @brief A mutex wrapper that checks for recursive locking
- * 
+ *
  * This class wraps a std::mutex and adds checking to prevent recursive locking.
  * It's useful for debugging and preventing deadlocks.
  */
@@ -97,6 +97,15 @@ public:
      */
     bool isLockedByCurrentThread() const {
         return m_checker.isLockedByCurrentThread();
+    }
+
+    /**
+     * @brief Get the underlying std::mutex
+     * @return Reference to the underlying std::mutex
+     * @note This is needed for compatibility with std::lock_guard
+     */
+    operator std::mutex&() {
+        return m_mutex;
     }
 
 private:
