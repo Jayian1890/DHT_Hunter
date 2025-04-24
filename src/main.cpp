@@ -16,6 +16,7 @@
 #include "dht_hunter/logforge/log_initializer.hpp"
 #include "dht_hunter/dht/dht_node.hpp"
 #include "dht_hunter/crawler/infohash_collector.hpp"
+#include "dht_hunter/crawler/dht_crawler.hpp"
 #include "dht_hunter/util/filesystem_utils.hpp"
 
 namespace {
@@ -41,8 +42,7 @@ DEFINE_COMPONENT_LOGGER("Main", "Application")
 // Global variables for signal handling
 std::atomic<bool> g_running(true);
 std::atomic<bool> g_shutdown_requested(false);
-std::shared_ptr<dht_hunter::dht::DHTNode> g_dhtNode;
-std::shared_ptr<dht_hunter::crawler::InfoHashCollector> g_collector;
+std::shared_ptr<dht_hunter::crawler::DHTCrawler> g_crawler;
 
 // Signal handler
 void signalHandler(int signal) {
@@ -66,6 +66,9 @@ struct CommandLineArgs {
     bool verbose = false;
     size_t maxInfoHashes = 1000000;
     std::chrono::seconds saveInterval = std::chrono::seconds(300);
+    uint32_t maxConcurrentLookups = 10;
+    uint32_t maxLookupsPerMinute = 60;
+    bool useCrawler = true;
 };
 
 /**
@@ -89,6 +92,12 @@ CommandLineArgs parseCommandLine(int argc, char* argv[]) {
             args.maxInfoHashes = static_cast<size_t>(std::stoull(argv[++i]));
         } else if (arg == "--save-interval" && i + 1 < argc) {
             args.saveInterval = std::chrono::seconds(std::stoi(argv[++i]));
+        } else if (arg == "--max-concurrent-lookups" && i + 1 < argc) {
+            args.maxConcurrentLookups = static_cast<uint32_t>(std::stoi(argv[++i]));
+        } else if (arg == "--max-lookups-per-minute" && i + 1 < argc) {
+            args.maxLookupsPerMinute = static_cast<uint32_t>(std::stoi(argv[++i]));
+        } else if (arg == "--no-crawler") {
+            args.useCrawler = false;
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
             std::cout << "Options:" << std::endl;
@@ -97,6 +106,9 @@ CommandLineArgs parseCommandLine(int argc, char* argv[]) {
             std::cout << "  --verbose, -v            Enable verbose logging" << std::endl;
             std::cout << "  --max-infohashes NUM     Maximum number of infohashes to store (default: 1000000)" << std::endl;
             std::cout << "  --save-interval SEC     Interval in seconds for saving infohashes (default: 300)" << std::endl;
+            std::cout << "  --max-concurrent-lookups NUM  Maximum number of concurrent lookups (default: 10)" << std::endl;
+            std::cout << "  --max-lookups-per-minute NUM  Maximum number of lookups per minute (default: 60)" << std::endl;
+            std::cout << "  --no-crawler            Disable the crawler component and use basic DHT node" << std::endl;
             std::cout << "  --help, -h               Show this help message" << std::endl;
             std::exit(0);
         }
@@ -106,7 +118,58 @@ CommandLineArgs parseCommandLine(int argc, char* argv[]) {
 }
 
 /**
- * @brief Configure the InfoHashCollector
+ * @brief Configure and create the DHTCrawler
+ * @param args Command line arguments
+ * @return Configured DHTCrawler instance
+ */
+std::shared_ptr<dht_hunter::crawler::DHTCrawler> configureCrawler(const CommandLineArgs& args) {
+    dht_hunter::crawler::DHTCrawlerConfig config;
+
+    // DHT node configuration
+    config.dhtPort = args.port;
+    config.configDir = args.configDir;
+    config.bootstrapNodes = {
+        "router.bittorrent.com:6881",
+        "dht.transmissionbt.com:6881",
+        "router.utorrent.com:6881",
+        "router.bitcomet.com:6881",
+        "dht.aelitis.com:6881"
+    };
+
+    // Crawling configuration
+    config.maxConcurrentLookups = args.maxConcurrentLookups;
+    config.maxLookupsPerMinute = args.maxLookupsPerMinute;
+    config.lookupInterval = std::chrono::milliseconds(100);
+    config.statusInterval = std::chrono::seconds(60);
+
+    // InfoHash collector configuration
+    config.infoHashCollectorConfig.maxStoredInfoHashes =
+        static_cast<uint32_t>(std::min(args.maxInfoHashes, static_cast<size_t>(std::numeric_limits<uint32_t>::max())));
+    config.infoHashCollectorConfig.saveInterval = args.saveInterval;
+    config.infoHashCollectorConfig.savePath = args.configDir + "/infohashes.dat";
+    config.infoHashCollectorConfig.deduplicateInfoHashes = true;
+    config.infoHashCollectorConfig.filterInvalidInfoHashes = true;
+    config.infoHashCollectorConfig.maxQueueSize = 100000; // Increased queue size for better performance
+
+    // Create the crawler
+    auto crawler = std::make_shared<dht_hunter::crawler::DHTCrawler>(config);
+
+    // Set status callback for logging
+    crawler->setStatusCallback([](uint64_t infoHashesDiscovered, uint64_t infoHashesQueued,
+                                uint64_t metadataFetched, double lookupRate, double metadataFetchRate) {
+        getLogger()->info("Crawler Status:");
+        getLogger()->info("  InfoHashes Discovered: {}", infoHashesDiscovered);
+        getLogger()->info("  InfoHashes Queued: {}", infoHashesQueued);
+        getLogger()->info("  Metadata Fetched: {}", metadataFetched);
+        getLogger()->info("  Lookup Rate: {:.2f} lookups/minute", lookupRate);
+        getLogger()->info("  Metadata Fetch Rate: {:.2f} fetches/minute", metadataFetchRate);
+    });
+
+    return crawler;
+}
+
+/**
+ * @brief Configure the InfoHashCollector (used when not using the crawler)
  * @param collector The collector to configure
  * @param args Command line arguments
  * @param configDir Configuration directory
@@ -253,41 +316,57 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    getLogger()->info("Starting DHT node on port {} with config directory '{}'", args.port, args.configDir);
-    getLogger()->info("Maximum infohashes: {}, Save interval: {} seconds",
-                 args.maxInfoHashes, args.saveInterval.count());
-
     // Record start time for uptime calculation
     auto startTime = std::chrono::steady_clock::now();
 
-    // Create and start the DHT node
-    g_dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(args.port, args.configDir);
+    if (args.useCrawler) {
+        // Use the DHTCrawler component for more efficient InfoHash collection
+        getLogger()->info("Starting DHT Crawler on port {} with config directory '{}'", args.port, args.configDir);
+        getLogger()->info("Maximum infohashes: {}, Save interval: {} seconds",
+                     args.maxInfoHashes, args.saveInterval.count());
+        getLogger()->info("Max concurrent lookups: {}, Max lookups per minute: {}",
+                     args.maxConcurrentLookups, args.maxLookupsPerMinute);
 
-    // Create an InfoHash collector
-    g_collector = std::make_shared<dht_hunter::crawler::InfoHashCollector>();
-    g_dhtNode->setInfoHashCollector(g_collector);
+        // Configure and create the crawler
+        g_crawler = configureCrawler(args);
 
-    // Configure the InfoHash collector
-    configureInfoHashCollector(g_collector, args, args.configDir);
+        // Start the crawler
+        if (!g_crawler->start()) {
+            getLogger()->error("Failed to start DHT Crawler");
+            return 1;
+        }
 
-    // Start the DHT node
-    if (!g_dhtNode->start()) {
-        getLogger()->error("Failed to start DHT node");
-        return 1;
+        getLogger()->info("DHT Crawler started successfully");
+    } else {
+        // Use the basic DHT node approach
+        getLogger()->info("Starting DHT node on port {} with config directory '{}'", args.port, args.configDir);
+        getLogger()->info("Maximum infohashes: {}, Save interval: {} seconds",
+                     args.maxInfoHashes, args.saveInterval.count());
+
+        // Create and start the DHT node
+        auto dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(args.port, args.configDir);
+
+        // Create an InfoHash collector
+        auto collector = std::make_shared<dht_hunter::crawler::InfoHashCollector>();
+        dhtNode->setInfoHashCollector(collector);
+
+        // Configure the InfoHash collector
+        configureInfoHashCollector(collector, args, args.configDir);
+
+        // Start the DHT node
+        if (!dhtNode->start()) {
+            getLogger()->error("Failed to start DHT node");
+            return 1;
+        }
+
+        // Bootstrap the DHT node
+        bootstrapDHTNode(dhtNode);
     }
 
-    // Bootstrap the DHT node
-    bootstrapDHTNode(g_dhtNode);
-
     // Main loop
-    getLogger()->info("DHT node running, press Ctrl+C to exit");
+    getLogger()->info("DHT Hunter running, press Ctrl+C to exit");
 
-    // Statistics variables
-    size_t lastInfoHashCount = 0;
-    auto lastStatsTime = std::chrono::steady_clock::now();
-    auto lastLookupTime = std::chrono::steady_clock::now();
-    auto lastSaveTime = std::chrono::steady_clock::now();
-
+    // Sleep until shutdown is requested
     while (g_running) {
         // Sleep for a short time
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -296,68 +375,42 @@ int main(int argc, char* argv[]) {
         if (g_shutdown_requested.load()) {
             break;
         }
-
-        // Current time
-        auto now = std::chrono::steady_clock::now();
-
-        // Print statistics every minute
-        if (now - lastStatsTime >= std::chrono::minutes(1)) {
-            printStatistics(g_dhtNode, g_collector, lastInfoHashCount, startTime);
-            lastStatsTime = now;
-        }
-
-        // Perform a random lookup every 5 minutes to keep the routing table fresh
-        if (now - lastLookupTime >= std::chrono::minutes(5)) {
-            dht_hunter::dht::NodeID randomID = dht_hunter::dht::generateRandomNodeID();
-            g_dhtNode->findClosestNodes(randomID, [](const std::vector<std::shared_ptr<dht_hunter::dht::Node>>& nodes) {
-                getLogger()->debug("Random lookup completed, found {} nodes", nodes.size());
-            });
-            lastLookupTime = now;
-        }
-
-        // Save routing table every 15 minutes
-        if (now - lastSaveTime >= std::chrono::minutes(15)) {
-            getLogger()->info("Periodic saving of routing table");
-            if (g_dhtNode->saveRoutingTable(args.configDir + "/routing_table.dat")) {
-                getLogger()->info("Routing table saved successfully");
-            }
-            lastSaveTime = now;
-        }
     }
 
     // Graceful shutdown
     getLogger()->info("Initiating graceful shutdown");
 
-    // Stop the InfoHash collector first
-    getLogger()->info("Stopping InfoHash collector");
-    g_collector->stop();
+    if (args.useCrawler) {
+        // Stop the crawler
+        getLogger()->info("Stopping DHT Crawler");
+        g_crawler->stop();
 
-    // Save infohashes before stopping
-    std::string infoHashPath = args.configDir + "/infohashes.dat";
-    getLogger()->info("Saving infohashes to {}", infoHashPath);
-    if (g_collector->saveInfoHashes(infoHashPath)) {
-        getLogger()->info("Infohashes saved successfully");
-    } else {
-        getLogger()->error("Failed to save infohashes");
+        // Get final statistics
+        uint64_t infoHashesDiscovered = g_crawler->getInfoHashesDiscovered();
+        uint64_t metadataFetched = g_crawler->getMetadataFetched();
+
+        // Print final statistics
+        getLogger()->info("Final statistics:");
+        getLogger()->info("  InfoHashes discovered: {}", infoHashesDiscovered);
+        getLogger()->info("  Metadata items fetched: {}", metadataFetched);
+
+        // Calculate uptime
+        auto now = std::chrono::steady_clock::now();
+        auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
+        auto days = static_cast<int>(uptime / 86400);
+        auto hours = static_cast<int>((uptime % 86400) / 3600);
+        auto minutes = static_cast<int>((uptime % 3600) / 60);
+        auto seconds = static_cast<int>(uptime % 60);
+
+        // Calculate infohash rate
+        double infoHashRate = static_cast<double>(infoHashesDiscovered) / (uptime > 0 ? uptime : 1);
+
+        getLogger()->info("  Uptime: {}d {:02d}h {:02d}m {:02d}s", days, hours, minutes, seconds);
+        getLogger()->info("  InfoHash discovery rate: {:.2f} per second", infoHashRate);
+
+        // Release resources
+        g_crawler.reset();
     }
-
-    // Stop the DHT node
-    getLogger()->info("Stopping DHT node");
-    g_dhtNode->stop();
-
-    // Save the routing table
-    getLogger()->info("Saving routing table");
-    if (g_dhtNode->saveRoutingTable(args.configDir + "/routing_table.dat")) {
-        getLogger()->info("Routing table saved successfully");
-    }
-
-    // Print final statistics
-    size_t finalInfoHashCount = g_collector->getInfoHashCount();
-    getLogger()->info("Final statistics: {} infohashes collected", finalInfoHashCount);
-
-    // Release resources
-    g_dhtNode.reset();
-    g_collector.reset();
 
     // Flush logs before exit
     dht_hunter::logforge::LogForge::flush();
