@@ -343,6 +343,11 @@ private:
     void statusThread();
 
     /**
+     * @brief Updates the terminal window title with current stats
+     */
+    void updateWindowTitle();
+
+    /**
      * @brief Active node discovery thread function
      */
     void activeNodeDiscoveryThread();

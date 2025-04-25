@@ -1263,45 +1263,78 @@ void DHTCrawler::metadataFetchThread() {
     }
     getLogger()->debug("Metadata fetch thread stopped");
 }
+void DHTCrawler::updateWindowTitle() {
+    // Update statistics
+    // Only get the statistics we need for the title
+    uint64_t metadataFetched = m_metadataFetched;
+    double lookupRate = m_lookupRate;
+
+    // Get the total number of info hashes from the collector
+    uint64_t totalInfoHashes = 0;
+    if (m_infoHashCollector) {
+        totalInfoHashes = m_infoHashCollector->getInfoHashCount();
+    }
+
+    // Update terminal window title with stats
+    std::string title = util::FilesystemUtils::getExecutableName() +
+                      " - InfoHashes: " + std::to_string(totalInfoHashes) +
+                      " - Metadata: " + std::to_string(metadataFetched) +
+                      " - Rate: " + std::to_string(static_cast<int>(lookupRate)) + "/min";
+    util::FilesystemUtils::setTerminalTitle(title);
+}
+
 void DHTCrawler::statusThread() {
     getLogger()->info("Status thread started");
+
+    // Time tracking for status updates and title updates
+    auto lastStatusTime = std::chrono::steady_clock::now();
+    auto lastTitleTime = lastStatusTime;
+
     while (m_running) {
-        // Update statistics
-        uint64_t infoHashesDiscovered = m_infoHashesDiscovered;
-        uint64_t infoHashesQueued = m_infoHashesQueued;
-        uint64_t metadataFetched = m_metadataFetched;
-        double lookupRate = m_lookupRate;
-        double metadataFetchRate = m_metadataFetchRate;
+        auto now = std::chrono::steady_clock::now();
 
-        // Get the total number of info hashes from the collector
-        uint64_t totalInfoHashes = 0;
-        if (m_infoHashCollector) {
-            totalInfoHashes = m_infoHashCollector->getInfoHashCount();
+        // Update the window title every 3 seconds
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastTitleTime).count() >= 3) {
+            updateWindowTitle();
+            lastTitleTime = now;
         }
 
-        // Log status with total info hashes
-        getLogger()->info("Status: {} info hashes discovered (total: {}), {} queued, {} metadata fetched, lookup rate: {:.2f}/min, metadata fetch rate: {:.2f}/min",
-                    infoHashesDiscovered, totalInfoHashes, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate);
+        // Full status update at the configured interval
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastStatusTime).count() >=
+            std::chrono::duration_cast<std::chrono::seconds>(m_config.statusInterval).count()) {
 
-        // Update terminal window title with stats
-        std::string title = util::FilesystemUtils::getExecutableName() +
-                          " - InfoHashes: " + std::to_string(totalInfoHashes) +
-                          " - Metadata: " + std::to_string(metadataFetched) +
-                          " - Rate: " + std::to_string(static_cast<int>(lookupRate)) + "/min";
-        util::FilesystemUtils::setTerminalTitle(title);
+            // Update statistics
+            uint64_t infoHashesDiscovered = m_infoHashesDiscovered;
+            uint64_t infoHashesQueued = m_infoHashesQueued;
+            uint64_t metadataFetched = m_metadataFetched;
+            double lookupRate = m_lookupRate;
+            double metadataFetchRate = m_metadataFetchRate;
 
-        // Call the status callback
-        if (m_statusCallback) {
-            m_statusCallback(infoHashesDiscovered, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate, totalInfoHashes);
+            // Get the total number of info hashes from the collector
+            uint64_t totalInfoHashes = 0;
+            if (m_infoHashCollector) {
+                totalInfoHashes = m_infoHashCollector->getInfoHashCount();
+            }
+
+            // Log status with total info hashes
+            getLogger()->info("Status: {} info hashes discovered (total: {}), {} queued, {} metadata fetched, lookup rate: {:.2f}/min, metadata fetch rate: {:.2f}/min",
+                        infoHashesDiscovered, totalInfoHashes, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate);
+
+            // Call the status callback
+            if (m_statusCallback) {
+                m_statusCallback(infoHashesDiscovered, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate, totalInfoHashes);
+            }
+
+            // Prioritize info hashes
+            if (m_config.prioritizePopularInfoHashes) {
+                prioritizeInfoHashes();
+            }
+
+            lastStatusTime = now;
         }
 
-        // Prioritize info hashes
-        if (m_config.prioritizePopularInfoHashes) {
-            prioritizeInfoHashes();
-        }
-
-        // Sleep for the status interval
-        std::this_thread::sleep_for(m_config.statusInterval);
+        // Sleep for a short time to avoid busy waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     getLogger()->debug("Status thread stopped");
 }
