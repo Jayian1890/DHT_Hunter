@@ -1,6 +1,7 @@
 #include "dht_hunter/crawler/dht_crawler.hpp"
 #include "dht_hunter/util/hash.hpp"
 #include "dht_hunter/util/filesystem_utils.hpp"
+#include "dht_hunter/util/process_utils.hpp"
 #include "dht_hunter/logforge/logger_macros.hpp"
 #include <algorithm>
 #include <random>
@@ -1297,10 +1298,22 @@ void DHTCrawler::updateWindowTitle() {
         totalInfoHashes = m_infoHashCollector->getInfoHashCount();
     }
 
+    // Get the routing table size
+    size_t routingTableSize = 0;
+    if (m_dhtNode) {
+        routingTableSize = m_dhtNode->getRoutingTable().size();
+    }
+
+    // Get memory usage
+    uint64_t memoryUsage = util::ProcessUtils::getMemoryUsage();
+    std::string memoryUsageStr = util::ProcessUtils::formatSize(memoryUsage);
+
     // Update terminal window title with stats
     std::string title = util::FilesystemUtils::getExecutableName() +
                       " - InfoHashes: " + std::to_string(totalInfoHashes) +
                       " - Metadata: " + std::to_string(metadataFetched) +
+                      " - RT: " + std::to_string(routingTableSize) +
+                      " - Mem: " + memoryUsageStr +
                       " - Rate: " + std::to_string(static_cast<int>(lookupRate)) + "/min";
     util::FilesystemUtils::setTerminalTitle(title);
 }
@@ -1338,13 +1351,23 @@ void DHTCrawler::statusThread() {
                 totalInfoHashes = m_infoHashCollector->getInfoHashCount();
             }
 
+            // Get the routing table size
+            size_t routingTableSize = 0;
+            if (m_dhtNode) {
+                routingTableSize = m_dhtNode->getRoutingTable().size();
+            }
+
+            // Get memory usage
+            uint64_t memoryUsage = util::ProcessUtils::getMemoryUsage();
+            std::string memoryUsageStr = util::ProcessUtils::formatSize(memoryUsage);
+
             // Log status with total info hashes
-            getLogger()->info("Status: {} info hashes discovered (total: {}), {} queued, {} metadata fetched, lookup rate: {:.2f}/min, metadata fetch rate: {:.2f}/min",
-                        infoHashesDiscovered, totalInfoHashes, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate);
+            getLogger()->info("Status: {} info hashes discovered (total: {}), {} queued, {} metadata fetched, routing table: {} nodes, memory: {}, lookup rate: {:.2f}/min, metadata fetch rate: {:.2f}/min",
+                        infoHashesDiscovered, totalInfoHashes, infoHashesQueued, metadataFetched, routingTableSize, memoryUsageStr, lookupRate, metadataFetchRate);
 
             // Call the status callback
             if (m_statusCallback) {
-                m_statusCallback(infoHashesDiscovered, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate, totalInfoHashes);
+                m_statusCallback(infoHashesDiscovered, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate, totalInfoHashes, routingTableSize, memoryUsage);
             }
 
             // Prioritize info hashes

@@ -115,6 +115,8 @@ struct DHTCrawlerConfig {
  * @param lookupRate The lookup rate (lookups per minute)
  * @param metadataFetchRate The metadata fetch rate (fetches per minute)
  * @param totalInfoHashes The total number of info hashes, including those loaded from disk
+ * @param routingTableSize The number of nodes in the routing table
+ * @param memoryUsage The memory usage in bytes
  */
 using CrawlerStatusCallback = std::function<void(
     uint64_t infoHashesDiscovered,
@@ -122,7 +124,9 @@ using CrawlerStatusCallback = std::function<void(
     uint64_t metadataFetched,
     double lookupRate,
     double metadataFetchRate,
-    uint64_t totalInfoHashes)>;
+    uint64_t totalInfoHashes,
+    size_t routingTableSize,
+    uint64_t memoryUsage)>;
 
 /**
  * @brief Class for crawling the DHT network to discover info hashes and fetch metadata

@@ -2,6 +2,7 @@
 add_library(dht_hunter_util
         filesystem_utils.cpp
         hash.cpp
+        process_utils.cpp
     # Other utility source files
 )
 

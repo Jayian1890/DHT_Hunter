@@ -11,6 +11,7 @@
 #include "dht_hunter/logforge/log_initializer.hpp"
 #include "dht_hunter/crawler/dht_crawler.hpp"
 #include "dht_hunter/util/filesystem_utils.hpp"
+#include "dht_hunter/util/process_utils.hpp"
 
 namespace {
     // This will be initialized during static initialization, before main() is called
@@ -72,7 +73,7 @@ std::shared_ptr<dht_hunter::crawler::DHTCrawler> createCrawler() {
     }
 
     // Set default values for crawler config
-    config.dhtPort = 6881;
+    config.dhtPort = 6882;  // Use a different port to avoid conflicts
     config.configDir = configDir;
     config.maxConcurrentLookups = 50;  // Increased for better performance
     config.maxLookupsPerMinute = 500;  // Increased for better performance
@@ -111,11 +112,13 @@ std::shared_ptr<dht_hunter::crawler::DHTCrawler> createCrawler() {
     // Set status callback for logging
     crawler->setStatusCallback([](uint64_t infoHashesDiscovered, uint64_t infoHashesQueued,
                                 uint64_t metadataFetched, double lookupRate, double metadataFetchRate,
-                                uint64_t totalInfoHashes) {
+                                uint64_t totalInfoHashes, size_t routingTableSize, uint64_t memoryUsage) {
         getLogger()->info("Crawler Status:");
         getLogger()->info("  InfoHashes Discovered: {} (session) / {} (total)", infoHashesDiscovered, totalInfoHashes);
         getLogger()->info("  InfoHashes Queued: {}", infoHashesQueued);
         getLogger()->info("  Metadata Fetched: {}", metadataFetched);
+        getLogger()->info("  Routing Table Size: {} nodes", routingTableSize);
+        getLogger()->info("  Memory Usage: {}", dht_hunter::util::ProcessUtils::formatSize(memoryUsage));
         getLogger()->info("  Lookup Rate: {:.2f} lookups/minute", lookupRate);
         getLogger()->info("  Metadata Fetch Rate: {:.2f} fetches/minute", metadataFetchRate);
     });
