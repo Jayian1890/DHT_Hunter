@@ -9,45 +9,45 @@ namespace dht_hunter::network {
 UDPSocketImpl::UDPSocketImpl(bool ipv6)
     : SocketImpl(SocketType::UDP, ipv6) {
     getLogger()->trace("UDPSocketImpl constructor start");
-    
+
     // UDP-specific initialization
     if (SocketImpl::isValid()) {
         // Set socket buffer sizes for better performance
         const int recvBufSize = 262144;  // 256 KB
         const int sendBufSize = 262144;  // 256 KB
-        
+
         if (setsockopt(SocketImpl::getHandle(), SOL_SOCKET, SO_RCVBUF,
                        reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize)) != 0) {
-            getLogger()->warning("Failed to set UDP receive buffer size: {}", 
+            getLogger()->warning("Failed to set UDP receive buffer size: {}",
                           Socket::getErrorString(translateError(getLastErrorCode())));
         }
-        
+
         if (setsockopt(SocketImpl::getHandle(), SOL_SOCKET, SO_SNDBUF,
                        reinterpret_cast<const char*>(&sendBufSize), sizeof(sendBufSize)) != 0) {
-            getLogger()->warning("Failed to set UDP send buffer size: {}", 
+            getLogger()->warning("Failed to set UDP send buffer size: {}",
                           Socket::getErrorString(translateError(getLastErrorCode())));
         }
-        
+
         // Set reuse address option to allow binding to recently used ports
         int reuseAddr = 1;
         if (setsockopt(SocketImpl::getHandle(), SOL_SOCKET, SO_REUSEADDR,
                        reinterpret_cast<const char*>(&reuseAddr), sizeof(reuseAddr)) != 0) {
-            getLogger()->warning("Failed to set SO_REUSEADDR: {}", 
+            getLogger()->warning("Failed to set SO_REUSEADDR: {}",
                           Socket::getErrorString(translateError(getLastErrorCode())));
         }
     }
-    
-    getLogger()->debug("UDPSocketImpl constructor completed (IPv{})", 
+
+    getLogger()->debug("UDPSocketImpl constructor completed (IPv{})",
                       ipv6 ? "6" : "4");
 }
 UDPSocketImpl::UDPSocketImpl(SocketHandle handle)
     : SocketImpl(handle, SocketType::UDP) {
     getLogger()->trace("UDPSocketImpl from handle constructor start");
-    
+
     // For existing handles, we don't modify socket options as they should be
     // already configured by the creator of the socket
-    
-    getLogger()->debug("UDPSocketImpl constructor from handle {} completed", 
+
+    getLogger()->debug("UDPSocketImpl constructor from handle {} completed",
                       static_cast<int>(handle));
 }
 int UDPSocketImpl::sendTo(const uint8_t* data, size_t length, const EndPoint& destination) {

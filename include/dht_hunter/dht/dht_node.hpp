@@ -40,14 +40,14 @@ constexpr size_t MAX_TRANSACTIONS = 1024; // Increased from 256 to 1024
 constexpr int TRANSACTION_TIMEOUT = 30; // Increased from 15 to 30 seconds to give more time for bootstrap
 
 /**
- * @brief Alpha parameter for parallel lookups (number of concurrent requests)
+ * @brief Default alpha parameter for parallel lookups (number of concurrent requests)
  */
-constexpr size_t LOOKUP_ALPHA = 3;
+constexpr size_t DEFAULT_LOOKUP_ALPHA = 5;
 
 /**
- * @brief Maximum number of nodes to store in a lookup result
+ * @brief Default maximum number of nodes to store in a lookup result
  */
-constexpr size_t LOOKUP_MAX_RESULTS = 8;
+constexpr size_t DEFAULT_LOOKUP_MAX_RESULTS = 16;
 
 /**
  * @brief Maximum number of iterations for a node lookup
@@ -75,14 +75,28 @@ constexpr int PEER_CLEANUP_INTERVAL = 300;
 constexpr int ROUTING_TABLE_SAVE_INTERVAL = 600;
 
 /**
- * @brief Whether to save the routing table after each new node is added
+ * @brief Default configuration directory
  */
-constexpr bool SAVE_ROUTING_TABLE_ON_NEW_NODE = true;
+constexpr char DEFAULT_CONFIG_DIR[] = "config";
 
 /**
- * @brief Default directory for configuration files
+ * @brief Default setting for whether to save the routing table after each new node is added
  */
-constexpr const char* DEFAULT_CONFIG_DIR = "config";
+constexpr bool DEFAULT_SAVE_ROUTING_TABLE_ON_NEW_NODE = true;
+
+/**
+ * @brief Configuration for the DHT node
+ */
+struct DHTNodeConfig {
+    uint16_t port = 6881;                                  ///< Port to listen on
+    std::string configDir = DEFAULT_CONFIG_DIR;           ///< Configuration directory
+    size_t kBucketSize = DEFAULT_LOOKUP_MAX_RESULTS;      ///< Maximum number of nodes in a k-bucket
+    size_t lookupAlpha = DEFAULT_LOOKUP_ALPHA;            ///< Alpha parameter for parallel lookups
+    size_t lookupMaxResults = DEFAULT_LOOKUP_MAX_RESULTS; ///< Maximum number of nodes to store in a lookup result
+    bool saveRoutingTableOnNewNode = DEFAULT_SAVE_ROUTING_TABLE_ON_NEW_NODE; ///< Whether to save the routing table after each new node is added
+};
+
+// Default directory for configuration files is defined above
 
 /**
  * @brief Default path for the routing table file
@@ -206,6 +220,13 @@ class DHTNode {
 public:
     /**
      * @brief Constructs a DHT node
+     * @param config The DHT node configuration
+     * @param nodeID The node ID (optional, generated randomly if not provided)
+     */
+    explicit DHTNode(const DHTNodeConfig& config, const NodeID& nodeID = generateRandomNodeID());
+
+    /**
+     * @brief Constructs a DHT node (legacy constructor)
      * @param port The port to listen on
      * @param configDir The configuration directory to use
      * @param nodeID The node ID (optional, generated randomly if not provided)
@@ -678,6 +699,7 @@ public:
     std::unique_ptr<network::UDPMessageBatcher> m_messageBatcher;
     std::string m_routingTablePath;
     std::string m_peerCachePath;
+    DHTNodeConfig m_config; // Configuration for the DHT node
 
     // InfoHash collector
     std::shared_ptr<crawler::InfoHashCollector> m_infoHashCollector;

@@ -66,8 +66,8 @@ int getBucketIndex(const NodeID& distance) {
     return -1;
 }
 // KBucket implementation
-KBucket::KBucket(int index)
-    : m_index(index) {
+KBucket::KBucket(int index, size_t maxSize)
+    : m_index(index), m_maxSize(maxSize) {
 }
 int KBucket::getIndex() const {
     return m_index;
@@ -79,13 +79,17 @@ size_t KBucket::size() const {
     return m_nodes.size();
 }
 bool KBucket::isFull() const {
-    return m_nodes.size() >= K_BUCKET_SIZE;
+    return m_nodes.size() >= m_maxSize;
 }
 bool KBucket::addNode(std::shared_ptr<Node> node) {
+    auto logger = dht_hunter::logforge::LogForge::getLogger("DHT.KBucket");
+
     // Check if the node is already in the bucket
     for (auto it = m_nodes.begin(); it != m_nodes.end(); ++it) {
         if ((*it)->getID() == node->getID()) {
             // Node already exists, move it to the end (most recently seen)
+            logger->debug("Node already exists in bucket {}, moving to end: {}",
+                      m_index, nodeIDToString(node->getID()));
             m_nodes.erase(it);
             m_nodes.push_back(node);
             return true;
@@ -93,9 +97,12 @@ bool KBucket::addNode(std::shared_ptr<Node> node) {
     }
     // If the bucket is full, we can't add the node
     if (isFull()) {
+        logger->debug("Cannot add node to bucket {} because it's full: {}",
+                  m_index, nodeIDToString(node->getID()));
         return false;
     }
     // Add the node to the end of the list (most recently seen)
+    logger->debug("Adding node to bucket {}: {}", m_index, nodeIDToString(node->getID()));
     m_nodes.push_back(node);
     return true;
 }
@@ -137,12 +144,12 @@ std::shared_ptr<Node> KBucket::getOldestNode() {
     return oldest;
 }
 // RoutingTable implementation
-RoutingTable::RoutingTable(const NodeID& ownID)
-    : m_ownID(ownID) {
+RoutingTable::RoutingTable(const NodeID& ownID, size_t kBucketSize)
+    : m_ownID(ownID), m_kBucketSize(kBucketSize) {
     // Initialize buckets
     m_buckets.reserve(NODE_ID_BITS);
     for (size_t i = 0; i < NODE_ID_BITS; i++) {
-        m_buckets.emplace_back(static_cast<int>(i));
+        m_buckets.emplace_back(static_cast<int>(i), kBucketSize);
     }
 }
 const NodeID& RoutingTable::getOwnID() const {
@@ -176,7 +183,12 @@ bool RoutingTable::addNodeNoLock(std::shared_ptr<Node> node) {
         return false;
     }
     // Add the node to the bucket
-    return m_buckets[static_cast<size_t>(bucketIndex)].addNode(node);
+    bool added = m_buckets[static_cast<size_t>(bucketIndex)].addNode(node);
+    if (added) {
+        getLogger()->info("Added new node to routing table: {} (bucket {})",
+                     nodeIDToString(node->getID()), bucketIndex);
+    }
+    return added;
 }
 bool RoutingTable::removeNode(const NodeID& id) {
     std::lock_guard<util::CheckedMutex> lock(m_mutex);

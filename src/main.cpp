@@ -18,7 +18,7 @@ namespace {
         LogInitializer() {
             // Initialize logging with empty filename to use executable name
             dht_hunter::logforge::getLogInitializer().initializeLogger(
-                dht_hunter::logforge::LogLevel::TRACE,  // Console level
+                dht_hunter::logforge::LogLevel::INFO,  // Console level
                 dht_hunter::logforge::LogLevel::TRACE,  // File level
                 "",  // Empty string means use executable name for log file
                 true,  // Use colors
@@ -78,6 +78,12 @@ std::shared_ptr<dht_hunter::crawler::DHTCrawler> createCrawler() {
     config.maxLookupsPerMinute = 500;  // Increased for better performance
     config.lookupInterval = std::chrono::milliseconds(50);  // Faster lookups
     config.statusInterval = std::chrono::seconds(60);
+
+    // DHT node configuration
+    config.kBucketSize = 16;  // Maximum number of nodes in a k-bucket
+    config.lookupAlpha = 5;   // Alpha parameter for parallel lookups
+    config.lookupMaxResults = 16;  // Maximum number of nodes to store in a lookup result
+    config.saveRoutingTableOnNewNode = true;  // Whether to save the routing table after each new node is added
 
     // Set bootstrap nodes
     config.bootstrapNodes = {

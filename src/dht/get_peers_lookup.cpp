@@ -25,7 +25,7 @@ bool DHTNode::startGetPeersLookup(const InfoHash& infoHash, GetPeersLookupCallba
         m_getPeersLookups[lookupID] = lookup;
     }
     // Start with nodes from our routing table
-    auto closestNodes = m_routingTable.getClosestNodes(infoHash, LOOKUP_MAX_RESULTS);
+    auto closestNodes = m_routingTable.getClosestNodes(infoHash, m_config.lookupMaxResults);
     // If we don't have any nodes in our routing table, we can't do a lookup
     if (closestNodes.empty()) {
         getLogger()->error("Cannot start get_peers lookup: No nodes in routing table");
@@ -89,7 +89,7 @@ void DHTNode::continueGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
                 // Increment the active queries count
                 lookup->activeQueries++;
                 // Only query alpha nodes at a time
-                if (nodesToQuery.size() >= LOOKUP_ALPHA) {
+                if (nodesToQuery.size() >= m_config.lookupAlpha) {
                     break;
                 }
             }
@@ -219,12 +219,12 @@ void DHTNode::handleGetPeersLookupResponse(std::shared_ptr<GetPeersLookup> looku
                 );
             });
         // Limit the number of nodes
-        if (lookup->nodes.size() > LOOKUP_MAX_RESULTS * 3) {
-            lookup->nodes.resize(LOOKUP_MAX_RESULTS * 3);
+        if (lookup->nodes.size() > m_config.lookupMaxResults * 3) {
+            lookup->nodes.resize(m_config.lookupMaxResults * 3);
         }
     }
     // If we have enough peers, we can complete the lookup
-    if (lookup->peers.size() >= LOOKUP_MAX_RESULTS) {
+    if (lookup->peers.size() >= m_config.lookupMaxResults) {
         getLogger()->debug("Get_peers lookup found enough peers: {}", lookup->peers.size());
         lookup->completed = true;
         completeGetPeersLookup(lookup);
@@ -253,17 +253,17 @@ void DHTNode::completeGetPeersLookup(std::shared_ptr<GetPeersLookup> lookup) {
         for (const auto& node : lookup->nodes) {
             if (node.responded) {
                 closestNodes.push_back(node.node);
-                if (closestNodes.size() >= LOOKUP_MAX_RESULTS) {
+                if (closestNodes.size() >= m_config.lookupMaxResults) {
                     break;
                 }
             }
         }
         // If we don't have enough nodes that responded, add nodes that didn't respond
-        if (closestNodes.size() < LOOKUP_MAX_RESULTS) {
+        if (closestNodes.size() < m_config.lookupMaxResults) {
             for (const auto& node : lookup->nodes) {
                 if (!node.responded && std::find(closestNodes.begin(), closestNodes.end(), node.node) == closestNodes.end()) {
                     closestNodes.push_back(node.node);
-                    if (closestNodes.size() >= LOOKUP_MAX_RESULTS) {
+                    if (closestNodes.size() >= m_config.lookupMaxResults) {
                         break;
                     }
                 }

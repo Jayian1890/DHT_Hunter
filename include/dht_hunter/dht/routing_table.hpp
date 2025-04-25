@@ -14,9 +14,10 @@
 namespace dht_hunter::dht {
 
 /**
- * @brief Maximum number of nodes in a k-bucket
+ * @brief Default maximum number of nodes in a k-bucket
+ * Increased from 8 to 16 for better performance and network coverage
  */
-constexpr size_t K_BUCKET_SIZE = 8;
+constexpr size_t DEFAULT_K_BUCKET_SIZE = 16;
 
 /**
  * @brief Number of bits in a node ID
@@ -118,8 +119,9 @@ public:
     /**
      * @brief Constructs a k-bucket
      * @param index The bucket index
+     * @param maxSize The maximum number of nodes in the bucket
      */
-    explicit KBucket(int index);
+    explicit KBucket(int index, size_t maxSize = DEFAULT_K_BUCKET_SIZE);
 
     /**
      * @brief Gets the bucket index
@@ -180,6 +182,7 @@ public:
 
 private:
     int m_index;
+    size_t m_maxSize;
     std::list<std::shared_ptr<Node>> m_nodes;
 };
 
@@ -191,8 +194,9 @@ public:
     /**
      * @brief Constructs a routing table
      * @param ownID The ID of the local node
+     * @param kBucketSize The maximum number of nodes in each k-bucket
      */
-    explicit RoutingTable(const NodeID& ownID);
+    explicit RoutingTable(const NodeID& ownID, size_t kBucketSize = DEFAULT_K_BUCKET_SIZE);
 
     /**
      * @brief Gets the ID of the local node
@@ -325,6 +329,7 @@ public:
 
 private:
     NodeID m_ownID;
+    size_t m_kBucketSize;
     std::vector<KBucket> m_buckets;
     mutable util::CheckedMutex m_mutex;
 };

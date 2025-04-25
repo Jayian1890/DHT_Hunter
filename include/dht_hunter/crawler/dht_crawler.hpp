@@ -27,6 +27,10 @@ struct DHTCrawlerConfig {
     // DHT node configuration
     uint16_t dhtPort = 6889;                                ///< Port for the DHT node (using a higher port to avoid potential blocks)
     std::string configDir = "config";                       ///< Configuration directory
+    size_t kBucketSize = 16;                                ///< Maximum number of nodes in a k-bucket
+    size_t lookupAlpha = 5;                                ///< Alpha parameter for parallel lookups
+    size_t lookupMaxResults = 16;                          ///< Maximum number of nodes to store in a lookup result
+    bool saveRoutingTableOnNewNode = true;                 ///< Whether to save the routing table after each new node is added
     std::vector<std::string> bootstrapNodes = {             ///< Bootstrap nodes for the DHT node
         // Standard bootstrap nodes
         "router.bittorrent.com:6881",

@@ -4,6 +4,9 @@
 #include "dht_hunter/network/platform/socket_impl.hpp"
 #include "dht_hunter/crawler/infohash_collector.hpp"
 #include "dht_hunter/util/mutex_utils.hpp"
+#include "dht_hunter/dht/query_message.hpp"
+#include "dht_hunter/dht/response_message.hpp"
+#include "dht_hunter/dht/error_message.hpp"
 #include <random>
 #include <sstream>
 #include <iomanip>
@@ -29,22 +32,25 @@ std::string generateRandomString(size_t length) {
 }
 
 namespace dht_hunter::dht {
-DHTNode::DHTNode(uint16_t port, const std::string& configDir, const NodeID& nodeID)
-    : m_nodeID(nodeID), m_port(port), m_routingTable(nodeID),
+DHTNode::DHTNode(const DHTNodeConfig& config, const NodeID& nodeID)
+    : m_nodeID(nodeID), m_port(config.port), m_routingTable(nodeID, config.kBucketSize),
       m_socket(nullptr), m_messageBatcher(nullptr),
-      m_routingTablePath(configDir + "/routing_table.dat"),
-      m_peerCachePath(configDir + "/peer_cache.dat"),
+      m_routingTablePath(config.configDir + "/routing_table.dat"),
+      m_peerCachePath(config.configDir + "/peer_cache.dat"),
+      m_config(config),
       m_running(false),
       m_secret(generateRandomString(20)), m_secretLastChanged(std::chrono::steady_clock::now()) {
     getLogger()->info("Creating DHT node with ID: {}, port: {}, config path: {}",
-                 nodeIDToString(m_nodeID), port, m_routingTablePath);
+                 nodeIDToString(m_nodeID), config.port, m_routingTablePath);
+    getLogger()->debug("DHT node configuration: kBucketSize={}, lookupAlpha={}, lookupMaxResults={}, saveRoutingTableOnNewNode={}",
+                 config.kBucketSize, config.lookupAlpha, config.lookupMaxResults, config.saveRoutingTableOnNewNode ? "true" : "false");
 
     // Ensure the config directory exists
     try {
-        if (!std::filesystem::exists(configDir)) {
-            getLogger()->info("Config directory does not exist, creating: {}", configDir);
-            if (!std::filesystem::create_directories(configDir)) {
-                getLogger()->error("Failed to create config directory: {}", configDir);
+        if (!std::filesystem::exists(config.configDir)) {
+            getLogger()->info("Config directory does not exist, creating: {}", config.configDir);
+            if (!std::filesystem::create_directories(config.configDir)) {
+                getLogger()->error("Failed to create config directory: {}", config.configDir);
             }
         }
     } catch (const std::exception& e) {
@@ -54,67 +60,40 @@ DHTNode::DHTNode(uint16_t port, const std::string& configDir, const NodeID& node
     // First try to load the node ID from the routing table file
     std::string nodeIdFilePath = m_routingTablePath + ".nodeid";
     bool nodeIdLoaded = false;
-    NodeID originalNodeId = m_nodeID; // Store the original node ID
 
     // Try to load from the nodeid file
-    std::ifstream nodeIdFile(nodeIdFilePath, std::ios::binary);
-    if (nodeIdFile.is_open()) {
+    std::ifstream nodeIdInFile(nodeIdFilePath, std::ios::binary);
+    if (nodeIdInFile.is_open()) {
         NodeID storedNodeId;
-        if (nodeIdFile.read(reinterpret_cast<char*>(storedNodeId.data()), static_cast<std::streamsize>(storedNodeId.size()))) {
+        if (nodeIdInFile.read(reinterpret_cast<char*>(storedNodeId.data()), static_cast<std::streamsize>(storedNodeId.size()))) {
             // Update our node ID to match the stored one
             m_nodeID = storedNodeId;
             getLogger()->info("Loaded node ID from file: {}", nodeIDToString(m_nodeID));
             nodeIdLoaded = true;
         }
-        nodeIdFile.close();
+        nodeIdInFile.close();
     }
 
-    // If we couldn't load from the nodeid file, try to load from the routing table file
+    // If we couldn't load the node ID, save the new one
     if (!nodeIdLoaded) {
-        std::ifstream routingTableFile(m_routingTablePath, std::ios::binary);
-        if (routingTableFile.is_open()) {
-            // Read the first 20 bytes which should be the node ID
-            NodeID storedNodeId;
-            if (routingTableFile.read(reinterpret_cast<char*>(storedNodeId.data()), static_cast<std::streamsize>(storedNodeId.size()))) {
-                // Update our node ID to match the stored one
-                m_nodeID = storedNodeId;
-                getLogger()->info("Loaded node ID from routing table file: {}", nodeIDToString(m_nodeID));
-                nodeIdLoaded = true;
-
-                // Also save it to the dedicated nodeid file for future use
-                std::ofstream outFile(nodeIdFilePath, std::ios::binary);
-                if (outFile.is_open()) {
-                    outFile.write(reinterpret_cast<const char*>(m_nodeID.data()), static_cast<std::streamsize>(m_nodeID.size()));
-                    outFile.close();
-                    getLogger()->info("Saved node ID to dedicated file: {}", nodeIdFilePath);
-                }
-            }
-            routingTableFile.close();
-        }
-    }
-
-    // If we still couldn't load the node ID, save the current one to a file
-    if (!nodeIdLoaded) {
-        std::ofstream outFile(nodeIdFilePath, std::ios::binary);
-        if (outFile.is_open()) {
-            outFile.write(reinterpret_cast<const char*>(m_nodeID.data()), static_cast<std::streamsize>(m_nodeID.size()));
-            outFile.close();
+        // Save the node ID to a file
+        std::ofstream nodeIdOutFile(nodeIdFilePath, std::ios::binary);
+        if (nodeIdOutFile.is_open()) {
+            nodeIdOutFile.write(reinterpret_cast<const char*>(m_nodeID.data()), static_cast<std::streamsize>(m_nodeID.size()));
+            nodeIdOutFile.close();
             getLogger()->info("Saved new node ID to file: {}", nodeIdFilePath);
         } else {
-            getLogger()->warning("Failed to save node ID to file: {}", nodeIdFilePath);
+            getLogger()->error("Failed to save node ID to file: {}", nodeIdFilePath);
         }
     }
-
-    // If the node ID was loaded and is different from the original, we need to update the routing table
-    if (nodeIdLoaded && m_nodeID != originalNodeId) {
-        getLogger()->info("Node ID changed from {} to {}, updating routing table",
-                     nodeIDToString(originalNodeId), nodeIDToString(m_nodeID));
-        // Update the routing table's own node ID
-        m_routingTable.updateOwnID(m_nodeID);
-        // Clear the routing table to ensure all nodes are compatible with the new node ID
-        m_routingTable.clear();
-    }
 }
+
+DHTNode::DHTNode(uint16_t port, const std::string& configDir, const NodeID& nodeID)
+    : DHTNode(DHTNodeConfig{port, configDir}, nodeID) {
+    // Legacy constructor delegates to the new constructor
+}
+
+
 DHTNode::~DHTNode() {
     stop();
 }
@@ -732,7 +711,7 @@ void DHTNode::handleFindNodeQuery(std::shared_ptr<FindNodeQuery> query, const ne
     getLogger()->debug("Received find_node query from {} for target {}",
                  sender.toString(), nodeIDToString(query->getTarget()));
     // Get the closest nodes to the target
-    auto closestNodes = m_routingTable.getClosestNodes(query->getTarget(), K_BUCKET_SIZE);
+    auto closestNodes = m_routingTable.getClosestNodes(query->getTarget(), m_config.kBucketSize);
     // Convert to compact node info
     std::vector<CompactNodeInfo> compactNodes;
     for (const auto& node : closestNodes) {
@@ -772,7 +751,7 @@ void DHTNode::handleGetPeersQuery(std::shared_ptr<GetPeersQuery> query, const ne
         getLogger()->debug("No stored peers for info hash {}, returning closest nodes",
                      nodeIDToString(query->getInfoHash()));
         // Get the closest nodes to the info hash
-        auto closestNodes = m_routingTable.getClosestNodes(query->getInfoHash(), K_BUCKET_SIZE);
+        auto closestNodes = m_routingTable.getClosestNodes(query->getInfoHash(), m_config.kBucketSize);
         // Convert to compact node info
         std::vector<CompactNodeInfo> compactNodes;
         for (const auto& node : closestNodes) {
@@ -1119,6 +1098,63 @@ void DHTNode::receiveMessages() {
             getLogger()->error("Failed to decode message from {}", sender.toString());
             continue;
         }
+
+        // Log message type
+        std::string messageTypeStr;
+        switch (message->getType()) {
+            case MessageType::Query:
+                {
+                    auto query = std::dynamic_pointer_cast<QueryMessage>(message);
+                    if (query) {
+                        messageTypeStr = "Query (" + queryMethodToString(query->getMethod()) + ")";
+                    } else {
+                        messageTypeStr = "Query (unknown method)";
+                    }
+                }
+                break;
+            case MessageType::Response:
+                {
+                    auto response = std::dynamic_pointer_cast<ResponseMessage>(message);
+                    if (response) {
+                        // Try to determine the type of response based on its class
+                        if (std::dynamic_pointer_cast<PingResponse>(response)) {
+                            messageTypeStr = "Response (ping)";
+                        } else if (auto findNodeResp = std::dynamic_pointer_cast<FindNodeResponse>(response)) {
+                            messageTypeStr = "Response (find_node) with " + std::to_string(findNodeResp->getNodes().size()) + " nodes";
+                        } else if (auto getPeersResp = std::dynamic_pointer_cast<GetPeersResponse>(response)) {
+                            if (getPeersResp->hasNodes()) {
+                                messageTypeStr = "Response (get_peers) with " + std::to_string(getPeersResp->getNodes().size()) + " nodes";
+                            } else if (getPeersResp->hasPeers()) {
+                                messageTypeStr = "Response (get_peers) with " + std::to_string(getPeersResp->getPeers().size()) + " peers";
+                            } else {
+                                messageTypeStr = "Response (get_peers)";
+                            }
+                        } else if (std::dynamic_pointer_cast<AnnouncePeerResponse>(response)) {
+                            messageTypeStr = "Response (announce_peer)";
+                        } else {
+                            messageTypeStr = "Response (unknown type)";
+                        }
+                    } else {
+                        messageTypeStr = "Response (unknown type)";
+                    }
+                }
+                break;
+            case MessageType::Error:
+                {
+                    auto error = std::dynamic_pointer_cast<ErrorMessage>(message);
+                    if (error) {
+                        messageTypeStr = "Error (" + std::to_string(error->getCode()) + ": " + error->getMessage() + ")";
+                    } else {
+                        messageTypeStr = "Error (unknown)";
+                    }
+                }
+                break;
+            default:
+                messageTypeStr = "Unknown";
+                break;
+        }
+        getLogger()->info("Received {} message ({} bytes) from {}", messageTypeStr, result, sender.toString());
+
         // Handle message
         handleMessage(message, sender);
     }
@@ -1135,8 +1171,9 @@ bool DHTNode::addNode(const NodeID& id, const network::EndPoint& endpoint) {
     bool added = m_routingTable.addNode(node);
 
     // If the node was added and we're configured to save on new nodes, save the routing table
-    if (added && SAVE_ROUTING_TABLE_ON_NEW_NODE && !m_routingTablePath.empty()) {
-        getLogger()->debug("Saving routing table after adding new node: {}", nodeIDToString(id));
+    if (added && m_config.saveRoutingTableOnNewNode && !m_routingTablePath.empty()) {
+        getLogger()->info("Saving routing table to {} after adding new node: {}",
+                     m_routingTablePath, nodeIDToString(id));
         if (!saveRoutingTable(m_routingTablePath)) {
             getLogger()->warning("Failed to save routing table after adding new node");
         }

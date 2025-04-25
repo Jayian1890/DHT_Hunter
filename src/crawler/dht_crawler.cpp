@@ -259,9 +259,20 @@ bool DHTCrawler::initializeDHTNode() {
             return false;
         }
 
-        // Create the DHT node with the configured port and config directory
+        // Create the DHT node with the configured parameters
         getLogger()->info("Creating DHT node on port {} with config directory {}", m_config.dhtPort, m_config.configDir);
-        m_dhtNode = std::make_shared<dht::DHTNode>(m_config.dhtPort, m_config.configDir);
+
+        // Create the DHT node config
+        dht::DHTNodeConfig dhtNodeConfig;
+        dhtNodeConfig.port = m_config.dhtPort;
+        dhtNodeConfig.configDir = m_config.configDir;
+        dhtNodeConfig.kBucketSize = m_config.kBucketSize;
+        dhtNodeConfig.lookupAlpha = m_config.lookupAlpha;
+        dhtNodeConfig.lookupMaxResults = m_config.lookupMaxResults;
+        dhtNodeConfig.saveRoutingTableOnNewNode = m_config.saveRoutingTableOnNewNode;
+
+        // Create the DHT node with the config
+        m_dhtNode = std::make_shared<dht::DHTNode>(dhtNodeConfig);
 
         // Start the DHT node
         getLogger()->debug("Starting DHT node");
@@ -552,6 +563,17 @@ bool DHTCrawler::initializeInfoHashCollector() {
 
     // Create the info hash collector
     m_infoHashCollector = std::make_shared<InfoHashCollector>(m_config.infoHashCollectorConfig);
+
+    // Try to load existing infohashes from file
+    if (std::filesystem::exists(m_config.infoHashCollectorConfig.savePath)) {
+        getLogger()->info("Loading existing infohashes from: {}", m_config.infoHashCollectorConfig.savePath);
+        if (!m_infoHashCollector->loadInfoHashes(m_config.infoHashCollectorConfig.savePath)) {
+            getLogger()->warning("Failed to load existing infohashes, starting with empty collection");
+        }
+    } else {
+        getLogger()->info("No existing infohashes file found at: {}", m_config.infoHashCollectorConfig.savePath);
+    }
+
     // Set the callback for new info hashes
     m_infoHashCollector->setNewInfoHashCallback(
         [this](const dht::InfoHash& infoHash) {

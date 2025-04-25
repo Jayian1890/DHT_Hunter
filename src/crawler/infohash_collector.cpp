@@ -262,11 +262,8 @@ void InfoHashCollector::processQueue() {
                     std::string infoHashCopy = hexStr; // Make a copy of the infohash
                     lock.unlock();
 
-                    // Save and log specifically that we're saving due to a new entry
-                    bool saved = saveInfoHashes(savePath);
-                    if (saved) {
-                        getLogger()->info("Saved infohashes to {} after adding new infohash: {}", savePath, infoHashCopy);
-                    }
+                    // Save without logging
+                    saveInfoHashes(savePath);
 
                     lock.lock(); // Re-lock for the rest of the function
                 }
@@ -299,12 +296,9 @@ void InfoHashCollector::periodicSave() {
         if (!m_running) {
             break;
         }
-        // Save the infohashes
+        // Save the infohashes without logging
         if (!m_savePath.empty()) {
-            bool saved = saveInfoHashes(m_savePath);
-            if (saved) {
-                getLogger()->info("Periodic save of infohashes to {} completed", m_savePath);
-            }
+            saveInfoHashes(m_savePath);
         }
     }
     getLogger()->debug("Periodic save thread stopped");

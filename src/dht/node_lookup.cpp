@@ -53,7 +53,7 @@ bool DHTNode::announceAsPeer(const InfoHash& infoHash, uint16_t port, std::funct
         }
         // We need to announce to the closest nodes
         size_t successCount = 0;
-        size_t totalCount = std::min(nodes.size(), LOOKUP_MAX_RESULTS);
+        size_t totalCount = std::min(nodes.size(), m_config.lookupMaxResults);
         std::atomic<size_t> completedCount(0);
         for (size_t i = 0; i < totalCount; ++i) {
             const auto& node = nodes[i];
@@ -106,7 +106,7 @@ bool DHTNode::startNodeLookup(const NodeID& targetID, NodeLookupCallback callbac
         m_nodeLookups[lookupID] = lookup;
     }
     // Start with nodes from our routing table
-    auto closestNodes = m_routingTable.getClosestNodes(targetID, LOOKUP_MAX_RESULTS);
+    auto closestNodes = m_routingTable.getClosestNodes(targetID, m_config.lookupMaxResults);
     // If we don't have any nodes in our routing table, we can't do a lookup
     if (closestNodes.empty()) {
         getLogger()->error("Cannot start node lookup: No nodes in routing table");
@@ -151,7 +151,7 @@ void DHTNode::continueNodeLookup(std::shared_ptr<NodeLookup> lookup) {
         // Increment the iteration count
         lookup->iterations++;
         // If we've reached the maximum number of iterations, complete the lookup
-        if (lookup->iterations >= LOOKUP_MAX_ITERATIONS) {
+        if (lookup->iterations >= 20) { // LOOKUP_MAX_ITERATIONS
             getLogger()->debug("Node lookup reached maximum iterations");
             lookup->completed = true;
             completeNodeLookup(lookup);
@@ -170,7 +170,7 @@ void DHTNode::continueNodeLookup(std::shared_ptr<NodeLookup> lookup) {
                 // Increment the active queries count
                 lookup->activeQueries++;
                 // Only query alpha nodes at a time
-                if (nodesToQuery.size() >= LOOKUP_ALPHA) {
+                if (nodesToQuery.size() >= m_config.lookupAlpha) {
                     break;
                 }
             }
@@ -268,14 +268,20 @@ void DHTNode::handleNodeLookupResponse(std::shared_ptr<NodeLookup> lookup,
     const auto& nodes = response->getNodes();
     // If there are no nodes, just continue the lookup
     if (nodes.empty()) {
+        getLogger()->debug("Find node response contains no nodes");
         return;
     }
+
+    getLogger()->info("Processing find_node response with {} nodes from {}",
+                 nodes.size(), endpoint.toString());
+
     // Add the nodes to the lookup
     {
         std::lock_guard<util::CheckedMutex> lock(lookup->mutex);
         for (const auto& node : nodes) {
             // Skip nodes with our own ID
             if (node.id == m_nodeID) {
+                getLogger()->debug("Skipping node with our own ID: {}", nodeIDToString(node.id));
                 continue;
             }
             // Check if we already have this node
@@ -284,8 +290,16 @@ void DHTNode::handleNodeLookupResponse(std::shared_ptr<NodeLookup> lookup,
                     return lookupNode.node->getID() == node.id;
                 });
             if (it == lookup->nodes.end()) {
+                getLogger()->debug("Adding new node to lookup and routing table: {} at {}",
+                             nodeIDToString(node.id), node.endpoint.toString());
+
                 // Add the node to our routing table
-                addNode(node.id, node.endpoint);
+                bool added = addNode(node.id, node.endpoint);
+                if (!added) {
+                    getLogger()->debug("Failed to add node to routing table: {} at {}",
+                                 nodeIDToString(node.id), node.endpoint.toString());
+                }
+
                 // Create a new node for the lookup
                 auto newNode = std::make_shared<Node>(node.id, node.endpoint);
                 // Add the node to the lookup
@@ -295,6 +309,9 @@ void DHTNode::handleNodeLookupResponse(std::shared_ptr<NodeLookup> lookup,
                 lookupNode.responded = false;
                 lookupNode.distance = calculateDistance(lookup->targetID, node.id);
                 lookup->nodes.push_back(lookupNode);
+            } else {
+                getLogger()->debug("Node already in lookup: {} at {}",
+                             nodeIDToString(node.id), node.endpoint.toString());
             }
         }
         // Sort nodes by distance to the target
@@ -306,8 +323,8 @@ void DHTNode::handleNodeLookupResponse(std::shared_ptr<NodeLookup> lookup,
                 );
             });
         // Limit the number of nodes
-        if (lookup->nodes.size() > LOOKUP_MAX_RESULTS * 3) {
-            lookup->nodes.resize(LOOKUP_MAX_RESULTS * 3);
+        if (lookup->nodes.size() > m_config.lookupMaxResults * 3) {
+            lookup->nodes.resize(m_config.lookupMaxResults * 3);
         }
     }
 }
@@ -328,17 +345,17 @@ void DHTNode::completeNodeLookup(std::shared_ptr<NodeLookup> lookup) {
         for (const auto& node : lookup->nodes) {
             if (node.responded) {
                 closestNodes.push_back(node.node);
-                if (closestNodes.size() >= LOOKUP_MAX_RESULTS) {
+                if (closestNodes.size() >= m_config.lookupMaxResults) {
                     break;
                 }
             }
         }
         // If we don't have enough nodes that responded, add nodes that didn't respond
-        if (closestNodes.size() < LOOKUP_MAX_RESULTS) {
+        if (closestNodes.size() < m_config.lookupMaxResults) {
             for (const auto& node : lookup->nodes) {
                 if (!node.responded) {
                     closestNodes.push_back(node.node);
-                    if (closestNodes.size() >= LOOKUP_MAX_RESULTS) {
+                    if (closestNodes.size() >= m_config.lookupMaxResults) {
                         break;
                     }
                 }

@@ -38,3 +38,21 @@ install(TARGETS dht_hunter
 )
 
 # DHT Server executable has been removed
+
+# Routing table check tool
+add_executable(routing_table_check check_routing_table.cpp)
+
+target_link_libraries(routing_table_check
+    PRIVATE
+    dht_hunter_logforge
+    dht_hunter_util
+    dht_hunter_network
+    dht_hunter_dht
+    dht_hunter_bencode
+    dht_hunter_crawler
+)
+
+target_include_directories(routing_table_check
+    PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
