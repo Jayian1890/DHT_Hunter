@@ -1153,7 +1153,7 @@ void DHTNode::receiveMessages() {
                 messageTypeStr = "Unknown";
                 break;
         }
-        getLogger()->info("Received {} message ({} bytes) from {}", messageTypeStr, result, sender.toString());
+        getLogger()->debug("Received {} message ({} bytes) from {}", messageTypeStr, result, sender.toString());
 
         // Handle message
         handleMessage(message, sender);

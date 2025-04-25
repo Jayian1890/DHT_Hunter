@@ -272,7 +272,7 @@ void DHTNode::handleNodeLookupResponse(std::shared_ptr<NodeLookup> lookup,
         return;
     }
 
-    getLogger()->info("Processing find_node response with {} nodes from {}",
+    getLogger()->debug("Processing find_node response with {} nodes from {}",
                  nodes.size(), endpoint.toString());
 
     // Add the nodes to the lookup
