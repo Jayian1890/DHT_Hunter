@@ -1172,8 +1172,7 @@ bool DHTNode::addNode(const NodeID& id, const network::EndPoint& endpoint) {
 
     // If the node was added and we're configured to save on new nodes, save the routing table
     if (added && m_config.saveRoutingTableOnNewNode && !m_routingTablePath.empty()) {
-        getLogger()->info("Saving routing table to {} after adding new node: {}",
-                     m_routingTablePath, nodeIDToString(id));
+        // Save the routing table without logging
         if (!saveRoutingTable(m_routingTablePath)) {
             getLogger()->warning("Failed to save routing table after adding new node");
         }
