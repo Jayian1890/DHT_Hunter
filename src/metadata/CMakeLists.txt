@@ -7,7 +7,6 @@ add_library(dht_hunter_metadata
     torrent_file.cpp
     metadata_fetcher.cpp
     torrent_file_builder.cpp
-    metadata_storage.cpp
 )
 
 # Set include directories
@@ -29,4 +28,5 @@ target_link_libraries(dht_hunter_metadata
     dht_hunter_util
     dht_hunter_network
     dht_hunter_bencode
+    dht_hunter_storage
 )

@@ -1,7 +1,6 @@
 # Define the storage library
 add_library(dht_hunter_storage
     metadata_storage.cpp
-    metadata_storage_adapter.cpp
 )
 
 # Set include directories
@@ -31,10 +30,6 @@ add_executable(test_metadata_storage
     test_metadata_storage.cpp
 )
 
-add_executable(test_metadata_storage_adapter
-    test_metadata_storage_adapter.cpp
-)
-
 # Link dependencies for tests
 target_link_libraries(test_metadata_storage
     PRIVATE
@@ -42,20 +37,8 @@ target_link_libraries(test_metadata_storage
     dht_hunter_logforge
 )
 
-target_link_libraries(test_metadata_storage_adapter
-    PRIVATE
-    dht_hunter_storage
-    dht_hunter_logforge
-    dht_hunter_metadata
-)
-
 # Set include directories for tests
 target_include_directories(test_metadata_storage
-    PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
-)
-
-target_include_directories(test_metadata_storage_adapter
     PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )

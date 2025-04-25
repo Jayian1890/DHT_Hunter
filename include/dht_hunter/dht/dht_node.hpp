@@ -32,7 +32,7 @@ namespace dht_hunter::dht {
 /**
  * @brief Maximum number of concurrent transactions
  */
-constexpr size_t MAX_TRANSACTIONS = 256;
+constexpr size_t MAX_TRANSACTIONS = 1024; // Increased from 256 to 1024
 
 /**
  * @brief Transaction timeout in seconds
@@ -421,6 +421,20 @@ public:
     bool loadNodeID(const std::string& filePath);
 
     /**
+     * @brief Saves the peer cache to a file
+     * @param filePath The path to the file
+     * @return True if the peer cache was saved successfully, false otherwise
+     */
+    bool savePeerCache(const std::string& filePath) const;
+
+    /**
+     * @brief Loads the peer cache from a file
+     * @param filePath The path to the file
+     * @return True if the peer cache was loaded successfully, false otherwise
+     */
+    bool loadPeerCache(const std::string& filePath);
+
+    /**
      * @brief Saves the node ID to a file
      * @param filePath The path to the file
      * @return True if the node ID was saved successfully, false otherwise
@@ -542,6 +556,18 @@ private:
     void checkTimeouts();
 
     /**
+     * @brief Processes the transaction queue
+     */
+    void processTransactionQueue();
+
+public:
+    /**
+     * @brief Performs a lookup for a random node ID to discover more nodes
+     * @return True if the lookup was started successfully, false otherwise
+     */
+    bool performRandomNodeLookup();
+
+    /**
      * @brief Receives messages
      */
     void receiveMessages();
@@ -651,6 +677,7 @@ private:
     util::CheckedMutex m_socketMutex; // Mutex for socket access
     std::unique_ptr<network::UDPMessageBatcher> m_messageBatcher;
     std::string m_routingTablePath;
+    std::string m_peerCachePath;
 
     // InfoHash collector
     std::shared_ptr<crawler::InfoHashCollector> m_infoHashCollector;
@@ -662,7 +689,9 @@ private:
     std::thread m_routingTableSaveThread;
 
     std::unordered_map<std::string, std::shared_ptr<Transaction>> m_transactions;
+    std::queue<std::shared_ptr<Transaction>> m_transactionQueue; // Queue for pending transactions
     util::CheckedMutex m_transactionsMutex;
+    size_t m_maxQueuedTransactions = 2048; // Maximum number of queued transactions
 
     std::unordered_map<std::string, std::shared_ptr<NodeLookup>> m_nodeLookups;
     util::CheckedMutex m_nodeLookupsLock;

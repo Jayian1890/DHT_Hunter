@@ -3,7 +3,7 @@
 #include "dht_hunter/dht/dht_node.hpp"
 #include "dht_hunter/crawler/infohash_collector.hpp"
 #include "dht_hunter/metadata/metadata_fetcher.hpp"
-#include "dht_hunter/metadata/metadata_storage.hpp"
+#include "dht_hunter/storage/metadata_storage.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
 
 #include <memory>
@@ -25,12 +25,46 @@ namespace dht_hunter::crawler {
  */
 struct DHTCrawlerConfig {
     // DHT node configuration
-    uint16_t dhtPort = 6881;                                ///< Port for the DHT node
+    uint16_t dhtPort = 6889;                                ///< Port for the DHT node (using a higher port to avoid potential blocks)
     std::string configDir = "config";                       ///< Configuration directory
     std::vector<std::string> bootstrapNodes = {             ///< Bootstrap nodes for the DHT node
+        // Standard bootstrap nodes
         "router.bittorrent.com:6881",
         "dht.transmissionbt.com:6881",
-        "router.utorrent.com:6881"
+        "router.utorrent.com:6881",
+        "router.bitcomet.com:6881",
+        "dht.aelitis.com:6881",
+
+        // Nodes with non-standard ports
+        "dht.libtorrent.org:25401",
+        "dht.anacrolix.link:6881",
+        "router.silotis.us:6881",
+        "dht.bluishcoder.co.nz:6881",
+        "dht.mldht.org:6881",
+        "dht.vuze.com:6881",
+
+        // Additional nodes with different ports
+        "router.bittorrent.com:6882",
+        "router.bittorrent.com:6883",
+        "router.bittorrent.com:6884",
+        "router.bittorrent.com:6885",
+        "dht.transmissionbt.com:6882",
+        "dht.transmissionbt.com:6883",
+        "router.utorrent.com:6882",
+        "router.utorrent.com:6883",
+
+        // Public DHT bootstrap nodes
+        "node.bitdewy.com:6881",
+        "dht.aelitis.com:6881",
+        "dht.filecxx.com:6881",
+        "dht.filecxx.com:6882",
+        "dht.filecxx.com:6883",
+        "dht.filecxx.com:6884",
+        "dht.filecxx.com:6885",
+        "dht.filecxx.com:6886",
+        "dht.filecxx.com:6887",
+        "dht.filecxx.com:6888",
+        "dht.filecxx.com:6889"
     };
 
     // Client identification
@@ -55,6 +89,10 @@ struct DHTCrawlerConfig {
     bool useInfoHashCollector = true;                       ///< Whether to use the info hash collector
     bool useMetadataStorage = true;                         ///< Whether to use metadata storage
 
+    // Active node discovery
+    bool enableActiveNodeDiscovery = true;                  ///< Whether to enable active node discovery
+    uint32_t activeNodeDiscoveryInterval = 60;             ///< Interval in seconds for active node discovery
+
     // Metadata fetcher configuration
     metadata::MetadataFetcherConfig metadataFetcherConfig;  ///< Configuration for the metadata fetcher
 
@@ -62,23 +100,25 @@ struct DHTCrawlerConfig {
     InfoHashCollectorConfig infoHashCollectorConfig;        ///< Configuration for the info hash collector
 
     // Metadata storage configuration
-    metadata::MetadataStorageConfig metadataStorageConfig;  ///< Configuration for the metadata storage
+    std::string metadataStorageDirectory = "config/metadata";  ///< Directory for storing metadata
 };
 
 /**
  * @brief Callback for crawler status updates
- * @param infoHashesDiscovered The number of info hashes discovered
+ * @param infoHashesDiscovered The number of info hashes discovered in this session
  * @param infoHashesQueued The number of info hashes queued for metadata fetching
  * @param metadataFetched The number of metadata items fetched
  * @param lookupRate The lookup rate (lookups per minute)
  * @param metadataFetchRate The metadata fetch rate (fetches per minute)
+ * @param totalInfoHashes The total number of info hashes, including those loaded from disk
  */
 using CrawlerStatusCallback = std::function<void(
     uint64_t infoHashesDiscovered,
     uint64_t infoHashesQueued,
     uint64_t metadataFetched,
     double lookupRate,
-    double metadataFetchRate)>;
+    double metadataFetchRate,
+    uint64_t totalInfoHashes)>;
 
 /**
  * @brief Class for crawling the DHT network to discover info hashes and fetch metadata
@@ -135,7 +175,7 @@ public:
      * @brief Gets the metadata storage
      * @return The metadata storage
      */
-    std::shared_ptr<metadata::MetadataStorage> getMetadataStorage() const;
+    std::shared_ptr<storage::MetadataStorage> getMetadataStorage() const;
 
     /**
      * @brief Checks if metadata storage is available
@@ -190,6 +230,12 @@ public:
      * @return The metadata fetch rate
      */
     double getMetadataFetchRate() const;
+
+    /**
+     * @brief Gets the total number of info hashes, including those loaded from disk
+     * @return The total number of info hashes
+     */
+    uint64_t getTotalInfoHashes() const;
 
 private:
     /**
@@ -297,6 +343,11 @@ private:
     void statusThread();
 
     /**
+     * @brief Active node discovery thread function
+     */
+    void activeNodeDiscoveryThread();
+
+    /**
      * @brief Updates the lookup rate
      */
     void updateLookupRate();
@@ -337,12 +388,13 @@ private:
     std::shared_ptr<dht::DHTNode> m_dhtNode;                    ///< DHT node
     std::shared_ptr<InfoHashCollector> m_infoHashCollector;     ///< Info hash collector
     std::shared_ptr<metadata::MetadataFetcher> m_metadataFetcher; ///< Metadata fetcher
-    std::shared_ptr<metadata::MetadataStorage> m_metadataStorage; ///< Metadata storage
+    std::shared_ptr<storage::MetadataStorage> m_metadataStorage; ///< Metadata storage
     std::atomic<bool> m_metadataStorageAvailable{false};        ///< Whether metadata storage is available
 
     std::thread m_lookupThread;                                 ///< Thread for performing lookups
     std::thread m_metadataFetchThread;                          ///< Thread for fetching metadata
     std::thread m_statusThread;                                 ///< Thread for status updates
+    std::thread m_activeNodeDiscoveryThread;                    ///< Thread for active node discovery
 
     std::queue<LookupRequest> m_lookupQueue;                    ///< Queue of lookup requests
     std::priority_queue<MetadataFetchRequest> m_metadataFetchQueue; ///< Queue of metadata fetch requests

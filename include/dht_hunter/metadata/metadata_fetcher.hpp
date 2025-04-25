@@ -2,7 +2,7 @@
 
 #include "dht_hunter/metadata/bt_connection.hpp"
 #include "dht_hunter/metadata/torrent_file_builder.hpp"
-#include "dht_hunter/metadata/metadata_storage.hpp"
+#include "dht_hunter/storage/metadata_storage.hpp"
 #include "dht_hunter/network/connection_pool_manager.hpp"
 #include "dht_hunter/network/async_socket_factory.hpp"
 #include "dht_hunter/network/io_multiplexer.hpp"
@@ -43,6 +43,8 @@ struct MetadataFetcherConfig {
     std::chrono::seconds fetchTimeout{120};             ///< Fetch timeout
     std::string connectionPoolName = "metadata";        ///< Name of the connection pool to use
     bool reuseConnections = true;                       ///< Whether to reuse connections
+    uint32_t maxRetries = 3;                            ///< Maximum number of retries for failed connections
+    std::chrono::seconds retryDelay{1};                 ///< Delay between retries
 
     // Client identification
     std::string peerIdPrefix = "-DH0001-";              ///< Peer ID prefix for BitTorrent handshakes
@@ -146,13 +148,13 @@ public:
      * @brief Gets the metadata storage
      * @return The metadata storage
      */
-    std::shared_ptr<MetadataStorage> getMetadataStorage() const;
+    std::shared_ptr<storage::MetadataStorage> getMetadataStorage() const;
 
     /**
      * @brief Sets the metadata storage
      * @param metadataStorage The metadata storage to use
      */
-    void setMetadataStorage(std::shared_ptr<MetadataStorage> metadataStorage);
+    void setMetadataStorage(std::shared_ptr<storage::MetadataStorage> metadataStorage);
 
 private:
     /**
@@ -166,6 +168,9 @@ private:
         std::vector<std::shared_ptr<BTConnection>> connections; ///< Active connections
         std::atomic<uint32_t> activeConnections{0};        ///< Number of active connections
         std::atomic<bool> completed{false};                ///< Whether the fetch has completed
+        std::atomic<uint32_t> retryCount{0};               ///< Number of retries attempted
+        std::chrono::steady_clock::time_point lastRetryTime; ///< Time of the last retry
+        std::vector<network::EndPoint> failedEndpoints;    ///< Endpoints that failed to connect
     };
 
     /**
@@ -230,7 +235,7 @@ private:
     MetadataFetcherConfig m_config;                                 ///< Configuration
     std::shared_ptr<network::IOMultiplexer> m_multiplexer;          ///< I/O multiplexer
     std::shared_ptr<network::ConnectionPool> m_connectionPool;      ///< Connection pool
-    std::shared_ptr<MetadataStorage> m_metadataStorage;             ///< Metadata storage
+    std::shared_ptr<storage::MetadataStorage> m_metadataStorage;    ///< Metadata storage
 
     std::unordered_map<std::string, std::shared_ptr<FetchRequest>> m_activeFetches; ///< Active fetches by info hash (hex string)
     std::queue<std::shared_ptr<FetchRequest>> m_fetchQueue;         ///< Queue of fetch requests

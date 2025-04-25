@@ -31,7 +31,9 @@ std::string generateRandomString(size_t length) {
 namespace dht_hunter::dht {
 DHTNode::DHTNode(uint16_t port, const std::string& configDir, const NodeID& nodeID)
     : m_nodeID(nodeID), m_port(port), m_routingTable(nodeID),
-      m_socket(nullptr), m_messageBatcher(nullptr), m_routingTablePath(configDir + "/routing_table.dat"),
+      m_socket(nullptr), m_messageBatcher(nullptr),
+      m_routingTablePath(configDir + "/routing_table.dat"),
+      m_peerCachePath(configDir + "/peer_cache.dat"),
       m_running(false),
       m_secret(generateRandomString(20)), m_secretLastChanged(std::chrono::steady_clock::now()) {
     getLogger()->info("Creating DHT node with ID: {}, port: {}, config path: {}",
@@ -167,6 +169,15 @@ bool DHTNode::start() {
             getLogger()->info("Loaded routing table from file: {}", m_routingTablePath);
         } else {
             getLogger()->warning("Failed to load routing table from file: {}", m_routingTablePath);
+        }
+    }
+
+    // Try to load the peer cache
+    if (!m_peerCachePath.empty()) {
+        if (loadPeerCache(m_peerCachePath)) {
+            getLogger()->info("Loaded peer cache from file: {}", m_peerCachePath);
+        } else {
+            getLogger()->warning("Failed to load peer cache from file: {}", m_peerCachePath);
         }
     }
     // Start threads
@@ -606,6 +617,23 @@ void DHTNode::handleResponse(std::shared_ptr<ResponseMessage> response, const ne
 
         // Remove the transaction
         m_transactions.erase(it);
+
+        // Process the transaction queue if we have any queued transactions
+        if (!m_transactionQueue.empty()) {
+            // Process one transaction from the queue
+            if (m_transactions.size() < MAX_TRANSACTIONS) {
+                auto transaction = m_transactionQueue.front();
+                m_transactionQueue.pop();
+
+                // Convert transaction ID to string for map key
+                std::string queuedTransactionIDStr(transaction->id.begin(), transaction->id.end());
+
+                // Add transaction to the active transactions map
+                m_transactions[queuedTransactionIDStr] = transaction;
+                getLogger()->debug("Processed queued transaction after response, active: {}, queue: {}",
+                             m_transactions.size(), m_transactionQueue.size());
+            }
+        }
     }
 
     // Call the response callback outside the lock
@@ -655,6 +683,23 @@ void DHTNode::handleError(std::shared_ptr<ErrorMessage> error, const network::En
 
         // Remove the transaction
         m_transactions.erase(it);
+
+        // Process the transaction queue if we have any queued transactions
+        if (!m_transactionQueue.empty()) {
+            // Process one transaction from the queue
+            if (m_transactions.size() < MAX_TRANSACTIONS) {
+                auto transaction = m_transactionQueue.front();
+                m_transactionQueue.pop();
+
+                // Convert transaction ID to string for map key
+                std::string queuedTransactionIDStr(transaction->id.begin(), transaction->id.end());
+
+                // Add transaction to the active transactions map
+                m_transactions[queuedTransactionIDStr] = transaction;
+                getLogger()->debug("Processed queued transaction after error, active: {}, queue: {}",
+                             m_transactions.size(), m_transactionQueue.size());
+            }
+        }
     }
 
     // Call the error callback outside the lock
@@ -840,12 +885,6 @@ bool DHTNode::addTransaction(const Transaction& transaction) {
 
     std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
 
-    // Check if we have too many transactions
-    if (m_transactions.size() >= MAX_TRANSACTIONS) {
-        getLogger()->error("Too many transactions");
-        return false;
-    }
-
     // Convert transaction ID to string for map key
     std::string transactionIDStr(transaction.id.begin(), transaction.id.end());
 
@@ -855,8 +894,26 @@ bool DHTNode::addTransaction(const Transaction& transaction) {
         return false;
     }
 
-    // Add transaction with a shared_ptr to ensure it stays alive
-    m_transactions[transactionIDStr] = std::make_shared<Transaction>(transaction);
+    // Create a shared_ptr for the transaction
+    auto transactionPtr = std::make_shared<Transaction>(transaction);
+
+    // Check if we have too many transactions
+    if (m_transactions.size() >= MAX_TRANSACTIONS) {
+        // If the queue is also full, reject the transaction
+        if (m_transactionQueue.size() >= m_maxQueuedTransactions) {
+            getLogger()->error("Transaction queue full, rejecting transaction");
+            return false;
+        }
+
+        // Add to queue instead
+        getLogger()->debug("Too many active transactions ({}), queueing transaction (queue size: {})",
+                     m_transactions.size(), m_transactionQueue.size());
+        m_transactionQueue.push(transactionPtr);
+        return true;
+    }
+
+    // Add transaction to the active transactions map
+    m_transactions[transactionIDStr] = transactionPtr;
     return true;
 }
 
@@ -899,6 +956,70 @@ void DHTNode::checkTimeouts() {
     // This method has been simplified to avoid AddressSanitizer issues
     getLogger()->info("Transaction timeout checking disabled to avoid memory issues");
 
+    // Process the transaction queue instead
+    processTransactionQueue();
+}
+
+void DHTNode::processTransactionQueue() {
+    if (!m_running) {
+        return;
+    }
+
+    std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
+
+    // Process queued transactions if we have space
+    while (!m_transactionQueue.empty() && m_transactions.size() < MAX_TRANSACTIONS) {
+        auto transaction = m_transactionQueue.front();
+        m_transactionQueue.pop();
+
+        // Convert transaction ID to string for map key
+        std::string transactionIDStr(transaction->id.begin(), transaction->id.end());
+
+        // Check if transaction already exists (shouldn't happen, but just in case)
+        if (m_transactions.find(transactionIDStr) != m_transactions.end()) {
+            getLogger()->warning("Queued transaction already exists, skipping");
+            continue;
+        }
+
+        // Add transaction to the active transactions map
+        m_transactions[transactionIDStr] = transaction;
+        getLogger()->debug("Processed queued transaction, active transactions: {}, queue size: {}",
+                     m_transactions.size(), m_transactionQueue.size());
+    }
+}
+
+bool DHTNode::performRandomNodeLookup() {
+    if (!m_running) {
+        getLogger()->warning("Cannot perform random node lookup: DHT node not running");
+        return false;
+    }
+
+    // Generate a random node ID
+    NodeID randomNodeID = generateRandomNodeID();
+
+    getLogger()->debug("Performing random node lookup for ID: {}", nodeIDToString(randomNodeID));
+
+    // Perform a find_node query for the random node ID
+    return findClosestNodes(randomNodeID, [this](const std::vector<std::shared_ptr<Node>>& nodes) {
+        if (nodes.empty()) {
+            getLogger()->debug("Random node lookup returned no nodes");
+            return;
+        }
+
+        getLogger()->debug("Random node lookup returned {} nodes", nodes.size());
+
+        // Add the nodes to the routing table
+        for (const auto& node : nodes) {
+            m_routingTable.addNode(node);
+        }
+
+        // Ping a few of the nodes to verify they're alive
+        size_t pingCount = std::min(nodes.size(), static_cast<size_t>(3));
+        for (size_t i = 0; i < pingCount; ++i) {
+            ping(nodes[i]->getEndpoint());
+        }
+    });
+
     while (m_running) {
         // Sleep for a short time
         std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -913,7 +1034,7 @@ void DHTNode::checkTimeouts() {
 
         // Only handle secret rotation, which is essential for security
         {
-            std::lock_guard<util::CheckedMutex> lock(m_secretMutex);
+            std::lock_guard<util::CheckedMutex> secretLock(m_secretMutex);
             auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(now - m_secretLastChanged).count();
             if (elapsed >= 10) {
                 // Change the secret every 10 minutes

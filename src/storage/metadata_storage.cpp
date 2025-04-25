@@ -13,7 +13,7 @@ DEFINE_COMPONENT_LOGGER("Storage.MetadataStorage", "Storage")
 
 MetadataStorage::MetadataStorage(const std::filesystem::path& basePath, int shardingLevel)
     : m_basePath(basePath), m_shardingLevel(shardingLevel), m_indexDirty(false) {
-    
+
     // Create base directory if it doesn't exist
     if (!std::filesystem::exists(m_basePath)) {
         getLogger()->info("Creating base directory: {}", m_basePath.string());
@@ -196,39 +196,39 @@ std::string MetadataStorage::infoHashToHex(const std::array<uint8_t, 20>& infoHa
 
 std::filesystem::path MetadataStorage::getMetadataPath(const std::array<uint8_t, 20>& infoHash) const {
     std::string hexHash = infoHashToHex(infoHash);
-    
+
     std::filesystem::path path = m_basePath / "data";
-    
+
     // Create sharded path
-    for (int i = 0; i < m_shardingLevel && i * 2 < hexHash.length(); ++i) {
+    for (size_t i = 0; i < static_cast<size_t>(m_shardingLevel) && i * 2 < hexHash.length(); ++i) {
         path /= hexHash.substr(i * 2, 2);
     }
-    
+
     // Add the full hash as the filename
     path /= hexHash;
-    
+
     return path;
 }
 
 bool MetadataStorage::createDirectoryStructure(const std::array<uint8_t, 20>& infoHash) {
     std::string hexHash = infoHashToHex(infoHash);
-    
+
     std::filesystem::path path = m_basePath / "data";
-    
+
     try {
         // Create data directory if it doesn't exist
         if (!std::filesystem::exists(path)) {
             std::filesystem::create_directories(path);
         }
-        
+
         // Create sharded directories
-        for (int i = 0; i < m_shardingLevel && i * 2 < hexHash.length(); ++i) {
+        for (size_t i = 0; i < static_cast<size_t>(m_shardingLevel) && i * 2 < hexHash.length(); ++i) {
             path /= hexHash.substr(i * 2, 2);
             if (!std::filesystem::exists(path)) {
                 std::filesystem::create_directories(path);
             }
         }
-        
+
         return true;
     } catch (const std::exception& e) {
         getLogger()->error("Exception while creating directory structure: {}", e.what());
@@ -238,7 +238,7 @@ bool MetadataStorage::createDirectoryStructure(const std::array<uint8_t, 20>& in
 
 bool MetadataStorage::updateIndex(const std::array<uint8_t, 20>& infoHash, const std::string& operation) {
     std::string hexHash = infoHashToHex(infoHash);
-    
+
     if (operation == "add") {
         // Check if already in index
         if (std::find(m_index.begin(), m_index.end(), hexHash) == m_index.end()) {
@@ -253,30 +253,30 @@ bool MetadataStorage::updateIndex(const std::array<uint8_t, 20>& infoHash, const
             m_indexDirty = true;
         }
     }
-    
+
     // Save index periodically (every 100 operations)
     if (m_indexDirty && (m_index.size() % 100 == 0)) {
         return saveIndex();
     }
-    
+
     return true;
 }
 
 bool MetadataStorage::loadIndex() {
     std::filesystem::path indexPath = m_basePath / "index" / "metadata.idx";
-    
+
     if (!std::filesystem::exists(indexPath)) {
         getLogger()->info("Index file does not exist: {}", indexPath.string());
         return true;
     }
-    
+
     try {
         std::ifstream file(indexPath);
         if (!file) {
             getLogger()->error("Failed to open index file for reading: {}", indexPath.string());
             return false;
         }
-        
+
         m_index.clear();
         std::string line;
         while (std::getline(file, line)) {
@@ -284,10 +284,10 @@ bool MetadataStorage::loadIndex() {
                 m_index.push_back(line);
             }
         }
-        
+
         file.close();
         m_indexDirty = false;
-        
+
         return true;
     } catch (const std::exception& e) {
         getLogger()->error("Exception while loading index: {}", e.what());
@@ -298,7 +298,7 @@ bool MetadataStorage::loadIndex() {
 bool MetadataStorage::saveIndex() {
     std::filesystem::path indexPath = m_basePath / "index" / "metadata.idx";
     std::filesystem::path tempPath = indexPath.string() + ".tmp";
-    
+
     try {
         // Write to temporary file first
         std::ofstream file(tempPath);
@@ -306,19 +306,19 @@ bool MetadataStorage::saveIndex() {
             getLogger()->error("Failed to open temporary index file for writing: {}", tempPath.string());
             return false;
         }
-        
+
         for (const auto& hash : m_index) {
             file << hash << std::endl;
         }
-        
+
         file.close();
-        
+
         // Rename temporary file to actual file
         std::filesystem::rename(tempPath, indexPath);
-        
+
         m_indexDirty = false;
         getLogger()->debug("Saved index with {} entries", m_index.size());
-        
+
         return true;
     } catch (const std::exception& e) {
         getLogger()->error("Exception while saving index: {}", e.what());

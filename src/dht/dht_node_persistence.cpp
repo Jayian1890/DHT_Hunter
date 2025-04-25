@@ -131,9 +131,170 @@ bool DHTNode::saveNodeID(const std::string& filePath) const {
         return false;
     }
 }
+bool DHTNode::savePeerCache(const std::string& filePath) const {
+    getLogger()->debug("Saving peer cache to file: {}", filePath);
+    try {
+        // Check if the directory exists and create it if needed
+        std::string directory = filePath.substr(0, filePath.find_last_of('/'));
+        if (!directory.empty()) {
+            getLogger()->debug("Checking directory: {}", directory);
+            try {
+                if (!std::filesystem::exists(directory)) {
+                    getLogger()->info("Creating directory: {}", directory);
+                    if (!std::filesystem::create_directories(directory)) {
+                        getLogger()->error("Failed to create directory: {}", directory);
+                        return false;
+                    }
+                }
+            } catch (const std::exception& e) {
+                getLogger()->error("Exception while creating directory {}: {}", directory, e.what());
+                return false;
+            }
+        }
+
+        // Open the file for writing
+        getLogger()->debug("Opening file for writing: {}", filePath);
+        std::ofstream file(filePath, std::ios::binary);
+        if (!file) {
+            getLogger()->error("Failed to open peer cache file for writing: {}", filePath);
+            return false;
+        }
+
+        // Lock the peers mutex
+        std::lock_guard<util::CheckedMutex> lock(m_peersLock);
+
+        // Write the number of info hashes
+        uint32_t numInfoHashes = static_cast<uint32_t>(m_peers.size());
+        getLogger()->debug("Writing {} info hashes to peer cache", numInfoHashes);
+        file.write(reinterpret_cast<const char*>(&numInfoHashes), sizeof(numInfoHashes));
+
+        // Write each info hash and its peers
+        for (const auto& [infoHashStr, peers] : m_peers) {
+            // Write the info hash string length
+            uint32_t infoHashStrLen = static_cast<uint32_t>(infoHashStr.size());
+            file.write(reinterpret_cast<const char*>(&infoHashStrLen), sizeof(infoHashStrLen));
+
+            // Write the info hash string
+            file.write(infoHashStr.c_str(), infoHashStrLen);
+
+            // Write the number of peers
+            uint32_t numPeers = static_cast<uint32_t>(peers.size());
+            file.write(reinterpret_cast<const char*>(&numPeers), sizeof(numPeers));
+
+            // Write each peer
+            for (const auto& peer : peers) {
+                // Write the endpoint
+                std::string endpointStr = peer.endpoint.toString();
+                uint32_t endpointStrLen = static_cast<uint32_t>(endpointStr.size());
+                file.write(reinterpret_cast<const char*>(&endpointStrLen), sizeof(endpointStrLen));
+                file.write(endpointStr.c_str(), endpointStrLen);
+
+                // Write the timestamp (as seconds since epoch)
+                auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+                    peer.timestamp.time_since_epoch()).count();
+                file.write(reinterpret_cast<const char*>(&timestamp), sizeof(timestamp));
+            }
+        }
+
+        // Flush and close the file
+        file.flush();
+        file.close();
+
+        getLogger()->info("Saved peer cache to file: {} ({} info hashes)", filePath, numInfoHashes);
+        return true;
+    } catch (const std::exception& e) {
+        getLogger()->error("Exception while saving peer cache to file: {}: {}", filePath, e.what());
+        return false;
+    }
+}
+
+bool DHTNode::loadPeerCache(const std::string& filePath) {
+    getLogger()->debug("Loading peer cache from file: {}", filePath);
+    try {
+        // Check if the file exists
+        std::ifstream checkFile(filePath);
+        if (!checkFile) {
+            getLogger()->info("Peer cache file does not exist: {}", filePath);
+            return false;
+        }
+        checkFile.close();
+
+        // Open the file for reading
+        std::ifstream file(filePath, std::ios::binary);
+        if (!file) {
+            getLogger()->error("Failed to open peer cache file for reading: {}", filePath);
+            return false;
+        }
+
+        // Lock the peers mutex
+        std::lock_guard<util::CheckedMutex> lock(m_peersLock);
+
+        // Clear the existing peers
+        m_peers.clear();
+
+        // Read the number of info hashes
+        uint32_t numInfoHashes;
+        file.read(reinterpret_cast<char*>(&numInfoHashes), sizeof(numInfoHashes));
+        getLogger()->debug("Reading {} info hashes from peer cache", numInfoHashes);
+
+        // Read each info hash and its peers
+        for (uint32_t i = 0; i < numInfoHashes; ++i) {
+            // Read the info hash string length
+            uint32_t infoHashStrLen;
+            file.read(reinterpret_cast<char*>(&infoHashStrLen), sizeof(infoHashStrLen));
+
+            // Read the info hash string
+            std::string infoHashStr(infoHashStrLen, '\0');
+            file.read(&infoHashStr[0], infoHashStrLen);
+
+            // Read the number of peers
+            uint32_t numPeers;
+            file.read(reinterpret_cast<char*>(&numPeers), sizeof(numPeers));
+
+            // Create a set for this info hash
+            std::unordered_set<StoredPeer, StoredPeerHash, StoredPeerEqual> peers;
+
+            // Read each peer
+            for (uint32_t j = 0; j < numPeers; ++j) {
+                // Read the endpoint
+                uint32_t endpointStrLen;
+                file.read(reinterpret_cast<char*>(&endpointStrLen), sizeof(endpointStrLen));
+                std::string endpointStr(endpointStrLen, '\0');
+                file.read(&endpointStr[0], endpointStrLen);
+
+                // Parse the endpoint
+                network::EndPoint endpoint(endpointStr);
+
+                // Read the timestamp
+                int64_t timestamp;
+                file.read(reinterpret_cast<char*>(&timestamp), sizeof(timestamp));
+
+                // Create a stored peer
+                StoredPeer peer;
+                peer.endpoint = endpoint;
+                peer.timestamp = std::chrono::steady_clock::time_point(
+                    std::chrono::steady_clock::duration(std::chrono::seconds(timestamp)));
+
+                // Add to the set
+                peers.insert(peer);
+            }
+
+            // Add to the map
+            m_peers[infoHashStr] = std::move(peers);
+        }
+
+        getLogger()->info("Loaded peer cache from file: {} ({} info hashes)", filePath, numInfoHashes);
+        return true;
+    } catch (const std::exception& e) {
+        getLogger()->error("Exception while loading peer cache from file: {}: {}", filePath, e.what());
+        return false;
+    }
+}
+
 void DHTNode::routingTableSaveThread() {
     getLogger()->debug("Routing table save thread started");
     getLogger()->debug("Routing table path: {}", m_routingTablePath);
+    getLogger()->debug("Peer cache path: {}", m_peerCachePath);
     while (m_running) {
         // Sleep for the save interval
         std::this_thread::sleep_for(std::chrono::seconds(ROUTING_TABLE_SAVE_INTERVAL));
@@ -148,6 +309,18 @@ void DHTNode::routingTableSaveThread() {
         } else {
             getLogger()->debug("Skipping routing table save: running={}, path={}", m_running ? "true" : "false", m_routingTablePath);
         }
+
+        // Save the peer cache
+        if (m_running && !m_peerCachePath.empty()) {
+            getLogger()->debug("Periodically saving peer cache to file: {}", m_peerCachePath);
+            if (!savePeerCache(m_peerCachePath)) {
+                getLogger()->warning("Failed to save peer cache to file: {}", m_peerCachePath);
+            } else {
+                getLogger()->debug("Successfully saved peer cache to file: {}", m_peerCachePath);
+            }
+        } else {
+            getLogger()->debug("Skipping peer cache save: running={}, path={}", m_running ? "true" : "false", m_peerCachePath);
+        }
     }
     // Save one last time before exiting
     if (!m_routingTablePath.empty()) {
@@ -160,6 +333,19 @@ void DHTNode::routingTableSaveThread() {
     } else {
         getLogger()->debug("Skipping final routing table save: path is empty");
     }
+
+    // Save the peer cache one last time before exiting
+    if (!m_peerCachePath.empty()) {
+        getLogger()->debug("Saving peer cache before exiting: {}", m_peerCachePath);
+        if (!savePeerCache(m_peerCachePath)) {
+            getLogger()->warning("Failed to save peer cache to file: {}", m_peerCachePath);
+        } else {
+            getLogger()->debug("Successfully saved peer cache before exiting: {}", m_peerCachePath);
+        }
+    } else {
+        getLogger()->debug("Skipping final peer cache save: path is empty");
+    }
+
     getLogger()->debug("Routing table save thread stopped");
 }
 } // namespace dht_hunter::dht

@@ -39,13 +39,7 @@ MetadataFetcher::MetadataFetcher(const MetadataFetcherConfig& config)
 
     // Create metadata storage if enabled
     if (m_config.useMetadataStorage) {
-        MetadataStorageConfig storageConfig;
-        storageConfig.storageDirectory = m_config.metadataStorageDirectory;
-        storageConfig.persistMetadata = m_config.persistMetadata;
-        storageConfig.createTorrentFiles = m_config.createTorrentFiles;
-        storageConfig.torrentFilesDirectory = m_config.torrentFilesDirectory;
-
-        m_metadataStorage = std::make_shared<MetadataStorage>(storageConfig);
+        m_metadataStorage = std::make_shared<storage::MetadataStorage>(m_config.metadataStorageDirectory);
     }
 
     getLogger()->debug("Created MetadataFetcher with max concurrent fetches: {}, max connections per info hash: {}",
@@ -65,13 +59,10 @@ bool MetadataFetcher::start() {
     // Start the connection pool maintenance
     network::ConnectionPoolManager::getInstance().startMaintenance();
 
-    // Initialize the metadata storage if enabled
+    // The new MetadataStorage class is initialized in the constructor
     if (m_config.useMetadataStorage && m_metadataStorage) {
-        if (!m_metadataStorage->initialize()) {
-            getLogger()->error("Failed to initialize metadata storage");
-            return false;
-        }
-        getLogger()->info("Metadata storage initialized with {} items", m_metadataStorage->getMetadataCount());
+        // Just log the count of items
+        getLogger()->info("Metadata storage initialized with {} items", m_metadataStorage->count());
     }
 
     m_running = true;
@@ -127,10 +118,10 @@ void MetadataFetcher::stop() {
         }
     }
 
-    // Shut down the metadata storage if enabled
+    // The new MetadataStorage class doesn't need explicit shutdown
     if (m_config.useMetadataStorage && m_metadataStorage) {
-        m_metadataStorage->shutdown();
-        getLogger()->debug("Metadata storage shut down");
+        m_metadataStorage.reset();
+        getLogger()->debug("Metadata storage released");
     }
 
     getLogger()->debug("MetadataFetcher stopped");
@@ -151,7 +142,16 @@ bool MetadataFetcher::fetchMetadata(
     }
 
     if (endpoints.empty()) {
-        getLogger()->error("Cannot fetch metadata: No endpoints provided");
+        getLogger()->warning("Cannot fetch metadata: No endpoints provided for info hash: {}", infoHashToString(infoHash));
+
+        // If we have a callback, call it with failure instead of just returning false
+        if (callback) {
+            // Schedule the callback to be called asynchronously
+            std::thread([callback, infoHash]() {
+                callback(infoHash, {}, 0, false);
+            }).detach();
+        }
+
         return false;
     }
 
@@ -274,12 +274,12 @@ MetadataFetcherConfig MetadataFetcher::getConfig() const {
     return m_config;
 }
 
-std::shared_ptr<MetadataStorage> MetadataFetcher::getMetadataStorage() const {
+std::shared_ptr<storage::MetadataStorage> MetadataFetcher::getMetadataStorage() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_metadataStorage;
 }
 
-void MetadataFetcher::setMetadataStorage(std::shared_ptr<MetadataStorage> metadataStorage) {
+void MetadataFetcher::setMetadataStorage(std::shared_ptr<storage::MetadataStorage> metadataStorage) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_metadataStorage = metadataStorage;
     getLogger()->info("Metadata storage set in MetadataFetcher");
@@ -418,7 +418,7 @@ void MetadataFetcher::timeoutThread() {
 
 void MetadataFetcher::handleConnectionStateChange(
     const std::array<uint8_t, BT_INFOHASH_LENGTH>& infoHash,
-    std::shared_ptr<BTConnection> /* connection */,
+    std::shared_ptr<BTConnection> connection,
     BTConnectionState state,
     const std::string& message) {
 
@@ -453,13 +453,100 @@ void MetadataFetcher::handleConnectionStateChange(
         case BTConnectionState::Error:
             getLogger()->debug("Connection ended for info hash: {}: {}", infoHashStr, message);
 
+            // If we have a connection, add its endpoint to the failed endpoints list
+            if (connection) {
+                request->failedEndpoints.push_back(connection->getRemoteEndpoint());
+            }
+
             // Decrement the active connection count
             request->activeConnections--;
 
             // Check if all connections have ended
             if (request->activeConnections == 0) {
-                // Complete the fetch with failure
-                completeFetch(infoHash, {}, 0, false);
+                // Check if we should retry
+                if (request->retryCount < m_config.maxRetries) {
+                    // Increment retry count
+                    request->retryCount++;
+                    request->lastRetryTime = std::chrono::steady_clock::now();
+
+                    getLogger()->debug("Retrying metadata fetch for info hash: {} (retry {}/{})",
+                                 infoHashStr, request->retryCount, m_config.maxRetries);
+
+                    // Get endpoints that haven't failed yet
+                    std::vector<network::EndPoint> remainingEndpoints;
+                    for (const auto& endpoint : request->endpoints) {
+                        // Check if this endpoint is in the failed endpoints list
+                        bool failed = false;
+                        for (const auto& failedEndpoint : request->failedEndpoints) {
+                            if (endpoint == failedEndpoint) {
+                                failed = true;
+                                break;
+                            }
+                        }
+
+                        if (!failed) {
+                            remainingEndpoints.push_back(endpoint);
+                        }
+                    }
+
+                    // If we have remaining endpoints, retry with them
+                    if (!remainingEndpoints.empty()) {
+                        // Start connections to the remaining endpoints
+                        for (size_t i = 0; i < std::min(remainingEndpoints.size(), static_cast<size_t>(m_config.maxConnectionsPerInfoHash)); ++i) {
+                            const auto& endpoint = remainingEndpoints[i];
+
+                            // Get a connection from the pool
+                            auto pooledConnection = m_connectionPool->getConnection(endpoint, std::chrono::milliseconds(m_config.connectionTimeout));
+
+                            if (pooledConnection) {
+                                // Create an async socket
+                                auto asyncSocket = std::make_unique<network::AsyncSocket>(pooledConnection->getSocket(), m_multiplexer);
+
+                                // Create a BT connection
+                                auto newConnection = std::make_shared<BTConnection>(
+                                    std::move(asyncSocket),
+                                    request->infoHash,
+                                    [this, infoHash = request->infoHash](BTConnectionState state, const std::string& message) {
+                                        this->handleConnectionStateChange(infoHash, nullptr, state, message);
+                                    },
+                                    [this, infoHash = request->infoHash](const std::vector<uint8_t>& metadata, uint32_t size) {
+                                        this->handleMetadata(infoHash, nullptr, metadata, size);
+                                    },
+                                    m_config.peerIdPrefix,
+                                    m_config.clientVersion
+                                );
+
+                                // Store the connection
+                                request->connections.push_back(newConnection);
+                                request->activeConnections++;
+
+                                // Connect
+                                if (!newConnection->connect(endpoint)) {
+                                    getLogger()->error("Failed to connect to {}: {}", endpoint.toString(), "Connection failed");
+                                    request->activeConnections--;
+                                    continue;
+                                }
+
+                                getLogger()->debug("Started retry connection to {} for info hash: {}", endpoint.toString(), infoHashStr);
+                            } else {
+                                getLogger()->error("Failed to get connection from pool for {}", endpoint.toString());
+                            }
+                        }
+
+                        // If we couldn't start any connections, complete with failure
+                        if (request->activeConnections == 0) {
+                            getLogger()->warning("No connections could be established for retry, completing with failure");
+                            completeFetch(infoHash, {}, 0, false);
+                        }
+                    } else {
+                        getLogger()->warning("No remaining endpoints to retry, completing with failure");
+                        completeFetch(infoHash, {}, 0, false);
+                    }
+                } else {
+                    // We've reached the maximum number of retries, complete with failure
+                    getLogger()->warning("Maximum retries reached for info hash: {}, completing with failure", infoHashStr);
+                    completeFetch(infoHash, {}, 0, false);
+                }
             }
             break;
 
@@ -563,7 +650,7 @@ void MetadataFetcher::completeFetch(
                     getLogger()->debug("Attempting to store metadata for info hash: {}, size: {}, vector size: {}",
                                  infoHashStr, size, metadataCopy.size());
 
-                    if (m_metadataStorage->addMetadata(infoHashCopy, metadataCopy, size)) {
+                    if (m_metadataStorage->addMetadata(infoHashCopy, metadataCopy.data(), size)) {
                         getLogger()->info("Stored metadata for info hash: {}", infoHashStr);
                     } else {
                         getLogger()->error("Failed to store metadata for info hash: {}", infoHashStr);
