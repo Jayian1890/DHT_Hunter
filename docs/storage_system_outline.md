@@ -8,7 +8,7 @@ A pragmatic, phased approach to implementing a scalable storage system for DHT H
 
 | Phase | Description | Status | Completion % | Notes |
 |-------|-------------|--------|--------------|-------|
-| 1     | Basic File-Based Storage | In Progress | 25% | File organization implemented |
+| 1     | Basic File-Based Storage | Completed | 100% | All tasks completed |
 | 2     | Memory-Optimized Storage | Not Started | 0% | |
 | 3     | Indexed Storage | Not Started | 0% | |
 | 4     | Advanced Features | Not Started | 0% | |
@@ -42,8 +42,8 @@ A pragmatic, phased approach to implementing a scalable storage system for DHT H
 | **Index File** | Completed | 100% | Simple text-based index implemented |
 | - Info hash to file mapping | Completed | 100% | Stores hex info hashes in text file |
 | - Periodic flushing mechanism | Completed | 100% | Flushes every 100 operations |
-| **Integration** | In Progress | 50% | Basic class implemented |
-| - Update `MetadataStorage` class | Completed | 100% | Created new class with all required functionality |
+| **Integration** | Completed | 100% | Adapter class implemented |
+| - Update `MetadataStorage` class | Completed | 100% | Created adapter class to integrate with existing code |
 | **Testing** | Completed | 100% | Basic tests implemented |
 | - Unit tests | Completed | 100% | Test program verifies all operations |
 | - Performance tests | Completed | 100% | Performance metrics included in test |
