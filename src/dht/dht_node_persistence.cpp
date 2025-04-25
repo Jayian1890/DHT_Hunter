@@ -124,7 +124,7 @@ bool DHTNode::saveNodeID(const std::string& filePath) const {
             return false;
         }
 
-        getLogger()->info("Saved node ID to file: {}", filePath);
+        getLogger()->debug("Saved node ID to file: {}", filePath);
         return true;
     } catch (const std::exception& e) {
         getLogger()->error("Exception while saving node ID to file: {}: {}", filePath, e.what());

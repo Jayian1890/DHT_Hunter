@@ -81,7 +81,7 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
                 file.write(reinterpret_cast<const char*>(&failedQueries), static_cast<std::streamsize>(sizeof(failedQueries)));
             }
         }
-        getLogger()->info("Saved routing table to file: {} ({} nodes)", filePath, totalNodes);
+        getLogger()->debug("Saved routing table to file: {} ({} nodes)", filePath, totalNodes);
         return true;
     } catch (const std::exception& e) {
         getLogger()->error("Failed to save routing table to file: {}: {}", filePath, e.what());
