@@ -318,4 +318,13 @@ bool InfoHashCollector::isValidInfoHash(const dht_hunter::dht::InfoHash& infoHas
     // Add more validation checks as needed
     return true;
 }
+
+bool InfoHashCollector::collectInfoHash(const dht_hunter::dht::InfoHash& infoHash, const dht_hunter::network::EndPoint& sender) {
+    // Log the collection event
+    std::string infoHashStr = dht_hunter::util::bytesToHex(infoHash.data(), infoHash.size());
+    getLogger()->debug("Collecting InfoHash {} from {}", infoHashStr, sender.toString());
+
+    // Add the InfoHash to our collection
+    return addInfoHash(infoHash);
+}
 } // namespace dht_hunter::crawler

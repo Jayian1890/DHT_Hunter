@@ -107,8 +107,16 @@ void BencodeValue::setInteger(const std::string& key, Integer value) {
 void BencodeValue::setList(const std::string& key, const List& value) {
     set(key, std::make_shared<BencodeValue>(value));
 }
+
+void BencodeValue::setList(const List& value) {
+    m_value = value;
+}
 void BencodeValue::setDictionary(const std::string& key, const Dictionary& value) {
     set(key, std::make_shared<BencodeValue>(value));
+}
+
+void BencodeValue::setDictionary(const Dictionary& value) {
+    m_value = value;
 }
 void BencodeValue::add(std::shared_ptr<BencodeValue> value) {
     if (!isList()) {

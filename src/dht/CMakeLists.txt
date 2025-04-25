@@ -1,19 +1,38 @@
 # Define the DHT library
 add_library(dht_hunter_dht
-    types.cpp
-    message.cpp
-    query_message.cpp
-    response_message.cpp
-    error_message.cpp
-    routing_table.cpp
-    dht_node.cpp
-    node_lookup.cpp
-    get_peers_lookup.cpp
-    peer_storage.cpp
-    routing_table_persistence.cpp
-    dht_node_persistence.cpp
-    transaction_persistence.cpp
-    dht_node_transaction_persistence.cpp
+    # Core components
+    core/dht_node.cpp
+    core/dht_node_config.cpp
+    core/dht_constants.cpp
+    core/dht_types.cpp
+    core/dht_routing_table.cpp
+
+    # Network components
+    network/dht_socket_manager.cpp
+    network/dht_message_sender.cpp
+    network/dht_message_handler.cpp
+    network/dht_message.cpp
+    network/dht_query_message.cpp
+    network/dht_response_message.cpp
+    network/dht_error_message.cpp
+
+    # Routing components
+    routing/dht_routing_manager.cpp
+    routing/dht_node_lookup.cpp
+    routing/dht_peer_lookup.cpp
+
+    # Storage components
+    storage/dht_token_manager.cpp
+    storage/dht_peer_storage.cpp
+
+    # Transaction components
+    transactions/dht_transaction_manager.cpp
+    transactions/dht_transaction_persistence.cpp
+
+    # Persistence components
+    persistence/dht_persistence_manager.cpp
+
+    # Legacy files have been removed
 )
 
 # Set include directories

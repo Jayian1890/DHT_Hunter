@@ -69,6 +69,27 @@ const std::array<uint8_t, 16>& NetworkAddress::getIPv6Address() const {
     }
     return m_ipv6Address;
 }
+bool NetworkAddress::fromString(const std::string& addressStr) {
+    // Try to parse as IPv4
+    struct in_addr addr4;
+    if (inet_pton(AF_INET, addressStr.c_str(), &addr4) == 1) {
+        m_family = AddressFamily::IPv4;
+        m_ipv4Address = ntohl(addr4.s_addr);
+        getLogger()->debug("Parsed IPv4 address: {}", addressStr);
+        return true;
+    }
+    // Try to parse as IPv6
+    struct in6_addr addr6;
+    if (inet_pton(AF_INET6, addressStr.c_str(), &addr6) == 1) {
+        m_family = AddressFamily::IPv6;
+        std::memcpy(m_ipv6Address.data(), addr6.s6_addr, 16);
+        getLogger()->debug("Parsed IPv6 address: {}", addressStr);
+        return true;
+    }
+    getLogger()->warning("Failed to parse address: {}", addressStr);
+    return false;
+}
+
 std::string NetworkAddress::toString() const {
     if (m_family == AddressFamily::IPv4) {
         struct in_addr addr;
@@ -148,6 +169,33 @@ bool NetworkAddress::operator==(const NetworkAddress& other) const {
 bool NetworkAddress::operator!=(const NetworkAddress& other) const {
     return !(*this == other);
 }
+
+bool NetworkAddress::isIPv4() const {
+    return m_family == AddressFamily::IPv4;
+}
+
+bool NetworkAddress::isIPv6() const {
+    return m_family == AddressFamily::IPv6;
+}
+
+std::string NetworkAddress::toBytes() const {
+    if (m_family == AddressFamily::IPv4) {
+        std::string result(4, '\0');
+        result[0] = static_cast<char>((m_ipv4Address >> 24) & 0xFF);
+        result[1] = static_cast<char>((m_ipv4Address >> 16) & 0xFF);
+        result[2] = static_cast<char>((m_ipv4Address >> 8) & 0xFF);
+        result[3] = static_cast<char>(m_ipv4Address & 0xFF);
+        return result;
+    } else if (m_family == AddressFamily::IPv6) {
+        std::string result(16, '\0');
+        for (size_t i = 0; i < 16; ++i) {
+            result[i] = static_cast<char>(m_ipv6Address[i]);
+        }
+        return result;
+    }
+    return "";
+}
+
 // EndPoint implementation
 EndPoint::EndPoint()
     : m_address(),

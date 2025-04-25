@@ -265,12 +265,12 @@ bool DHTCrawler::initializeDHTNode() {
 
         // Create the DHT node config
         dht::DHTNodeConfig dhtNodeConfig;
-        dhtNodeConfig.port = m_config.dhtPort;
-        dhtNodeConfig.configDir = m_config.configDir;
-        dhtNodeConfig.kBucketSize = m_config.kBucketSize;
-        dhtNodeConfig.lookupAlpha = m_config.lookupAlpha;
-        dhtNodeConfig.lookupMaxResults = m_config.lookupMaxResults;
-        dhtNodeConfig.saveRoutingTableOnNewNode = m_config.saveRoutingTableOnNewNode;
+        dhtNodeConfig.setPort(m_config.dhtPort);
+        dhtNodeConfig.setConfigDir(m_config.configDir);
+        dhtNodeConfig.setKBucketSize(m_config.kBucketSize);
+        dhtNodeConfig.setLookupAlpha(m_config.lookupAlpha);
+        dhtNodeConfig.setLookupMaxResults(m_config.lookupMaxResults);
+        dhtNodeConfig.setSaveRoutingTableOnNewNode(m_config.saveRoutingTableOnNewNode);
 
         // Create the DHT node with the config
         m_dhtNode = std::make_shared<dht::DHTNode>(dhtNodeConfig);
@@ -1301,7 +1301,7 @@ void DHTCrawler::updateWindowTitle() {
     // Get the routing table size
     size_t routingTableSize = 0;
     if (m_dhtNode) {
-        routingTableSize = m_dhtNode->getRoutingTable().size();
+        routingTableSize = m_dhtNode->getRoutingTable().getNodeCount();
     }
 
     // Get memory usage
@@ -1354,7 +1354,7 @@ void DHTCrawler::statusThread() {
             // Get the routing table size
             size_t routingTableSize = 0;
             if (m_dhtNode) {
-                routingTableSize = m_dhtNode->getRoutingTable().size();
+                routingTableSize = m_dhtNode->getRoutingTable().getNodeCount();
             }
 
             // Get memory usage

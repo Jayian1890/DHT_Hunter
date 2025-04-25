@@ -132,13 +132,38 @@ public:
         return m_checker.isLockedByCurrentThread() ? static_cast<int>(m_lockCount.load()) : 0;
     }
 
+    // Operator moved below
+
     /**
-     * @brief Get the underlying std::recursive_mutex
+     * @brief Get the underlying std::recursive_mutex (const version)
      * @return Reference to the underlying std::recursive_mutex
      * @note This is needed for compatibility with std::lock_guard
      */
-    operator std::mutex&() {
-        return reinterpret_cast<std::mutex&>(m_mutex);
+    operator const std::recursive_mutex&() const {
+        return m_mutex;
+    }
+
+    /**
+     * @brief Get the underlying std::recursive_mutex (non-const version)
+     * @return Reference to the underlying std::recursive_mutex
+     * @note This is needed for compatibility with std::lock_guard
+     */
+    operator std::recursive_mutex&() {
+        return m_mutex;
+    }
+
+    /**
+     * @brief Lock the mutex (const version)
+     */
+    void lock() const {
+        const_cast<CheckedMutex*>(this)->lock();
+    }
+
+    /**
+     * @brief Unlock the mutex (const version)
+     */
+    void unlock() const {
+        const_cast<CheckedMutex*>(this)->unlock();
     }
 
 private:

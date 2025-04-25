@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/types.hpp"
+#include "dht_hunter/dht/core/dht_types.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
 #include "dht_hunter/util/mutex_utils.hpp"
 
@@ -75,6 +75,14 @@ public:
      * @return True if the infohash was added, false otherwise
      */
     bool addInfoHash(const dht_hunter::dht::InfoHash& infoHash);
+
+    /**
+     * @brief Collects an infohash from a DHT message
+     * @param infoHash The infohash to collect
+     * @param sender The sender's endpoint
+     * @return True if the infohash was collected, false otherwise
+     */
+    bool collectInfoHash(const dht_hunter::dht::InfoHash& infoHash, const dht_hunter::network::EndPoint& sender);
 
     /**
      * @brief Gets the number of collected infohashes

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/dht_node.hpp"
+#include "dht_hunter/dht/core/dht_node.hpp"
 #include "dht_hunter/crawler/infohash_collector.hpp"
 #include "dht_hunter/metadata/metadata_fetcher.hpp"
 #include "dht_hunter/storage/metadata_storage.hpp"
