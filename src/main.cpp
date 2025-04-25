@@ -59,11 +59,23 @@ std::shared_ptr<dht_hunter::crawler::DHTCrawler> createCrawler() {
     // Create default crawler config
     dht_hunter::crawler::DHTCrawlerConfig config;
 
+    // Get the executable path and set the config directory next to it
+    auto execPath = dht_hunter::util::FilesystemUtils::getExecutablePath();
+    std::string configDir = "config"; // Default fallback
+
+    if (execPath) {
+        // Set config directory next to the executable
+        configDir = (execPath->parent_path() / "config").string();
+        getLogger()->info("Setting config directory next to executable: {}", configDir);
+    } else {
+        getLogger()->warning("Could not determine executable path, using default config directory: {}", configDir);
+    }
+
     // Set default values for crawler config
     config.dhtPort = 6881;
-    config.configDir = "config";
-    config.maxConcurrentLookups = 20;  // Increased for better performance
-    config.maxLookupsPerMinute = 120;  // Increased for better performance
+    config.configDir = configDir;
+    config.maxConcurrentLookups = 50;  // Increased for better performance
+    config.maxLookupsPerMinute = 500;  // Increased for better performance
     config.lookupInterval = std::chrono::milliseconds(50);  // Faster lookups
     config.statusInterval = std::chrono::seconds(60);
 
@@ -84,14 +96,18 @@ std::shared_ptr<dht_hunter::crawler::DHTCrawler> createCrawler() {
     config.infoHashCollectorConfig.maxQueueSize = 1000000;  // Large queue size
     config.infoHashCollectorConfig.savePath = config.configDir + "/infohashes.dat";
 
+    // Update metadata storage directory to use the new config directory
+    config.metadataStorageDirectory = config.configDir + "/metadata";
+
     // Create the crawler
     auto crawler = std::make_shared<dht_hunter::crawler::DHTCrawler>(config);
 
     // Set status callback for logging
     crawler->setStatusCallback([](uint64_t infoHashesDiscovered, uint64_t infoHashesQueued,
-                                uint64_t metadataFetched, double lookupRate, double metadataFetchRate) {
+                                uint64_t metadataFetched, double lookupRate, double metadataFetchRate,
+                                uint64_t totalInfoHashes) {
         getLogger()->info("Crawler Status:");
-        getLogger()->info("  InfoHashes Discovered: {}", infoHashesDiscovered);
+        getLogger()->info("  InfoHashes Discovered: {} (session) / {} (total)", infoHashesDiscovered, totalInfoHashes);
         getLogger()->info("  InfoHashes Queued: {}", infoHashesQueued);
         getLogger()->info("  Metadata Fetched: {}", metadataFetched);
         getLogger()->info("  Lookup Rate: {:.2f} lookups/minute", lookupRate);
@@ -105,11 +121,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Log the actual log filename being used
     getLogger()->info("Using log file: {}.log", dht_hunter::util::FilesystemUtils::getExecutableName());
 
-    // Ensure config directory exists
-    if (!dht_hunter::util::FilesystemUtils::ensureDirectoryExists("config")) {
-        getLogger()->error("Failed to create config directory");
-        return 1;
-    }
+    // Set initial window title
+    std::string initialTitle = dht_hunter::util::FilesystemUtils::getExecutableName() + " - Starting...";
+    dht_hunter::util::FilesystemUtils::setTerminalTitle(initialTitle);
+
+    // Config directory will be created by the crawler when it starts
 
     // Register signal handlers
     std::signal(SIGINT, signalHandler);
@@ -156,9 +172,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
     uint64_t infoHashesDiscovered = g_crawler->getInfoHashesDiscovered();
     uint64_t metadataFetched = g_crawler->getMetadataFetched();
 
+    // Get total infohashes
+    uint64_t totalInfoHashes = g_crawler->getTotalInfoHashes();
+
     // Print final statistics
     getLogger()->info("Final statistics:");
-    getLogger()->info("  InfoHashes discovered: {}", infoHashesDiscovered);
+    getLogger()->info("  InfoHashes discovered: {} (session) / {} (total)", infoHashesDiscovered, totalInfoHashes);
     getLogger()->info("  Metadata items fetched: {}", metadataFetched);
 
     // Calculate uptime
@@ -174,6 +193,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     getLogger()->info("  Uptime: {}d {:02d}h {:02d}m {:02d}s", days, hours, minutes, seconds);
     getLogger()->info("  InfoHash discovery rate: {:.2f} per second", infoHashRate);
+
+    // Set final window title with stats
+    std::string finalTitle = dht_hunter::util::FilesystemUtils::getExecutableName() +
+                           " - Stopped - InfoHashes: " + std::to_string(totalInfoHashes) +
+                           " - Metadata: " + std::to_string(metadataFetched);
+    dht_hunter::util::FilesystemUtils::setTerminalTitle(finalTitle);
 
     // Release resources
     g_crawler.reset();

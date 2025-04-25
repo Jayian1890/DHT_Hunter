@@ -194,4 +194,10 @@ std::string FilesystemUtils::getExecutableName() {
     return filename;
 }
 
+void FilesystemUtils::setTerminalTitle(const std::string& title) {
+    // Use ANSI escape sequence to set the terminal title
+    // This works on most modern terminals including Windows 10+ with modern console
+    std::cout << "\033]0;" << title << "\007" << std::flush;
+}
+
 } // namespace dht_hunter::util

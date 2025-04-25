@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <iostream>
 
 namespace dht_hunter::util {
 
@@ -58,6 +59,13 @@ public:
      * @return The full path to the executable, or empty optional if it cannot be determined
      */
     static std::optional<std::filesystem::path> getExecutablePath();
+
+    /**
+     * Sets the terminal window title using ANSI escape sequences
+     *
+     * @param title The title to set
+     */
+    static void setTerminalTitle(const std::string& title);
 };
 
 } // namespace dht_hunter::util

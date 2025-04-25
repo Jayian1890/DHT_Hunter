@@ -2,6 +2,7 @@
 
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
+#include "dht_hunter/util/mutex_utils.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -151,7 +152,7 @@ private:
 
     InfoHashCollectorConfig m_config;                  ///< Configuration
     std::atomic<bool> m_running{false};                ///< Whether the collector is running
-    mutable std::mutex m_mutex;                        ///< Mutex for thread safety
+    mutable util::CheckedMutex m_mutex;                 ///< Mutex for thread safety
     std::unordered_set<std::string> m_infoHashes;      ///< Set of collected infohashes (as hex strings for deduplication)
     std::queue<dht_hunter::dht::InfoHash> m_queue;     ///< Queue of infohashes to process
     std::thread m_processingThread;                    ///< Thread for processing the queue

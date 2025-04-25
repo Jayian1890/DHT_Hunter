@@ -1,5 +1,6 @@
 #include "dht_hunter/crawler/dht_crawler.hpp"
 #include "dht_hunter/util/hash.hpp"
+#include "dht_hunter/util/filesystem_utils.hpp"
 #include "dht_hunter/logforge/logger_macros.hpp"
 #include <algorithm>
 #include <random>
@@ -75,6 +76,14 @@ bool DHTCrawler::start() {
     m_metadataFetchThread = std::thread(&DHTCrawler::metadataFetchThread, this);
     getLogger()->info("Starting status thread");
     m_statusThread = std::thread(&DHTCrawler::statusThread, this);
+
+    // Start active node discovery thread if enabled
+    if (m_config.enableActiveNodeDiscovery) {
+        getLogger()->info("Starting active node discovery thread");
+        m_activeNodeDiscoveryThread = std::thread(&DHTCrawler::activeNodeDiscoveryThread, this);
+    } else {
+        getLogger()->info("Active node discovery disabled");
+    }
     getLogger()->info("DHTCrawler started");
     return true;
 }
@@ -134,12 +143,14 @@ void DHTCrawler::stop() {
     joinThreadWithTimeout(m_lookupThread, "lookup", threadJoinTimeout);
     joinThreadWithTimeout(m_metadataFetchThread, "metadata fetch", threadJoinTimeout);
     joinThreadWithTimeout(m_statusThread, "status", threadJoinTimeout);
+    joinThreadWithTimeout(m_activeNodeDiscoveryThread, "active node discovery", threadJoinTimeout);
 
     // Stop components in reverse order of initialization
     try {
         if (m_metadataStorage) {
             getLogger()->debug("Shutting down metadata storage...");
-            m_metadataStorage->shutdown();
+            // The new MetadataStorage class doesn't need explicit shutdown
+            m_metadataStorage.reset();
         }
     } catch (const std::exception& e) {
         getLogger()->error("Exception while shutting down metadata storage: {}", e.what());
@@ -197,7 +208,7 @@ std::shared_ptr<metadata::MetadataFetcher> DHTCrawler::getMetadataFetcher() cons
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_metadataFetcher;
 }
-std::shared_ptr<metadata::MetadataStorage> DHTCrawler::getMetadataStorage() const {
+std::shared_ptr<storage::MetadataStorage> DHTCrawler::getMetadataStorage() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_metadataStorage;
 }
@@ -232,8 +243,22 @@ double DHTCrawler::getLookupRate() const {
 double DHTCrawler::getMetadataFetchRate() const {
     return m_metadataFetchRate;
 }
+
+uint64_t DHTCrawler::getTotalInfoHashes() const {
+    if (m_infoHashCollector) {
+        return m_infoHashCollector->getInfoHashCount();
+    }
+    return 0;
+}
 bool DHTCrawler::initializeDHTNode() {
     try {
+        // Ensure the config directory exists
+        getLogger()->info("Ensuring config directory exists: {}", m_config.configDir);
+        if (!util::FilesystemUtils::ensureDirectoryExists(m_config.configDir)) {
+            getLogger()->error("Failed to create config directory: {}", m_config.configDir);
+            return false;
+        }
+
         // Create the DHT node with the configured port and config directory
         getLogger()->info("Creating DHT node on port {} with config directory {}", m_config.dhtPort, m_config.configDir);
         m_dhtNode = std::make_shared<dht::DHTNode>(m_config.dhtPort, m_config.configDir);
@@ -259,7 +284,7 @@ bool DHTCrawler::initializeDHTNode() {
 
         // Set a timeout for the entire bootstrap process
         auto bootstrapStartTime = std::chrono::steady_clock::now();
-        auto bootstrapTimeout = std::chrono::seconds(10); // 10 second timeout for the entire bootstrap process
+        auto bootstrapTimeout = std::chrono::seconds(30); // 30 second timeout for the entire bootstrap process
 
         // Bootstrap the DHT node
         getLogger()->info("Bootstrapping DHT node with {} bootstrap nodes (timeout: {} seconds)",
@@ -414,7 +439,7 @@ bool DHTCrawler::initializeDHTNode() {
 
                 // Set a timeout for this specific bootstrap attempt
                 auto attemptStartTime = std::chrono::steady_clock::now();
-                auto attemptTimeout = std::chrono::seconds(2); // 2 second timeout per bootstrap attempt
+                auto attemptTimeout = std::chrono::seconds(5); // 5 second timeout per bootstrap attempt
 
                 // Use a separate thread for bootstrap to implement a timeout
                 std::atomic<bool> bootstrapComplete = false;
@@ -516,6 +541,15 @@ bool DHTCrawler::initializeDHTNode() {
     }
 }
 bool DHTCrawler::initializeInfoHashCollector() {
+    // Ensure the info hash collector's save directory exists
+    std::filesystem::path savePath(m_config.infoHashCollectorConfig.savePath);
+    std::filesystem::path saveDir = savePath.parent_path();
+    getLogger()->info("Ensuring info hash collector save directory exists: {}", saveDir.string());
+    if (!util::FilesystemUtils::ensureDirectoryExists(saveDir)) {
+        getLogger()->error("Failed to create info hash collector save directory: {}", saveDir.string());
+        return false;
+    }
+
     // Create the info hash collector
     m_infoHashCollector = std::make_shared<InfoHashCollector>(m_config.infoHashCollectorConfig);
     // Set the callback for new info hashes
@@ -560,17 +594,19 @@ bool DHTCrawler::initializeMetadataStorage() {
 
     // Log the metadata storage configuration
     getLogger()->debug("Metadata storage configuration:");
-    getLogger()->debug("  Storage directory: {}", m_config.metadataStorageConfig.storageDirectory);
-    getLogger()->debug("  Persist metadata: {}", m_config.metadataStorageConfig.persistMetadata);
-    getLogger()->debug("  Create torrent files: {}", m_config.metadataStorageConfig.createTorrentFiles);
-    getLogger()->debug("  Torrent files directory: {}", m_config.metadataStorageConfig.torrentFilesDirectory);
-    getLogger()->debug("  Max metadata items: {}", m_config.metadataStorageConfig.maxMetadataItems);
-    getLogger()->debug("  Deduplicate metadata: {}", m_config.metadataStorageConfig.deduplicateMetadata);
+    getLogger()->debug("  Storage directory: {}", m_config.metadataStorageDirectory);
+
+    // Ensure the metadata storage directory exists
+    getLogger()->info("Ensuring metadata storage directory exists: {}", m_config.metadataStorageDirectory);
+    if (!util::FilesystemUtils::ensureDirectoryExists(m_config.metadataStorageDirectory)) {
+        getLogger()->error("Failed to create metadata storage directory: {}", m_config.metadataStorageDirectory);
+        return false;
+    }
 
     // Create the metadata storage
     try {
         getLogger()->debug("Creating MetadataStorage instance");
-        m_metadataStorage = std::make_shared<metadata::MetadataStorage>(m_config.metadataStorageConfig);
+        m_metadataStorage = std::make_shared<storage::MetadataStorage>(m_config.metadataStorageDirectory);
         getLogger()->debug("MetadataStorage instance created successfully");
     } catch (const std::exception& e) {
         getLogger()->error("Exception while creating metadata storage: {}", e.what());
@@ -597,13 +633,13 @@ bool DHTCrawler::initializeMetadataStorage() {
             initializationStage = 1;
             getLogger()->debug("Stage 1: Preparing to initialize metadata storage");
 
-            // Stage 2: Calling initialize
+            // Stage 2: Checking if metadata storage was created successfully
             initializationStage = 2;
-            getLogger()->debug("Stage 2: Calling MetadataStorage::initialize()");
+            getLogger()->debug("Stage 2: Checking if MetadataStorage was created successfully");
 
-            // Call initialize with detailed logging
-            if (!m_metadataStorage->initialize()) {
-                std::string errorMsg = "MetadataStorage::initialize() returned false";
+            // The new MetadataStorage class is initialized in the constructor
+            if (!m_metadataStorage) {
+                std::string errorMsg = "MetadataStorage was not created successfully";
                 {
                     std::lock_guard<std::mutex> lock(errorMessageMutex);
                     initializationErrorMessage = errorMsg;
@@ -718,8 +754,9 @@ bool DHTCrawler::initializeMetadataStorage() {
         return false;
     }
 
-    if (!m_metadataStorage->isInitialized()) {
-        getLogger()->error("Metadata storage reports it is not initialized");
+    // The new MetadataStorage class is always initialized after construction
+    if (!m_metadataStorage) {
+        getLogger()->error("Metadata storage is not available");
         return false;
     }
 
@@ -742,7 +779,7 @@ bool DHTCrawler::initializeMetadataStorage() {
     // Get metadata count
     size_t metadataCount = 0;
     try {
-        metadataCount = m_metadataStorage->getMetadataCount();
+        metadataCount = m_metadataStorage->count();
     } catch (const std::exception& e) {
         getLogger()->error("Exception while getting metadata count: {}", e.what());
     }
@@ -921,7 +958,7 @@ void DHTCrawler::handleMetadataFetchCompletion(
                                  infoHashStr, size, metadataCopy.size());
 
                     // Use the copied metadata to ensure we're not accessing freed memory
-                    if (m_metadataStorage->addMetadata(infoHashCopy, metadataCopy, size)) {
+                    if (m_metadataStorage->addMetadata(infoHashCopy, metadataCopy.data(), size)) {
                         getLogger()->info("Stored metadata for info hash: {}", infoHashStr);
                     } else {
                         getLogger()->warning("Failed to store metadata for info hash: {}", infoHashStr);
@@ -1235,21 +1272,64 @@ void DHTCrawler::statusThread() {
         uint64_t metadataFetched = m_metadataFetched;
         double lookupRate = m_lookupRate;
         double metadataFetchRate = m_metadataFetchRate;
-        // Log status
-        getLogger()->info("Status: {} info hashes discovered, {} queued, {} metadata fetched, lookup rate: {:.2f}/min, metadata fetch rate: {:.2f}/min",
-                    infoHashesDiscovered, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate);
+
+        // Get the total number of info hashes from the collector
+        uint64_t totalInfoHashes = 0;
+        if (m_infoHashCollector) {
+            totalInfoHashes = m_infoHashCollector->getInfoHashCount();
+        }
+
+        // Log status with total info hashes
+        getLogger()->info("Status: {} info hashes discovered (total: {}), {} queued, {} metadata fetched, lookup rate: {:.2f}/min, metadata fetch rate: {:.2f}/min",
+                    infoHashesDiscovered, totalInfoHashes, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate);
+
+        // Update terminal window title with stats
+        std::string title = util::FilesystemUtils::getExecutableName() +
+                          " - InfoHashes: " + std::to_string(totalInfoHashes) +
+                          " - Metadata: " + std::to_string(metadataFetched) +
+                          " - Rate: " + std::to_string(static_cast<int>(lookupRate)) + "/min";
+        util::FilesystemUtils::setTerminalTitle(title);
+
         // Call the status callback
         if (m_statusCallback) {
-            m_statusCallback(infoHashesDiscovered, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate);
+            m_statusCallback(infoHashesDiscovered, infoHashesQueued, metadataFetched, lookupRate, metadataFetchRate, totalInfoHashes);
         }
+
         // Prioritize info hashes
         if (m_config.prioritizePopularInfoHashes) {
             prioritizeInfoHashes();
         }
+
         // Sleep for the status interval
         std::this_thread::sleep_for(m_config.statusInterval);
     }
     getLogger()->debug("Status thread stopped");
+}
+
+void DHTCrawler::activeNodeDiscoveryThread() {
+    getLogger()->info("Active node discovery thread started");
+
+    // Wait a bit before starting to allow the DHT node to initialize
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    while (m_running) {
+        try {
+            // Perform random node lookups to discover more nodes
+            if (m_dhtNode && m_dhtNode->isRunning()) {
+                getLogger()->debug("Performing random node lookup for active discovery");
+                m_dhtNode->performRandomNodeLookup();
+            }
+        } catch (const std::exception& e) {
+            getLogger()->error("Exception in active node discovery thread: {}", e.what());
+        } catch (...) {
+            getLogger()->error("Unknown exception in active node discovery thread");
+        }
+
+        // Sleep for the active node discovery interval
+        std::this_thread::sleep_for(std::chrono::seconds(m_config.activeNodeDiscoveryInterval));
+    }
+
+    getLogger()->debug("Active node discovery thread stopped");
 }
 void DHTCrawler::updateLookupRate() {
     auto now = std::chrono::steady_clock::now();

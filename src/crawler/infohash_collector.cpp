@@ -50,35 +50,59 @@ bool InfoHashCollector::isRunning() const {
     return m_running;
 }
 bool InfoHashCollector::addInfoHash(const dht_hunter::dht::InfoHash& infoHash) {
-    // Convert to hex string for logging
+    // Convert to hex string for logging and storage
     std::string infoHashStr = dht_hunter::util::bytesToHex(infoHash.data(), infoHash.size());
-    getLogger()->info("Received info hash: {}", infoHashStr);
+
+    // Quick check if we're already at capacity before doing any locking
+    if (getInfoHashCount() >= m_config.maxStoredInfoHashes) {
+        // We're at capacity, only log at debug level to avoid flooding logs
+        getLogger()->debug("InfoHash collector at capacity ({} hashes), dropping: {}",
+                     m_config.maxStoredInfoHashes, infoHashStr);
+        return false;
+    }
 
     if (!m_running) {
         getLogger()->warning("Cannot add infohash: InfoHashCollector is not running");
         return false;
     }
+
     // Check if the queue is full
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<util::CheckedMutex> lock(m_mutex);
+
+        // First check if we already have this InfoHash to avoid unnecessary processing
+        if (m_infoHashes.find(infoHashStr) != m_infoHashes.end()) {
+            // We already have this InfoHash, no need to process it again
+            getLogger()->debug("InfoHash already collected, skipping: {}", infoHashStr);
+            return true;
+        }
+
         if (m_queue.size() >= m_config.maxQueueSize) {
             getLogger()->warning("Infohash queue is full, dropping infohash: {}", infoHashStr);
             return false;
         }
+
         // Add to the queue
         m_queue.push(infoHash);
         getLogger()->debug("Added info hash to queue: {}, queue size: {}", infoHashStr, m_queue.size());
     }
+
+    // Log at info level only occasionally to avoid flooding logs
+    static size_t addCounter = 0;
+    if (++addCounter % 100 == 0) {
+        getLogger()->info("Received 100 more infohashes, latest: {}", infoHashStr);
+    }
+
     return true;
 }
 size_t InfoHashCollector::getInfoHashCount() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     return m_infoHashes.size();
 }
 std::vector<dht_hunter::dht::InfoHash> InfoHashCollector::getInfoHashes() const {
     std::vector<dht_hunter::dht::InfoHash> result;
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<util::CheckedMutex> lock(m_mutex);
         result.reserve(m_infoHashes.size());
         for (const auto& hexStr : m_infoHashes) {
             auto bytes = dht_hunter::util::hexToBytes(hexStr);
@@ -92,7 +116,7 @@ std::vector<dht_hunter::dht::InfoHash> InfoHashCollector::getInfoHashes() const 
 std::vector<dht_hunter::dht::InfoHash> InfoHashCollector::getInfoHashBatch(size_t count) const {
     std::vector<dht_hunter::dht::InfoHash> result;
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<util::CheckedMutex> lock(m_mutex);
         size_t batchSize = std::min(count, m_infoHashes.size());
         result.reserve(batchSize);
         auto it = m_infoHashes.begin();
@@ -106,7 +130,7 @@ std::vector<dht_hunter::dht::InfoHash> InfoHashCollector::getInfoHashBatch(size_
     return result;
 }
 void InfoHashCollector::clearInfoHashes() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     m_infoHashes.clear();
     // Reset counters
     m_totalProcessed = 0;
@@ -122,7 +146,7 @@ bool InfoHashCollector::saveInfoHashes(const std::string& filePath) const {
         return false;
     }
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<util::CheckedMutex> lock(m_mutex);
         // Write the number of infohashes
         uint32_t count = static_cast<uint32_t>(m_infoHashes.size());
         file.write(reinterpret_cast<const char*>(&count), sizeof(count));
@@ -132,7 +156,7 @@ bool InfoHashCollector::saveInfoHashes(const std::string& filePath) const {
             file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         }
     }
-    getLogger()->info("Saved {} infohashes to {}", m_infoHashes.size(), filePath);
+    getLogger()->debug("Saved {} infohashes to {}", m_infoHashes.size(), filePath);
     return true;
 }
 bool InfoHashCollector::loadInfoHashes(const std::string& filePath) {
@@ -163,14 +187,14 @@ bool InfoHashCollector::loadInfoHashes(const std::string& filePath) {
     }
     // Replace the current set with the loaded set
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<util::CheckedMutex> lock(m_mutex);
         m_infoHashes = std::move(loadedInfoHashes);
     }
     getLogger()->info("Loaded {} infohashes from {}", count, filePath);
     return true;
 }
 void InfoHashCollector::setNewInfoHashCallback(InfoHashCallback callback) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     m_newInfoHashCallback = callback;
 }
 InfoHashCollectorConfig InfoHashCollector::getConfig() const {
@@ -188,7 +212,7 @@ void InfoHashCollector::processQueue() {
         bool hasInfoHash = false;
         // Get an infohash from the queue
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<util::CheckedMutex> lock(m_mutex);
             if (!m_queue.empty()) {
                 infoHash = m_queue.front();
                 m_queue.pop();
@@ -210,7 +234,8 @@ void InfoHashCollector::processQueue() {
 
             bool added = false;
             {
-                std::lock_guard<std::mutex> lock(m_mutex);
+                // Use unique_lock instead of lock_guard to allow unlocking and relocking
+                std::unique_lock<util::CheckedMutex> lock(m_mutex);
                 // Check if we need to deduplicate
                 if (m_config.deduplicateInfoHashes) {
                     if (m_infoHashes.find(hexStr) != m_infoHashes.end()) {
@@ -229,6 +254,22 @@ void InfoHashCollector::processQueue() {
                 added = true;
                 m_totalAdded++;
                 getLogger()->info("Added new info hash: {}, total: {}", hexStr, m_totalAdded);
+
+                // Save immediately if a save path is set
+                if (!m_savePath.empty()) {
+                    // Unlock the mutex before saving to avoid deadlock
+                    std::string savePath = m_savePath; // Make a copy of the save path
+                    std::string infoHashCopy = hexStr; // Make a copy of the infohash
+                    lock.unlock();
+
+                    // Save and log specifically that we're saving due to a new entry
+                    bool saved = saveInfoHashes(savePath);
+                    if (saved) {
+                        getLogger()->info("Saved infohashes to {} after adding new infohash: {}", savePath, infoHashCopy);
+                    }
+
+                    lock.lock(); // Re-lock for the rest of the function
+                }
 
                 // Call the callback if set
                 if (m_newInfoHashCallback) {
@@ -260,7 +301,10 @@ void InfoHashCollector::periodicSave() {
         }
         // Save the infohashes
         if (!m_savePath.empty()) {
-            saveInfoHashes(m_savePath);
+            bool saved = saveInfoHashes(m_savePath);
+            if (saved) {
+                getLogger()->info("Periodic save of infohashes to {} completed", m_savePath);
+            }
         }
     }
     getLogger()->debug("Periodic save thread stopped");
