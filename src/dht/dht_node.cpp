@@ -37,6 +37,7 @@ DHTNode::DHTNode(const DHTNodeConfig& config, const NodeID& nodeID)
       m_socket(nullptr), m_messageBatcher(nullptr),
       m_routingTablePath(config.configDir + "/routing_table.dat"),
       m_peerCachePath(config.configDir + "/peer_cache.dat"),
+      m_transactionsPath(config.transactionsPath.empty() ? config.configDir + "/transactions.dat" : config.transactionsPath),
       m_config(config),
       m_running(false),
       m_secret(generateRandomString(20)), m_secretLastChanged(std::chrono::steady_clock::now()) {
@@ -159,12 +160,22 @@ bool DHTNode::start() {
             getLogger()->warning("Failed to load peer cache from file: {}", m_peerCachePath);
         }
     }
+
+    // Try to load transactions if configured
+    if (m_config.loadTransactionsOnStartup && !m_transactionsPath.empty()) {
+        if (loadTransactions(m_transactionsPath)) {
+            getLogger()->info("Loaded transactions from file: {}", m_transactionsPath);
+        } else {
+            getLogger()->warning("Failed to load transactions from file: {}", m_transactionsPath);
+        }
+    }
     // Start threads
     m_running = true;
     m_receiveThread = std::thread(&DHTNode::receiveMessages, this);
     m_timeoutThread = std::thread(&DHTNode::checkTimeouts, this);
     m_peerCleanupThread = std::thread(&DHTNode::peerCleanupThread, this);
     m_routingTableSaveThread = std::thread(&DHTNode::routingTableSaveThread, this);
+    m_transactionSaveThread = std::thread(&DHTNode::transactionSaveThread, this);
     return true;
 }
 void DHTNode::stop() {
@@ -247,6 +258,7 @@ void DHTNode::stop() {
     joinThreadWithTimeout(m_timeoutThread, "timeout");
     joinThreadWithTimeout(m_peerCleanupThread, "peer cleanup");
     joinThreadWithTimeout(m_routingTableSaveThread, "routing table save");
+    joinThreadWithTimeout(m_transactionSaveThread, "transaction save");
 
     // Try to save the routing table before exiting, but don't block if it fails
     if (!m_routingTablePath.empty()) {
@@ -259,6 +271,20 @@ void DHTNode::stop() {
             getLogger()->error("Exception while saving routing table: {}", e.what());
         } catch (...) {
             getLogger()->error("Unknown exception while saving routing table");
+        }
+    }
+
+    // Save transactions if configured
+    if (m_config.saveTransactionsOnShutdown && !m_transactionsPath.empty()) {
+        try {
+            getLogger()->debug("Saving transactions to file: {}", m_transactionsPath);
+            if (!saveTransactions(m_transactionsPath)) {
+                getLogger()->warning("Failed to save transactions to file: {}", m_transactionsPath);
+            }
+        } catch (const std::exception& e) {
+            getLogger()->error("Exception while saving transactions: {}", e.what());
+        } catch (...) {
+            getLogger()->error("Unknown exception while saving transactions");
         }
     }
 
@@ -575,6 +601,7 @@ void DHTNode::handleResponse(std::shared_ptr<ResponseMessage> response, const ne
 
     // Find the transaction and make a copy of the callback
     ResponseCallback callback;
+    bool transactionsChanged = false;
     {
         // Find and remove the transaction atomically
         std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
@@ -596,6 +623,7 @@ void DHTNode::handleResponse(std::shared_ptr<ResponseMessage> response, const ne
 
         // Remove the transaction
         m_transactions.erase(it);
+        transactionsChanged = true;
 
         // Process the transaction queue if we have any queued transactions
         if (!m_transactionQueue.empty()) {
@@ -611,7 +639,15 @@ void DHTNode::handleResponse(std::shared_ptr<ResponseMessage> response, const ne
                 m_transactions[queuedTransactionIDStr] = transaction;
                 getLogger()->debug("Processed queued transaction after response, active: {}, queue: {}",
                              m_transactions.size(), m_transactionQueue.size());
+                transactionsChanged = true;
             }
+        }
+    }
+
+    // Save transactions to disk if they were changed
+    if (transactionsChanged && !m_transactionsPath.empty()) {
+        if (!saveTransactions(m_transactionsPath)) {
+            getLogger()->warning("Failed to save transactions after handling response");
         }
     }
 
@@ -641,6 +677,7 @@ void DHTNode::handleError(std::shared_ptr<ErrorMessage> error, const network::En
 
     // Find the transaction and make a copy of the callback
     ErrorCallback callback;
+    bool transactionsChanged = false;
     {
         // Find and remove the transaction atomically
         std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
@@ -662,6 +699,7 @@ void DHTNode::handleError(std::shared_ptr<ErrorMessage> error, const network::En
 
         // Remove the transaction
         m_transactions.erase(it);
+        transactionsChanged = true;
 
         // Process the transaction queue if we have any queued transactions
         if (!m_transactionQueue.empty()) {
@@ -677,7 +715,15 @@ void DHTNode::handleError(std::shared_ptr<ErrorMessage> error, const network::En
                 m_transactions[queuedTransactionIDStr] = transaction;
                 getLogger()->debug("Processed queued transaction after error, active: {}, queue: {}",
                              m_transactions.size(), m_transactionQueue.size());
+                transactionsChanged = true;
             }
+        }
+    }
+
+    // Save transactions to disk if they were changed
+    if (transactionsChanged && !m_transactionsPath.empty()) {
+        if (!saveTransactions(m_transactionsPath)) {
+            getLogger()->warning("Failed to save transactions after handling error");
         }
     }
 
@@ -862,38 +908,50 @@ bool DHTNode::addTransaction(const Transaction& transaction) {
         return false;
     }
 
-    std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
+    bool result = false;
+    {
+        std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
 
-    // Convert transaction ID to string for map key
-    std::string transactionIDStr(transaction.id.begin(), transaction.id.end());
+        // Convert transaction ID to string for map key
+        std::string transactionIDStr(transaction.id.begin(), transaction.id.end());
 
-    // Check if transaction already exists
-    if (m_transactions.find(transactionIDStr) != m_transactions.end()) {
-        getLogger()->error("Transaction already exists");
-        return false;
-    }
-
-    // Create a shared_ptr for the transaction
-    auto transactionPtr = std::make_shared<Transaction>(transaction);
-
-    // Check if we have too many transactions
-    if (m_transactions.size() >= MAX_TRANSACTIONS) {
-        // If the queue is also full, reject the transaction
-        if (m_transactionQueue.size() >= m_maxQueuedTransactions) {
-            getLogger()->error("Transaction queue full, rejecting transaction");
+        // Check if transaction already exists
+        if (m_transactions.find(transactionIDStr) != m_transactions.end()) {
+            getLogger()->error("Transaction already exists");
             return false;
         }
 
-        // Add to queue instead
-        getLogger()->debug("Too many active transactions ({}), queueing transaction (queue size: {})",
-                     m_transactions.size(), m_transactionQueue.size());
-        m_transactionQueue.push(transactionPtr);
-        return true;
+        // Create a shared_ptr for the transaction
+        auto transactionPtr = std::make_shared<Transaction>(transaction);
+
+        // Check if we have too many transactions
+        if (m_transactions.size() >= MAX_TRANSACTIONS) {
+            // If the queue is also full, reject the transaction
+            if (m_transactionQueue.size() >= m_maxQueuedTransactions) {
+                getLogger()->error("Transaction queue full, rejecting transaction");
+                return false;
+            }
+
+            // Add to queue instead
+            getLogger()->debug("Too many active transactions ({}), queueing transaction (queue size: {})",
+                        m_transactions.size(), m_transactionQueue.size());
+            m_transactionQueue.push(transactionPtr);
+            result = true;
+        } else {
+            // Add transaction to the active transactions map
+            m_transactions[transactionIDStr] = transactionPtr;
+            result = true;
+        }
     }
 
-    // Add transaction to the active transactions map
-    m_transactions[transactionIDStr] = transactionPtr;
-    return true;
+    // Save transactions to disk if configured
+    if (result && !m_transactionsPath.empty()) {
+        if (!saveTransactions(m_transactionsPath)) {
+            getLogger()->warning("Failed to save transactions after adding new transaction");
+        }
+    }
+
+    return result;
 }
 
 bool DHTNode::removeTransaction(const TransactionID& id) {
@@ -902,13 +960,25 @@ bool DHTNode::removeTransaction(const TransactionID& id) {
         return false;
     }
 
-    std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
+    bool result = false;
+    {
+        std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
 
-    // Convert transaction ID to string for map key
-    std::string transactionIDStr(id.begin(), id.end());
+        // Convert transaction ID to string for map key
+        std::string transactionIDStr(id.begin(), id.end());
 
-    // Remove transaction
-    return m_transactions.erase(transactionIDStr) > 0;
+        // Remove transaction
+        result = m_transactions.erase(transactionIDStr) > 0;
+    }
+
+    // Save transactions to disk if configured and a transaction was removed
+    if (result && !m_transactionsPath.empty()) {
+        if (!saveTransactions(m_transactionsPath)) {
+            getLogger()->warning("Failed to save transactions after removing transaction");
+        }
+    }
+
+    return result;
 }
 
 std::shared_ptr<Transaction> DHTNode::findTransaction(const TransactionID& id) {
@@ -944,26 +1014,38 @@ void DHTNode::processTransactionQueue() {
         return;
     }
 
-    std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
+    bool transactionsChanged = false;
+    {
+        std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
 
-    // Process queued transactions if we have space
-    while (!m_transactionQueue.empty() && m_transactions.size() < MAX_TRANSACTIONS) {
-        auto transaction = m_transactionQueue.front();
-        m_transactionQueue.pop();
+        // Process queued transactions if we have space
+        while (!m_transactionQueue.empty() && m_transactions.size() < MAX_TRANSACTIONS) {
+            auto transaction = m_transactionQueue.front();
+            m_transactionQueue.pop();
 
-        // Convert transaction ID to string for map key
-        std::string transactionIDStr(transaction->id.begin(), transaction->id.end());
+            // Convert transaction ID to string for map key
+            std::string transactionIDStr(transaction->id.begin(), transaction->id.end());
 
-        // Check if transaction already exists (shouldn't happen, but just in case)
-        if (m_transactions.find(transactionIDStr) != m_transactions.end()) {
-            getLogger()->warning("Queued transaction already exists, skipping");
-            continue;
+            // Check if transaction already exists (shouldn't happen, but just in case)
+            if (m_transactions.find(transactionIDStr) != m_transactions.end()) {
+                getLogger()->warning("Queued transaction already exists, skipping");
+                continue;
+            }
+
+            // Add transaction to the active transactions map
+            m_transactions[transactionIDStr] = transaction;
+            getLogger()->debug("Processed queued transaction, active transactions: {}, queue size: {}",
+                        m_transactions.size(), m_transactionQueue.size());
+
+            transactionsChanged = true;
         }
+    }
 
-        // Add transaction to the active transactions map
-        m_transactions[transactionIDStr] = transaction;
-        getLogger()->debug("Processed queued transaction, active transactions: {}, queue size: {}",
-                     m_transactions.size(), m_transactionQueue.size());
+    // Save transactions to disk if configured and transactions were changed
+    if (transactionsChanged && !m_transactionsPath.empty()) {
+        if (!saveTransactions(m_transactionsPath)) {
+            getLogger()->warning("Failed to save transactions after processing queue");
+        }
     }
 }
 

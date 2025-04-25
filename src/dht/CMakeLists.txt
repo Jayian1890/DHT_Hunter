@@ -12,6 +12,8 @@ add_library(dht_hunter_dht
     peer_storage.cpp
     routing_table_persistence.cpp
     dht_node_persistence.cpp
+    transaction_persistence.cpp
+    dht_node_transaction_persistence.cpp
 )
 
 # Set include directories

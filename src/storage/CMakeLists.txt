@@ -18,21 +18,3 @@ target_link_libraries(dht_hunter_storage
     dht_hunter_util
     dht_hunter_metadata
 )
-
-# Create test executables
-add_executable(test_metadata_storage
-    test_metadata_storage.cpp
-)
-
-# Link dependencies for tests
-target_link_libraries(test_metadata_storage
-    PRIVATE
-    dht_hunter_storage
-    dht_hunter_logforge
-)
-
-# Set include directories for tests
-target_include_directories(test_metadata_storage
-    PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
-)

@@ -6,6 +6,7 @@
 #include "dht_hunter/dht/query_message.hpp"
 #include "dht_hunter/dht/response_message.hpp"
 #include "dht_hunter/dht/error_message.hpp"
+#include "dht_hunter/dht/transaction_persistence.hpp"
 #include "dht_hunter/network/socket.hpp"
 #include "dht_hunter/network/socket_factory.hpp"
 #include "dht_hunter/network/udp_message_batcher.hpp"
@@ -75,6 +76,11 @@ constexpr int PEER_CLEANUP_INTERVAL = 300;
 constexpr int ROUTING_TABLE_SAVE_INTERVAL = 600;
 
 /**
+ * @brief Interval for saving transactions in seconds (5 minutes)
+ */
+constexpr int TRANSACTION_SAVE_INTERVAL = 300;
+
+/**
  * @brief Default configuration directory
  */
 constexpr char DEFAULT_CONFIG_DIR[] = "config";
@@ -83,6 +89,16 @@ constexpr char DEFAULT_CONFIG_DIR[] = "config";
  * @brief Default setting for whether to save the routing table after each new node is added
  */
 constexpr bool DEFAULT_SAVE_ROUTING_TABLE_ON_NEW_NODE = true;
+
+/**
+ * @brief Default setting for whether to save transactions on shutdown
+ */
+constexpr bool DEFAULT_SAVE_TRANSACTIONS_ON_SHUTDOWN = true;
+
+/**
+ * @brief Default setting for whether to load transactions on startup
+ */
+constexpr bool DEFAULT_LOAD_TRANSACTIONS_ON_STARTUP = true;
 
 /**
  * @brief Configuration for the DHT node
@@ -94,6 +110,9 @@ struct DHTNodeConfig {
     size_t lookupAlpha = DEFAULT_LOOKUP_ALPHA;            ///< Alpha parameter for parallel lookups
     size_t lookupMaxResults = DEFAULT_LOOKUP_MAX_RESULTS; ///< Maximum number of nodes to store in a lookup result
     bool saveRoutingTableOnNewNode = DEFAULT_SAVE_ROUTING_TABLE_ON_NEW_NODE; ///< Whether to save the routing table after each new node is added
+    bool saveTransactionsOnShutdown = DEFAULT_SAVE_TRANSACTIONS_ON_SHUTDOWN; ///< Whether to save transactions on shutdown
+    bool loadTransactionsOnStartup = DEFAULT_LOAD_TRANSACTIONS_ON_STARTUP;   ///< Whether to load transactions on startup
+    std::string transactionsPath = "";                     ///< Path to the transactions file (empty = auto-generate)
 };
 
 // Default directory for configuration files is defined above
@@ -691,6 +710,25 @@ public:
      */
     void routingTableSaveThread();
 
+    /**
+     * @brief Saves transactions to a file
+     * @param filePath The path to the file
+     * @return True if the transactions were saved successfully, false otherwise
+     */
+    bool saveTransactions(const std::string& filePath) const;
+
+    /**
+     * @brief Loads transactions from a file
+     * @param filePath The path to the file
+     * @return True if the transactions were loaded successfully, false otherwise
+     */
+    bool loadTransactions(const std::string& filePath);
+
+    /**
+     * @brief Thread function for periodically saving transactions
+     */
+    void transactionSaveThread();
+
     NodeID m_nodeID;
     uint16_t m_port;
     RoutingTable m_routingTable;
@@ -699,6 +737,7 @@ public:
     std::unique_ptr<network::UDPMessageBatcher> m_messageBatcher;
     std::string m_routingTablePath;
     std::string m_peerCachePath;
+    std::string m_transactionsPath;
     DHTNodeConfig m_config; // Configuration for the DHT node
 
     // InfoHash collector
@@ -709,6 +748,7 @@ public:
     mutable util::CheckedMutex m_peersLock;
     std::thread m_peerCleanupThread;
     std::thread m_routingTableSaveThread;
+    std::thread m_transactionSaveThread;
 
     std::unordered_map<std::string, std::shared_ptr<Transaction>> m_transactions;
     std::queue<std::shared_ptr<Transaction>> m_transactionQueue; // Queue for pending transactions
