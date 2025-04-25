@@ -6,6 +6,7 @@
 #include "dht_hunter/dht/transactions/dht_transaction_manager.hpp"
 #include "dht_hunter/network/network_address.hpp"
 #include "dht_hunter/logforge/logger_macros.hpp"
+#include "dht_hunter/util/hash.hpp"
 
 #include <thread>
 #include <future>
@@ -452,15 +453,17 @@ bool DHTBootstrapper::bootstrapWithEndpointUsingComponents(
     result.totalAttempts++;
 
     // Create a find_node query
-    auto query = std::make_shared<FindNodeQuery>(nodeID);
+    auto query = std::make_shared<FindNodeQuery>("", nodeID, nodeID);
 
-    // Register a response handler
-    std::atomic<bool> success{false};
+    // Use a promise and condition variable to wait for the response
+    std::promise<bool> responsePromise;
+    std::mutex responseMutex;
+    std::condition_variable responseCV;
+    bool responseReceived = false;
+    bool success = false;
 
-    // Set up a temporary response handler
-    // This is a placeholder for a response handler that would be registered with the message handler
-    // In a real implementation, we would register this handler with the message handler
-    /*auto responseHandler = [&](const std::shared_ptr<ResponseMessage>& response) {
+    // Set up response, error, and timeout callbacks
+    ResponseCallback responseCallback = [&](const std::shared_ptr<ResponseMessage>& response) {
         // Process the response
         auto findNodeResponse = std::dynamic_pointer_cast<FindNodeResponse>(response);
         if (findNodeResponse) {
@@ -469,28 +472,63 @@ bool DHTBootstrapper::bootstrapWithEndpointUsingComponents(
             getLogger()->debug("Received {} nodes from bootstrap node {}", nodes.size(), endpoint.toString());
             success = !nodes.empty();
         }
-        // responseReceived = true;
-    };*/
 
-    // Register the handler
-    // Note: This is a placeholder - actual implementation would depend on the messageHandler API
-    // messageHandler->registerTemporaryHandler(query->getTransactionID(), responseHandler);
+        // Signal that we've received a response
+        std::lock_guard<std::mutex> lock(responseMutex);
+        responseReceived = true;
+        responseCV.notify_one();
+    };
+
+    ErrorCallback errorCallback = [&](const std::shared_ptr<ErrorMessage>& error) {
+        getLogger()->warning("Received error from bootstrap node: {} ({})",
+            error->getMessage(), error->getCode());
+
+        // Signal that we've received a response
+        std::lock_guard<std::mutex> lock(responseMutex);
+        responseReceived = true;
+        responseCV.notify_one();
+    };
+
+    TimeoutCallback timeoutCallback = [&]() {
+        getLogger()->warning("Bootstrap request to {} timed out", endpoint.toString());
+
+        // Signal that we've received a response
+        std::lock_guard<std::mutex> lock(responseMutex);
+        responseReceived = true;
+        responseCV.notify_one();
+    };
+
+    // Create a transaction with the callbacks
+    std::string transactionID = transactionManager->createTransaction(
+        query, endpoint, responseCallback, errorCallback, timeoutCallback);
+
+    if (transactionID.empty()) {
+        getLogger()->error("Failed to create transaction for bootstrap query to {}", endpoint.toString());
+        result.failedEndpoints.push_back(endpoint);
+        result.errorCode = BootstrapResult::ErrorCode::InternalError;
+        result.errorMessage = "Failed to create transaction for bootstrap query";
+        return false;
+    }
 
     // Send the query
     if (!messageSender->sendQuery(query, endpoint)) {
         getLogger()->debug("Failed to send find_node query to {}", endpoint.toString());
         result.failedEndpoints.push_back(endpoint);
+        result.errorCode = BootstrapResult::ErrorCode::ConnectionFailed;
+        result.errorMessage = "Failed to send find_node query to " + endpoint.toString();
         return false;
     }
 
-    // Wait for a response
-    bool responseSuccess = waitForResponse(transactionManager, query->getTransactionID(), m_config.bootstrapAttemptTimeout);
-
-    // If we didn't get a response, assume failure
-    if (!responseSuccess) {
-        getLogger()->debug("Timed out waiting for response from {}", endpoint.toString());
-        result.failedEndpoints.push_back(endpoint);
-        return false;
+    // Wait for a response with a timeout
+    {
+        std::unique_lock<std::mutex> lock(responseMutex);
+        if (!responseCV.wait_for(lock, m_config.bootstrapAttemptTimeout, [&]() { return responseReceived; })) {
+            getLogger()->warning("Timed out waiting for bootstrap response from {}", endpoint.toString());
+            result.failedEndpoints.push_back(endpoint);
+            result.errorCode = BootstrapResult::ErrorCode::Timeout;
+            result.errorMessage = "Timed out waiting for bootstrap response from " + endpoint.toString();
+            return false;
+        }
     }
 
     // Update the result
@@ -501,6 +539,8 @@ bool DHTBootstrapper::bootstrapWithEndpointUsingComponents(
     } else {
         getLogger()->debug("Failed to bootstrap with {}", endpoint.toString());
         result.failedEndpoints.push_back(endpoint);
+        result.errorCode = BootstrapResult::ErrorCode::InvalidResponse;
+        result.errorMessage = "Received invalid or empty response from " + endpoint.toString();
     }
 
     return success;
@@ -525,15 +565,20 @@ bool DHTBootstrapper::parseBootstrapNode(const std::string& bootstrapNode, std::
 }
 
 bool DHTBootstrapper::sendFindNodeQuery(
-    const NodeID& /*nodeID*/,
+    const NodeID& nodeID,
     std::shared_ptr<DHTMessageSender> messageSender,
     const network::EndPoint& endpoint,
     const NodeID& targetID) {
 
-    // Create a find_node query
-    auto query = std::make_shared<FindNodeQuery>(targetID);
+    // Create a find_node query with our node ID and the target ID
+    // The target ID is typically our own node ID to find nodes close to us
+    auto query = std::make_shared<FindNodeQuery>("", nodeID, targetID);
 
-    // Send the query
+    // Log the query
+    getLogger()->debug("Sending find_node query to {} with target ID {}",
+        endpoint.toString(), util::bytesToHex(targetID.data(), targetID.size()));
+
+    // Send the query using the message sender
     return messageSender->sendQuery(query, endpoint);
 }
 
@@ -542,13 +587,20 @@ bool DHTBootstrapper::waitForResponse(
     const std::string& transactionID,
     std::chrono::seconds timeout) {
 
+    // Wait for the transaction to complete or timeout
     auto startTime = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() - startTime < timeout) {
+        // Check if the transaction has completed (been removed from the manager)
         if (!transactionManager->hasTransaction(transactionID)) {
+            getLogger()->debug("Transaction {} completed successfully", transactionID);
             return true; // Transaction completed
         }
+
+        // Sleep a bit to avoid busy waiting
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+
+    getLogger()->warning("Transaction {} timed out", transactionID);
     return false; // Timed out
 }
 

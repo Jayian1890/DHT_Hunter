@@ -4,6 +4,9 @@
 #include "dht_hunter/dht/network/dht_socket_manager.hpp"
 #include "dht_hunter/dht/network/dht_message_sender.hpp"
 #include "dht_hunter/dht/network/dht_message_handler.hpp"
+#include "dht_hunter/dht/network/dht_query_message.hpp"
+#include "dht_hunter/dht/network/dht_response_message.hpp"
+#include "dht_hunter/dht/network/dht_error_message.hpp"
 #include "dht_hunter/dht/routing/dht_routing_manager.hpp"
 #include "dht_hunter/dht/routing/dht_node_lookup.hpp"
 #include "dht_hunter/dht/routing/dht_peer_lookup.hpp"
@@ -280,11 +283,63 @@ bool DHTNode::bootstrap(const network::EndPoint& endpoint) {
 
     // Send a find_node query to the bootstrap node
     // We use our own node ID as the target to find nodes close to us
-    auto query = std::make_shared<FindNodeQuery>(m_nodeID);
+    auto query = std::make_shared<FindNodeQuery>("", m_nodeID, m_nodeID);
 
-    // In a real implementation, we would set up callbacks and wait for a response
-    // For now, we'll just simulate a successful bootstrap
+    // Set up a promise and condition variable to wait for the response
+    std::promise<bool> responsePromise;
+    std::mutex responseMutex;
+    std::condition_variable responseCV;
+    bool responseReceived = false;
     bool success = false;
+
+    // Register the transaction with callbacks
+    std::string transactionID = m_transactionManager->createTransaction(
+        query, endpoint,
+        [&](const std::shared_ptr<ResponseMessage>& response) {
+            // Process the response
+            auto findNodeResponse = std::dynamic_pointer_cast<FindNodeResponse>(response);
+            if (findNodeResponse) {
+                // Process the nodes
+                const auto& nodes = findNodeResponse->getNodes();
+                getLogger()->debug("Received {} nodes from bootstrap node {}", nodes.size(), endpoint.toString());
+
+                // Add the nodes to our routing table
+                for (const auto& node : nodes) {
+                    m_routingManager->addNode(node->getID(), node->getEndpoint());
+                }
+
+                // Mark as successful if we got at least one node
+                success = !nodes.empty();
+            }
+
+            // Signal that we've received a response
+            std::lock_guard<std::mutex> lock(responseMutex);
+            responseReceived = true;
+            responseCV.notify_one();
+        },
+        [&](const std::shared_ptr<ErrorMessage>& error) {
+            getLogger()->warning("Received error from bootstrap node: {} ({})",
+                error->getMessage(), error->getCode());
+
+            // Signal that we've received a response
+            std::lock_guard<std::mutex> lock(responseMutex);
+            responseReceived = true;
+            responseCV.notify_one();
+        },
+        [&]() {
+            getLogger()->warning("Bootstrap request to {} timed out", endpoint.toString());
+
+            // Signal that we've received a response
+            std::lock_guard<std::mutex> lock(responseMutex);
+            responseReceived = true;
+            responseCV.notify_one();
+        }
+    );
+
+    if (transactionID.empty()) {
+        getLogger()->error("Failed to create transaction for bootstrap query to {}", endpoint.toString());
+        return false;
+    }
 
     // Send the query
     if (!m_messageSender->sendQuery(query, endpoint)) {
@@ -292,10 +347,14 @@ bool DHTNode::bootstrap(const network::EndPoint& endpoint) {
         return false;
     }
 
-    // In a real implementation, we would wait for a response with a timeout
-    // For now, we'll just simulate a successful bootstrap after a short delay
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    success = true;
+    // Wait for a response with a timeout
+    {
+        std::unique_lock<std::mutex> lock(responseMutex);
+        if (!responseCV.wait_for(lock, std::chrono::seconds(5), [&]() { return responseReceived; })) {
+            getLogger()->warning("Timed out waiting for bootstrap response from {}", endpoint.toString());
+            return false;
+        }
+    }
 
     return success;
 }
