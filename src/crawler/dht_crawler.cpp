@@ -294,18 +294,10 @@ bool DHTCrawler::initializeDHTNode() {
             getLogger()->debug("  {}", node);
         }
 
-        // Set a timeout for the entire bootstrap process
-        auto bootstrapStartTime = std::chrono::steady_clock::now();
-        auto bootstrapTimeout = std::chrono::seconds(30); // 30 second timeout for the entire bootstrap process
+        // Bootstrap the DHT node using the new bootstrapper
+        getLogger()->info("Bootstrapping DHT node with {} bootstrap nodes", m_config.bootstrapNodes.size());
 
-        // Bootstrap the DHT node
-        getLogger()->info("Bootstrapping DHT node with {} bootstrap nodes (timeout: {} seconds)",
-                     m_config.bootstrapNodes.size(), bootstrapTimeout.count());
-
-        getLogger()->debug("Bootstrap process starting at {}",
-                     std::chrono::duration_cast<std::chrono::milliseconds>(bootstrapStartTime.time_since_epoch()).count());
-
-        // Debug: Check if the bootstrap nodes are empty
+        // Check if the bootstrap nodes are empty
         if (m_config.bootstrapNodes.empty()) {
             getLogger()->warning("No bootstrap nodes configured, skipping bootstrap process");
             getLogger()->info("DHT node initialization complete on port {}", m_dhtNode->getPort());
@@ -313,232 +305,22 @@ bool DHTCrawler::initializeDHTNode() {
             return true;
         }
 
-        // Debug: Print bootstrap nodes
-        getLogger()->debug("Bootstrap nodes:");
-        for (const auto& node : m_config.bootstrapNodes) {
-            getLogger()->debug("  {}", node);
-        }
+        // Create bootstrapper config from crawler config
+        dht::DHTBootstrapperConfig bootstrapperConfig;
+        bootstrapperConfig.bootstrapNodes = m_config.bootstrapNodes;
+        bootstrapperConfig.bootstrapTimeout = std::chrono::seconds(30);
+        bootstrapperConfig.minSuccessfulBootstraps = 1;
 
-        // Track bootstrap success
-        int successfulBootstraps = 0;
-        int totalAttempts = 0;
+        // Bootstrap with default nodes
+        bool bootstrapSuccess = m_dhtNode->bootstrapWithDefaultNodes(bootstrapperConfig);
 
-        // Fallback IP addresses for common bootstrap nodes in case DNS resolution fails
-        const std::unordered_map<std::string, std::vector<std::string>> fallbackIPs = {
-            {"router.bittorrent.com", {"67.215.246.10", "67.215.246.11"}},
-            {"dht.transmissionbt.com", {"212.129.33.59"}},
-            {"router.utorrent.com", {"67.215.246.10"}}
-        };
-
-        // Try to bootstrap with each configured node
-        getLogger()->debug("Starting bootstrap process with {} nodes", m_config.bootstrapNodes.size());
-        for (const auto& bootstrapNode : m_config.bootstrapNodes) {
-            getLogger()->debug("Processing bootstrap node: {}", bootstrapNode);
-            // Check if we've exceeded the bootstrap timeout
-            if (std::chrono::steady_clock::now() - bootstrapStartTime > bootstrapTimeout) {
-                getLogger()->warning("Bootstrap process timed out after {} seconds, continuing with {} successful bootstraps",
-                               bootstrapTimeout.count(), successfulBootstraps);
-                break;
-            }
-
-            getLogger()->debug("Processing bootstrap node: {}", bootstrapNode);
-
-            // Parse the bootstrap node string (host:port)
-            std::string host;
-            uint16_t port;
-
-            const size_t colonPos = bootstrapNode.find(':');
-            if (colonPos != std::string::npos) {
-                host = bootstrapNode.substr(0, colonPos);
-                try {
-                    port = static_cast<uint16_t>(std::stoi(bootstrapNode.substr(colonPos + 1)));
-                    getLogger()->debug("Parsed bootstrap node: host={}, port={}", host, port);
-                } catch (const std::exception& e) {
-                    getLogger()->warning("Invalid port in bootstrap node {}: {}", bootstrapNode, e.what());
-                    continue;
-                }
-            } else {
-                host = bootstrapNode;
-                port = 6881; // Default DHT port
-                getLogger()->debug("Using default port for bootstrap node: host={}, port={}", host, port);
-            }
-
-            // Try to resolve the hostname with a short timeout
-            getLogger()->debug("Resolving bootstrap node: {}", host);
-            std::vector<network::NetworkAddress> addresses;
-
-            // First try to resolve the hostname with a timeout
-            try {
-                auto resolveStartTime = std::chrono::steady_clock::now();
-                auto resolveTimeout = std::chrono::seconds(2); // 2 second timeout for DNS resolution
-
-                // Use a separate thread for DNS resolution to implement a timeout
-                std::atomic<bool> resolutionComplete = false;
-                std::thread resolveThread([&]() {
-                    try {
-                        getLogger()->debug("DNS resolution thread started for {}", host);
-                        addresses = network::AddressResolver::resolve(host);
-                        getLogger()->debug("DNS resolution successful for {}, got {} addresses", host, addresses.size());
-
-                        // Log the resolved addresses
-                        for (const auto& address : addresses) {
-                            getLogger()->debug("Resolved {} to {}", host, address.toString());
-                        }
-
-                        resolutionComplete = true;
-                    } catch (const std::exception& e) {
-                        getLogger()->warning("Exception resolving bootstrap node {}: {}", host, e.what());
-                        resolutionComplete = true;
-                    }
-                });
-
-                // Wait for resolution to complete or timeout
-                while (!resolutionComplete) {
-                    if (std::chrono::steady_clock::now() - resolveStartTime > resolveTimeout) {
-                        getLogger()->warning("DNS resolution timed out for {}", host);
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-
-                // Clean up the thread
-                if (resolveThread.joinable()) {
-                    resolveThread.detach(); // Let it finish in the background
-                }
-
-                // Check if we've exceeded the bootstrap timeout
-                if (std::chrono::steady_clock::now() - bootstrapStartTime > bootstrapTimeout) {
-                    getLogger()->warning("Bootstrap process timed out during DNS resolution, continuing with {} successful bootstraps",
-                                   successfulBootstraps);
-                    break;
-                }
-            } catch (const std::exception& e) {
-                getLogger()->warning("Exception during DNS resolution thread for {}: {}", host, e.what());
-            }
-
-            // If resolution failed, try fallback IPs
-            if (addresses.empty()) {
-                getLogger()->warning("DNS resolution failed for {}, trying fallback IPs", host);
-                auto it = fallbackIPs.find(host);
-                if (it != fallbackIPs.end()) {
-                    for (const auto& ip : it->second) {
-                        getLogger()->debug("Using fallback IP {} for {}", ip, host);
-                        addresses.push_back(network::NetworkAddress(ip));
-                    }
-                }
-            }
-
-            if (addresses.empty()) {
-                getLogger()->warning("Failed to resolve bootstrap node and no fallbacks available: {}", host);
-                continue;
-            }
-
-            // Try each resolved address with a timeout
-            bool nodeBootstrapped = false;
-            for (const auto& address : addresses) {
-                // Check if we've exceeded the bootstrap timeout
-                if (std::chrono::steady_clock::now() - bootstrapStartTime > bootstrapTimeout) {
-                    getLogger()->warning("Bootstrap process timed out during bootstrap attempts, continuing with {} successful bootstraps",
-                                   successfulBootstraps);
-                    break;
-                }
-
-                network::EndPoint endpoint(address, port);
-                totalAttempts++;
-
-                getLogger()->debug("Attempting to bootstrap with {}", endpoint.toString());
-                getLogger()->debug("Bootstrap attempt #{} for {}", totalAttempts, bootstrapNode);
-
-                // Set a timeout for this specific bootstrap attempt
-                auto attemptStartTime = std::chrono::steady_clock::now();
-                auto attemptTimeout = std::chrono::seconds(5); // 5 second timeout per bootstrap attempt
-
-                // Use a separate thread for bootstrap to implement a timeout
-                std::atomic<bool> bootstrapComplete = false;
-                std::atomic<bool> bootstrapSuccess = false;
-
-                getLogger()->debug("Starting bootstrap thread for {}", endpoint.toString());
-                std::thread bootstrapThread([&]() {
-                    getLogger()->debug("Bootstrap thread started for {}", endpoint.toString());
-                    bootstrapSuccess = m_dhtNode->bootstrap(endpoint);
-                    getLogger()->debug("Bootstrap thread completed for {}, result: {}",
-                                 endpoint.toString(), bootstrapSuccess.load() ? "success" : "failure");
-                    bootstrapComplete = true;
-                });
-
-                // Wait for bootstrap to complete or timeout
-                getLogger()->debug("Waiting for bootstrap to complete for {}", endpoint.toString());
-                while (!bootstrapComplete) {
-                    if (std::chrono::steady_clock::now() - attemptStartTime > attemptTimeout) {
-                        getLogger()->warning("Bootstrap attempt timed out for {}", endpoint.toString());
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-                getLogger()->debug("Bootstrap wait completed for {}, complete: {}",
-                             endpoint.toString(), bootstrapComplete.load() ? "yes" : "no");
-
-                // Clean up the thread
-                if (bootstrapThread.joinable()) {
-                    getLogger()->debug("Detaching bootstrap thread for {}", endpoint.toString());
-                    bootstrapThread.detach(); // Let it finish in the background
-                }
-
-                if (bootstrapComplete && bootstrapSuccess) {
-                    getLogger()->info("Successfully bootstrapped with {}", endpoint.toString());
-                    successfulBootstraps++;
-                    nodeBootstrapped = true;
-                    getLogger()->debug("Breaking out of address loop after successful bootstrap with {}", endpoint.toString());
-                    break; // Successfully bootstrapped with this node, try the next one
-                } else {
-                    getLogger()->debug("Failed to bootstrap with {}", endpoint.toString());
-                    if (!bootstrapComplete) {
-                        getLogger()->debug("Bootstrap did not complete for {}", endpoint.toString());
-                    } else {
-                        getLogger()->debug("Bootstrap completed but failed for {}", endpoint.toString());
-                    }
-                }
-            }
-
-            // Log result for this bootstrap node
-            if (!nodeBootstrapped) {
-                getLogger()->warning("Failed to bootstrap with any address for {}", host);
-            } else {
-                getLogger()->info("Successfully bootstrapped with at least one address for {}", host);
-            }
-
-            // If we've bootstrapped with at least 1 node, that's sufficient
-            // Changed from 2 to 1 to speed up the process
-            if (successfulBootstraps >= 1) {
-                getLogger()->info("Successfully bootstrapped with {} node, continuing", successfulBootstraps);
-                getLogger()->debug("Breaking out of bootstrap node loop after {} successful bootstraps", successfulBootstraps);
-                break;
-            } else {
-                getLogger()->debug("Continuing to next bootstrap node after {} successful bootstraps", successfulBootstraps);
-            }
-        }
-
-        // Even if bootstrap fails, we can still continue - the DHT node will eventually
-        // discover other nodes through normal DHT traffic
-        if (successfulBootstraps == 0) {
-            if (totalAttempts > 0) {
-                getLogger()->warning("Failed to bootstrap with any nodes ({} attempts), but continuing anyway", totalAttempts);
-            } else {
-                getLogger()->warning("No bootstrap attempts were made, DHT may have limited connectivity");
-            }
+        if (bootstrapSuccess) {
+            getLogger()->info("DHT node bootstrapped successfully");
         } else {
-            getLogger()->info("DHT node bootstrapped successfully with {} out of {} attempts",
-                         successfulBootstraps, totalAttempts);
+            getLogger()->warning("DHT node bootstrap failed, but continuing anyway");
         }
 
-        // Log the total bootstrap time
-        auto bootstrapEndTime = std::chrono::steady_clock::now();
-        auto bootstrapDuration = std::chrono::duration_cast<std::chrono::milliseconds>(bootstrapEndTime - bootstrapStartTime);
-        getLogger()->info("Bootstrap process completed in {} ms", bootstrapDuration.count());
-
-        getLogger()->debug("Bootstrap process ending at {}",
-                     std::chrono::duration_cast<std::chrono::milliseconds>(bootstrapEndTime.time_since_epoch()).count());
-
+        // Log completion
         getLogger()->info("DHT node initialization complete on port {}", m_dhtNode->getPort());
         getLogger()->debug("Returning from initializeDHTNode() with success");
         return true;

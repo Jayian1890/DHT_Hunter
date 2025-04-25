@@ -3,6 +3,7 @@
 #include "dht_hunter/dht/core/dht_node_config.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/bootstrap/dht_bootstrapper.hpp"
 #include "dht_hunter/dht/routing/dht_routing_manager.hpp"
 #include "dht_hunter/dht/transactions/dht_transaction_types.hpp"
 #include "dht_hunter/network/socket.hpp"
@@ -69,7 +70,7 @@ using GetPeersLookupCallback = std::function<void(
  * This class is the main interface for interacting with the DHT network.
  * It delegates to specialized components for different aspects of DHT functionality.
  */
-class DHTNode {
+class DHTNode : public std::enable_shared_from_this<DHTNode> {
 public:
     /**
      * @brief Constructs a DHT node
@@ -139,6 +140,24 @@ public:
     std::shared_ptr<crawler::InfoHashCollector> getInfoHashCollector() const;
 
     /**
+     * @brief Gets the message sender
+     * @return The message sender
+     */
+    std::shared_ptr<DHTMessageSender> getMessageSender() const;
+
+    /**
+     * @brief Gets the message handler
+     * @return The message handler
+     */
+    std::shared_ptr<DHTMessageHandler> getMessageHandler() const;
+
+    /**
+     * @brief Gets the transaction manager
+     * @return The transaction manager
+     */
+    std::shared_ptr<DHTTransactionManager> getTransactionManager() const;
+
+    /**
      * @brief Bootstraps the DHT node using a known node
      * @param endpoint The endpoint of the known node
      * @return True if the bootstrap was successful, false otherwise
@@ -151,6 +170,13 @@ public:
      * @return True if at least one bootstrap was successful, false otherwise
      */
     bool bootstrap(const std::vector<network::EndPoint>& endpoints);
+
+    /**
+     * @brief Bootstraps the DHT node using the configured bootstrap nodes
+     * @param config The bootstrapper configuration (optional, uses default if not provided)
+     * @return True if the bootstrap was successful, false otherwise
+     */
+    bool bootstrapWithDefaultNodes(const DHTBootstrapperConfig& config = DHTBootstrapperConfig());
 
     /**
      * @brief Pings a node

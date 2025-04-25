@@ -32,6 +32,9 @@ add_library(dht_hunter_dht
     # Persistence components
     persistence/dht_persistence_manager.cpp
 
+    # Bootstrap components
+    bootstrap/dht_bootstrapper.cpp
+
     # Legacy files have been removed
 )
 
