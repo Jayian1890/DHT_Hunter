@@ -199,6 +199,18 @@ using BootstrapCallback = std::function<void(const BootstrapResult&)>;
  * This class handles the process of bootstrapping a DHT node by connecting
  * to known bootstrap nodes. It includes DNS resolution, fallback mechanisms,
  * and parallel bootstrapping.
+ *
+ * The bootstrapping process works as follows:
+ * 1. Resolve bootstrap node hostnames to IP addresses
+ * 2. For each IP address, send a find_node query
+ * 3. The message handler processes the response and routes it to the transaction manager
+ * 4. The transaction manager calls the appropriate callback
+ * 5. The callback processes the nodes in the response and adds them to the routing table
+ *
+ * The class uses the following components:
+ * - DHTMessageSender: Sends DHT messages to other nodes
+ * - DHTMessageHandler: Processes incoming DHT messages
+ * - DHTTransactionManager: Manages DHT transactions and callbacks
  */
 class DHTBootstrapper {
 public:
@@ -275,6 +287,10 @@ public:
      * This method is similar to bootstrap(), but it allows you to provide the individual components
      * of a DHT node instead of a complete DHT node. This can be useful for testing or for bootstrapping
      * a custom DHT node implementation.
+     *
+     * The message handler is used to process incoming DHT messages. When a response is received,
+     * the message handler routes it to the transaction manager, which then calls the appropriate
+     * callback. The callback processes the nodes in the response and adds them to the result.
      *
      * @note This method is thread-safe and can be called from multiple threads.
      * @note This method will block until the bootstrap process completes or times out.

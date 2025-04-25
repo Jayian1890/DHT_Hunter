@@ -444,7 +444,7 @@ bool DHTBootstrapper::bootstrapWithEndpoint(
 bool DHTBootstrapper::bootstrapWithEndpointUsingComponents(
     const NodeID& nodeID,
     std::shared_ptr<DHTMessageSender> messageSender,
-    std::shared_ptr<DHTMessageHandler> /*messageHandler*/,
+    std::shared_ptr<DHTMessageHandler> messageHandler,
     std::shared_ptr<DHTTransactionManager> transactionManager,
     const network::EndPoint& endpoint,
     BootstrapResult& result) {
@@ -510,6 +510,10 @@ bool DHTBootstrapper::bootstrapWithEndpointUsingComponents(
         return false;
     }
 
+    // Log that we're using the message handler
+    getLogger()->debug("Using message handler {} to process responses for transaction {}",
+        static_cast<void*>(messageHandler.get()), transactionID);
+
     // Send the query
     if (!messageSender->sendQuery(query, endpoint)) {
         getLogger()->debug("Failed to send find_node query to {}", endpoint.toString());
@@ -518,6 +522,13 @@ bool DHTBootstrapper::bootstrapWithEndpointUsingComponents(
         result.errorMessage = "Failed to send find_node query to " + endpoint.toString();
         return false;
     }
+
+    // The message flow works as follows:
+    // 1. We send a query using the message sender
+    // 2. When a response is received, the message handler processes it
+    // 3. The message handler routes the response to the transaction manager
+    // 4. The transaction manager calls our callback, which signals the condition variable
+    // 5. We wait for the condition variable to be signaled or timeout
 
     // Wait for a response with a timeout
     {
