@@ -275,6 +275,11 @@ std::shared_ptr<Transaction> DHTTransactionManager::findTransaction(const std::s
     return it->second;
 }
 
+bool DHTTransactionManager::hasTransaction(const std::string& id) {
+    std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
+    return m_transactions.find(id) != m_transactions.end();
+}
+
 bool DHTTransactionManager::removeTransaction(const std::string& id) {
     std::lock_guard<util::CheckedMutex> lock(m_transactionsMutex);
 

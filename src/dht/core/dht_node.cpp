@@ -316,7 +316,7 @@ bool DHTNode::bootstrap(const std::vector<network::EndPoint>& endpoints) {
     return success;
 }
 
-bool DHTNode::bootstrapWithDefaultNodes(const DHTBootstrapperConfig& config) {
+bool DHTNode::bootstrapWithDefaultNodes(const DHTBootstrapperConfig& bootstrapperConfig) {
     if (!m_running) {
         getLogger()->error("Cannot bootstrap: DHT node not running");
         return false;
@@ -325,7 +325,7 @@ bool DHTNode::bootstrapWithDefaultNodes(const DHTBootstrapperConfig& config) {
     getLogger()->info("Bootstrapping DHT node with default nodes");
 
     // Create a bootstrapper with the provided config
-    DHTBootstrapper bootstrapper(config);
+    DHTBootstrapper bootstrapper(bootstrapperConfig);
 
     // Bootstrap the node
     auto result = bootstrapper.bootstrap(shared_from_this());

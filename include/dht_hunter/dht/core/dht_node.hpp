@@ -173,10 +173,10 @@ public:
 
     /**
      * @brief Bootstraps the DHT node using the configured bootstrap nodes
-     * @param config The bootstrapper configuration (optional, uses default if not provided)
+     * @param bootstrapperConfig The bootstrapper configuration (optional, uses default if not provided)
      * @return True if the bootstrap was successful, false otherwise
      */
-    bool bootstrapWithDefaultNodes(const DHTBootstrapperConfig& config = DHTBootstrapperConfig());
+    bool bootstrapWithDefaultNodes(const DHTBootstrapperConfig& bootstrapperConfig = DHTBootstrapperConfig());
 
     /**
      * @brief Pings a node

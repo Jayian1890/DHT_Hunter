@@ -21,7 +21,7 @@ std::shared_ptr<logforge::LogForge> DHTBootstrapper::getLogger() const {
 }
 
 DHTBootstrapper::DHTBootstrapper(const DHTBootstrapperConfig& config)
-    : m_config(config) {
+    : m_config(config), m_threadPool(std::make_shared<util::ThreadPool>(config.maxParallelBootstraps)) {
     getLogger()->info("DHTBootstrapper created with {} bootstrap nodes", config.bootstrapNodes.size());
 }
 
@@ -30,13 +30,13 @@ DHTBootstrapper::~DHTBootstrapper() {
 }
 
 void DHTBootstrapper::setConfig(const DHTBootstrapperConfig& config) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     m_config = config;
     getLogger()->info("DHTBootstrapper config updated with {} bootstrap nodes", config.bootstrapNodes.size());
 }
 
 const DHTBootstrapperConfig& DHTBootstrapper::getConfig() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<util::CheckedMutex> lock(m_mutex);
     return m_config;
 }
 
@@ -46,7 +46,8 @@ BootstrapResult DHTBootstrapper::bootstrap(std::shared_ptr<DHTNode> node) {
         return BootstrapResult{};
     }
 
-    if (m_bootstrapping.exchange(true)) {
+    BootstrapGuard guard(m_bootstrapping);
+    if (!guard.acquired()) {
         getLogger()->warning("Bootstrap already in progress, ignoring request");
         return BootstrapResult{};
     }
@@ -98,6 +99,8 @@ BootstrapResult DHTBootstrapper::bootstrap(std::shared_ptr<DHTNode> node) {
             auto endpoints = resolveHost(host, port);
             if (endpoints.empty()) {
                 getLogger()->warning("Failed to resolve bootstrap node: {}", host);
+                result.errorCode = BootstrapResult::ErrorCode::DNSResolutionFailed;
+                result.errorMessage = "Failed to resolve hostname: " + host;
                 continue;
             }
 
@@ -115,13 +118,20 @@ BootstrapResult DHTBootstrapper::bootstrap(std::shared_ptr<DHTNode> node) {
                 if (elapsed > m_config.bootstrapTimeout) {
                     getLogger()->warning("Bootstrap process timed out after {} seconds",
                         std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+                    result.errorCode = BootstrapResult::ErrorCode::Timeout;
+                    result.errorMessage = "Bootstrap process timed out after " +
+                        std::to_string(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()) + " seconds";
                     break;
                 }
 
                 // Attempt to bootstrap with this endpoint
-                if (bootstrapWithEndpoint(node, endpoint, result)) {
+                bool success = bootstrapWithEndpoint(node, endpoint, result);
+                if (success) {
                     // Node was bootstrapped successfully
                     break;
+                } else if (m_cancelled.load()) {
+                    result.errorCode = BootstrapResult::ErrorCode::Cancelled;
+                    result.errorMessage = "Bootstrap process was cancelled";
                 }
             }
 
@@ -153,7 +163,6 @@ BootstrapResult DHTBootstrapper::bootstrap(std::shared_ptr<DHTNode> node) {
         result.success = false;
     }
 
-    m_bootstrapping.store(false);
     return result;
 }
 
@@ -192,7 +201,8 @@ BootstrapResult DHTBootstrapper::bootstrapWithComponents(
         return BootstrapResult{};
     }
 
-    if (m_bootstrapping.exchange(true)) {
+    BootstrapGuard guard(m_bootstrapping);
+    if (!guard.acquired()) {
         getLogger()->warning("Bootstrap already in progress, ignoring request");
         return BootstrapResult{};
     }
@@ -294,9 +304,10 @@ BootstrapResult DHTBootstrapper::bootstrapWithComponents(
     } catch (const std::exception& e) {
         getLogger()->error("Exception during bootstrap process: {}", e.what());
         result.success = false;
+        result.errorCode = BootstrapResult::ErrorCode::InternalError;
+        result.errorMessage = "Exception during bootstrap process: " + std::string(e.what());
     }
 
-    m_bootstrapping.store(false);
     return result;
 }
 
@@ -323,21 +334,16 @@ std::vector<network::EndPoint> DHTBootstrapper::resolveHost(const std::string& h
 
     getLogger()->debug("Resolving host: {}", host);
 
-    // Use a promise and future to implement a timeout
-    std::promise<std::vector<network::EndPoint>> promise;
-    auto future = promise.get_future();
-
-    // Launch a thread to perform the DNS resolution
-    std::thread([&promise, &host, port, this]() {
+    // Use the thread pool to perform the DNS resolution with a timeout
+    auto future = m_threadPool->enqueue([this, host, port]() {
         try {
             // Use the resolveEndpoint method to directly get endpoints
-            auto resolvedEndpoints = network::AddressResolver::resolveEndpoint(host, port);
-            promise.set_value(resolvedEndpoints);
+            return network::AddressResolver::resolveEndpoint(host, port);
         } catch (const std::exception& e) {
             getLogger()->warning("Exception during DNS resolution: {}", e.what());
-            promise.set_value({});
+            return std::vector<network::EndPoint>{};
         }
-    }).detach();
+    });
 
     // Wait for the resolution to complete or timeout
     auto status = future.wait_for(m_config.dnsResolutionTimeout);
@@ -372,79 +378,120 @@ bool DHTBootstrapper::bootstrapWithEndpoint(
     getLogger()->debug("Attempting to bootstrap with {}", endpoint.toString());
     result.totalAttempts++;
 
-    // Set a timeout for this bootstrap attempt
-    // Start time for timeout tracking
-
-    // Use a promise and future to implement a timeout
-    std::promise<bool> promise;
-    auto future = promise.get_future();
-
-    // Launch a thread to perform the bootstrap attempt
-    std::thread([&promise, node, &endpoint, this]() {
-        try {
-            bool success = node->bootstrap(endpoint);
-            promise.set_value(success);
-        } catch (const std::exception& e) {
-            getLogger()->warning("Exception during bootstrap attempt: {}", e.what());
-            promise.set_value(false);
+    // Implement retry logic
+    for (int attempt = 0; attempt < m_config.maxRetries; ++attempt) {
+        // If this is a retry, log it and wait before trying again
+        if (attempt > 0) {
+            getLogger()->debug("Retrying bootstrap with {} (attempt {}/{})",
+                endpoint.toString(), attempt + 1, m_config.maxRetries);
+            std::this_thread::sleep_for(m_config.retryDelay);
         }
-    }).detach();
 
-    // Wait for the bootstrap attempt to complete or timeout
-    auto status = future.wait_for(m_config.bootstrapAttemptTimeout);
-    bool success = false;
+        // Use the thread pool to perform the bootstrap attempt with a timeout
+        auto future = m_threadPool->enqueue([node, endpoint, this]() {
+            try {
+                return node->bootstrap(endpoint);
+            } catch (const std::exception& e) {
+                getLogger()->warning("Exception during bootstrap attempt: {}", e.what());
+                return false;
+            }
+        });
 
-    if (status == std::future_status::ready) {
-        success = future.get();
-    } else {
-        getLogger()->warning("Bootstrap attempt timed out for {}", endpoint.toString());
+        // Wait for the bootstrap attempt to complete or timeout
+        auto status = future.wait_for(m_config.bootstrapAttemptTimeout);
+        bool success = false;
+
+        if (status == std::future_status::ready) {
+            success = future.get();
+            if (success) {
+                // Update the result
+                getLogger()->info("Successfully bootstrapped with {}", endpoint.toString());
+                result.successfulAttempts++;
+                result.successfulEndpoints.push_back(endpoint);
+                return true;
+            } else {
+                // Only set error code if this is the last attempt
+                if (attempt == m_config.maxRetries - 1) {
+                    result.errorCode = BootstrapResult::ErrorCode::ConnectionFailed;
+                    result.errorMessage = "Failed to connect to bootstrap node: " + endpoint.toString();
+                }
+            }
+        } else {
+            getLogger()->warning("Bootstrap attempt timed out for {}", endpoint.toString());
+            // Only set error code if this is the last attempt
+            if (attempt == m_config.maxRetries - 1) {
+                result.errorCode = BootstrapResult::ErrorCode::Timeout;
+                result.errorMessage = "Bootstrap attempt timed out for " + endpoint.toString();
+            }
+        }
+
+        // Check if we've been cancelled
+        if (m_cancelled.load()) {
+            getLogger()->warning("Bootstrap process cancelled during retry");
+            result.errorCode = BootstrapResult::ErrorCode::Cancelled;
+            result.errorMessage = "Bootstrap process was cancelled";
+            break;
+        }
     }
 
-    // Update the result
-    if (success) {
-        getLogger()->info("Successfully bootstrapped with {}", endpoint.toString());
-        result.successfulAttempts++;
-        result.successfulEndpoints.push_back(endpoint);
-    } else {
-        getLogger()->debug("Failed to bootstrap with {}", endpoint.toString());
-        result.failedEndpoints.push_back(endpoint);
-    }
-
-    return success;
+    // If we get here, all attempts failed
+    getLogger()->debug("Failed to bootstrap with {} after {} attempts", endpoint.toString(), m_config.maxRetries);
+    result.failedEndpoints.push_back(endpoint);
+    return false;
 }
 
 bool DHTBootstrapper::bootstrapWithEndpointUsingComponents(
     const NodeID& nodeID,
     std::shared_ptr<DHTMessageSender> messageSender,
     std::shared_ptr<DHTMessageHandler> /*messageHandler*/,
-    std::shared_ptr<DHTTransactionManager> /*transactionManager*/,
+    std::shared_ptr<DHTTransactionManager> transactionManager,
     const network::EndPoint& endpoint,
     BootstrapResult& result) {
 
     getLogger()->debug("Attempting to bootstrap with {} using components", endpoint.toString());
     result.totalAttempts++;
 
-    // Set a timeout for this bootstrap attempt
-    // Start time for timeout tracking
+    // Create a find_node query
+    auto query = std::make_shared<FindNodeQuery>(nodeID);
 
-    // Send a find_node query to the bootstrap node
-    // We use our own node ID as the target to find nodes close to us
-    bool success = sendFindNodeQuery(nodeID, messageSender, endpoint, nodeID);
+    // Register a response handler
+    std::atomic<bool> success{false};
 
-    if (!success) {
+    // Set up a temporary response handler
+    // This is a placeholder for a response handler that would be registered with the message handler
+    // In a real implementation, we would register this handler with the message handler
+    /*auto responseHandler = [&](const std::shared_ptr<ResponseMessage>& response) {
+        // Process the response
+        auto findNodeResponse = std::dynamic_pointer_cast<FindNodeResponse>(response);
+        if (findNodeResponse) {
+            // Process the nodes
+            const auto& nodes = findNodeResponse->getNodes();
+            getLogger()->debug("Received {} nodes from bootstrap node {}", nodes.size(), endpoint.toString());
+            success = !nodes.empty();
+        }
+        // responseReceived = true;
+    };*/
+
+    // Register the handler
+    // Note: This is a placeholder - actual implementation would depend on the messageHandler API
+    // messageHandler->registerTemporaryHandler(query->getTransactionID(), responseHandler);
+
+    // Send the query
+    if (!messageSender->sendQuery(query, endpoint)) {
         getLogger()->debug("Failed to send find_node query to {}", endpoint.toString());
         result.failedEndpoints.push_back(endpoint);
         return false;
     }
 
     // Wait for a response
-    // The transaction ID is generated by the message sender, so we need to get it from there
-    // For now, we'll just wait a bit and assume success if we don't time out
-    std::this_thread::sleep_for(m_config.bootstrapAttemptTimeout);
+    bool responseSuccess = waitForResponse(transactionManager, query->getTransactionID(), m_config.bootstrapAttemptTimeout);
 
-    // For now, we'll just assume success
-    // In a real implementation, we would check if we received a response
-    success = true;
+    // If we didn't get a response, assume failure
+    if (!responseSuccess) {
+        getLogger()->debug("Timed out waiting for response from {}", endpoint.toString());
+        result.failedEndpoints.push_back(endpoint);
+        return false;
+    }
 
     // Update the result
     if (success) {
@@ -491,15 +538,18 @@ bool DHTBootstrapper::sendFindNodeQuery(
 }
 
 bool DHTBootstrapper::waitForResponse(
-    std::shared_ptr<DHTTransactionManager> /*transactionManager*/,
-    const std::string& /*transactionID*/,
-    std::chrono::seconds /*timeout*/) {
+    std::shared_ptr<DHTTransactionManager> transactionManager,
+    const std::string& transactionID,
+    std::chrono::seconds timeout) {
 
-    // This is a placeholder implementation
-    // In a real implementation, we would check if the transaction has completed
-    // For now, we'll just return true after a short delay
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    return true;
+    auto startTime = std::chrono::steady_clock::now();
+    while (std::chrono::steady_clock::now() - startTime < timeout) {
+        if (!transactionManager->hasTransaction(transactionID)) {
+            return true; // Transaction completed
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return false; // Timed out
 }
 
 } // namespace dht_hunter::dht
