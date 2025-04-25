@@ -1,18 +1,18 @@
-# Add subdirectories for each component
-add_subdirectory(logforge)
-add_subdirectory(util)
-add_subdirectory(network)
-add_subdirectory(dht)
-add_subdirectory(bencode)
-add_subdirectory(metadata)
-add_subdirectory(crawler)
-add_subdirectory(ui)
-add_subdirectory(storage)
+# Add subdirectories for each component in dependency order
+add_subdirectory(logforge)  # Base logging component
+add_subdirectory(util)      # Utility functions
+add_subdirectory(network)   # Network functionality
+add_subdirectory(bencode)   # Bencode parsing
+add_subdirectory(dht)       # DHT protocol implementation
+add_subdirectory(metadata)  # Metadata handling
+add_subdirectory(storage)   # Storage functionality
+add_subdirectory(crawler)   # DHT crawler
+add_subdirectory(ui)        # User interface
 
 # Main executable
 add_executable(dht_hunter main.cpp)
 
-# Minimal dependencies
+# Link with all component libraries
 target_link_libraries(dht_hunter
     PRIVATE
     dht_hunter_logforge
@@ -21,9 +21,9 @@ target_link_libraries(dht_hunter
     dht_hunter_dht
     dht_hunter_bencode
     dht_hunter_metadata
+    dht_hunter_storage
     dht_hunter_crawler
     dht_hunter_ui
-    dht_hunter_storage
 )
 
 # Set include directories
@@ -36,5 +36,3 @@ target_include_directories(dht_hunter
 install(TARGETS dht_hunter
     RUNTIME DESTINATION bin
 )
-
-# DHT Server executable has been removed

@@ -9,12 +9,6 @@ target_include_directories(dht_hunter_storage
     ${CMAKE_SOURCE_DIR}/include
 )
 
-# Set compile features
-target_compile_features(dht_hunter_storage
-    PUBLIC
-    cxx_std_17
-)
-
 # Link with other libraries
 target_link_libraries(dht_hunter_storage
     PUBLIC
