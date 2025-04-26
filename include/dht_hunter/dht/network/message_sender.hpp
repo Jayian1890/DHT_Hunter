@@ -6,6 +6,8 @@
 #include "dht_hunter/dht/network/query_message.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
+#include "dht_hunter/dht/events/event_bus.hpp"
+#include "dht_hunter/dht/events/dht_event.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <memory>
 #include <atomic>
@@ -102,6 +104,7 @@ private:
 
     DHTConfig m_config;
     std::shared_ptr<SocketManager> m_socketManager;
+    std::shared_ptr<events::EventBus> m_eventBus;
     std::atomic<bool> m_running;
     std::mutex m_mutex;
     event::Logger m_logger;

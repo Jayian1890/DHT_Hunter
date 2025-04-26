@@ -35,6 +35,12 @@ DHTNode::DHTNode(const DHTConfig& config)
     m_messageHandler = MessageHandler::getInstance(config, m_nodeID, m_messageSender, m_routingTable, m_tokenManager, m_peerStorage, m_transactionManager);
     m_btMessageHandler = bittorrent::BTMessageHandler::getInstance(m_routingManager);
 
+    // Get the event bus
+    m_eventBus = events::EventBus::getInstance();
+
+    // Get the statistics service
+    m_statisticsService = services::StatisticsService::getInstance();
+
     // Create DHT extensions
     m_mainlineDHT = std::make_shared<extensions::MainlineDHT>(config, m_nodeID, m_routingTable);
     m_kademliaDHT = std::make_shared<extensions::KademliaDHT>(config, m_nodeID, m_routingTable);
@@ -121,10 +127,23 @@ bool DHTNode::start() {
 
     m_running = true;
 
+    // Subscribe to events
+    subscribeToEvents();
+
+    // Start the statistics service
+    if (m_statisticsService && !m_statisticsService->start()) {
+        m_logger.error("Failed to start statistics service");
+        // Continue anyway, this is not critical
+    }
+
     // Bootstrap the node
     m_bootstrapper->bootstrap([this](const bool success) {
         if (success) {
             m_logger.info("DHT node bootstrapped successfully");
+
+            // Publish a system started event
+            auto event = std::make_shared<events::SystemStartedEvent>();
+            m_eventBus->publish(event);
         } else {
             m_logger.warning("DHT node bootstrap failed");
         }
@@ -162,6 +181,21 @@ void DHTNode::stop() {
     m_messageSender->stop();
     m_socketManager->stop();
 
+    // Unsubscribe from events
+    for (int subscriptionId : m_eventSubscriptionIds) {
+        m_eventBus->unsubscribe(subscriptionId);
+    }
+    m_eventSubscriptionIds.clear();
+
+    // Stop the statistics service
+    if (m_statisticsService) {
+        m_statisticsService->stop();
+    }
+
+    // Publish a system stopped event
+    auto event = std::make_shared<events::SystemStoppedEvent>();
+    m_eventBus->publish(event);
+
     m_running = false;
 
     m_logger.info("DHT node stopped");
@@ -177,6 +211,13 @@ const NodeID& DHTNode::getNodeID() const {
 
 uint16_t DHTNode::getPort() const {
     return m_config.getPort();
+}
+
+std::string DHTNode::getStatistics() const {
+    if (m_statisticsService) {
+        return m_statisticsService->getStatisticsAsJson();
+    }
+    return "{}";
 }
 
 bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length) {

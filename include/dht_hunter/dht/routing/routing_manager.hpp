@@ -4,6 +4,8 @@
 #include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/routing/node_verifier.hpp"
+#include "dht_hunter/dht/events/event_bus.hpp"
+#include "dht_hunter/dht/events/dht_event.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <memory>
 #include <thread>
@@ -174,6 +176,9 @@ private:
     std::atomic<bool> m_bucketRefreshThreadRunning;
     std::mutex m_bucketRefreshMutex;
     std::condition_variable m_bucketRefreshCondition;
+
+    // Event bus
+    std::shared_ptr<events::EventBus> m_eventBus;
 
     event::Logger m_logger;
 };

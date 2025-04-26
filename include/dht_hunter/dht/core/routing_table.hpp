@@ -186,6 +186,13 @@ public:
     size_t getBucketCount() const;
 
     /**
+     * @brief Gets the bucket index for a node ID
+     * @param nodeID The node ID
+     * @return The bucket index
+     */
+    size_t getBucketIndex(const NodeID& nodeID) const;
+
+    /**
      * @brief Saves the routing table to a file
      * @param filePath The path to the file
      * @return True if the routing table was saved successfully, false otherwise

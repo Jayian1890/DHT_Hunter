@@ -3,6 +3,8 @@
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/network/network_address.hpp"
+#include "dht_hunter/dht/events/event_bus.hpp"
+#include "dht_hunter/dht/events/dht_event.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <unordered_map>
 #include <vector>
@@ -124,6 +126,7 @@ private:
     std::atomic<bool> m_running;
     std::thread m_cleanupThread;
     mutable std::mutex m_mutex;
+    std::shared_ptr<events::EventBus> m_eventBus;
     event::Logger m_logger;
 };
 

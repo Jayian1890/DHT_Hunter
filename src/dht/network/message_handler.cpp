@@ -43,6 +43,7 @@ MessageHandler::MessageHandler(const DHTConfig& config,
       m_tokenManager(tokenManager),
       m_peerStorage(peerStorage),
       m_transactionManager(transactionManager),
+      m_eventBus(events::EventBus::getInstance()),
       m_logger(event::Logger::forComponent("DHT.MessageHandler")) {
 }
 
@@ -86,6 +87,12 @@ void MessageHandler::handleMessage(std::shared_ptr<Message> message, const netwo
         m_logger.error("Invalid message");
         return;
     }
+
+    // Publish a message received event
+    // Convert EndPoint to NetworkAddress
+    network::NetworkAddress networkAddress = sender.getAddress();
+    auto event = std::make_shared<events::MessageReceivedEvent>(message, networkAddress);
+    m_eventBus->publish(event);
 
     // Update the routing table with the sender's node ID
     if (message->getNodeID()) {

@@ -6,6 +6,7 @@ add_library(dht_hunter_dht
 
     # Core components
     core/dht_node.cpp
+    core/dht_event_handlers.cpp
     core/dht_config.cpp
     core/dht_constants.cpp
     core/routing_table.cpp
@@ -34,6 +35,12 @@ add_library(dht_hunter_dht
 
     # Bootstrap components
     bootstrap/bootstrapper.cpp
+
+    # Event components
+    events/event_bus.cpp
+
+    # Service components
+    services/statistics_service.cpp
 
     # Extension components
     extensions/mainline_dht.cpp

@@ -4,6 +4,9 @@
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/extensions/dht_extension.hpp"
+#include "dht_hunter/dht/events/event_bus.hpp"
+#include "dht_hunter/dht/events/dht_event.hpp"
+#include "dht_hunter/dht/services/statistics_service.hpp"
 #include "dht_hunter/bittorrent/bt_message_handler.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <memory>
@@ -80,6 +83,12 @@ public:
     uint16_t getPort() const;
 
     /**
+     * @brief Gets the statistics as a JSON string
+     * @return The statistics as a JSON string
+     */
+    std::string getStatistics() const;
+
+    /**
      * @brief Handles a BitTorrent PORT message
      * @param peerAddress The peer's address
      * @param data The message data
@@ -148,6 +157,29 @@ private:
      */
     void saveRoutingTablePeriodically();
 
+    /**
+     * @brief Subscribes to events
+     */
+    void subscribeToEvents();
+
+    /**
+     * @brief Handles a node discovered event
+     * @param event The event
+     */
+    void handleNodeDiscoveredEvent(std::shared_ptr<events::DHTEvent> event);
+
+    /**
+     * @brief Handles a peer discovered event
+     * @param event The event
+     */
+    void handlePeerDiscoveredEvent(std::shared_ptr<events::DHTEvent> event);
+
+    /**
+     * @brief Handles a system error event
+     * @param event The event
+     */
+    void handleSystemErrorEvent(std::shared_ptr<events::DHTEvent> event);
+
     NodeID m_nodeID;
     DHTConfig m_config;
     std::atomic<bool> m_running;
@@ -163,6 +195,13 @@ private:
     std::shared_ptr<NodeLookup> m_nodeLookup;
     std::shared_ptr<PeerLookup> m_peerLookup;
     std::shared_ptr<Bootstrapper> m_bootstrapper;
+
+    // Event bus
+    std::shared_ptr<events::EventBus> m_eventBus;
+    std::vector<int> m_eventSubscriptionIds;
+
+    // Services
+    std::shared_ptr<services::StatisticsService> m_statisticsService;
 
     // DHT extensions
     std::shared_ptr<extensions::MainlineDHT> m_mainlineDHT;

@@ -467,6 +467,30 @@ size_t RoutingTable::getBucketCount() const {
     return m_buckets.size();
 }
 
+size_t RoutingTable::getBucketIndex(const NodeID& nodeID) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // Calculate the distance between our node ID and the given node ID
+    NodeID distance = m_ownID.distanceTo(nodeID);
+
+    // Find the index of the first bit that is 1 in the distance
+    // This is the bucket index
+    size_t bucketIndex = 0;
+    // NodeID is a 20-byte array
+    for (size_t i = 0; i < 20; ++i) {
+        for (size_t j = 7; j >= 0 && j < 8; --j) { // Ensure j is unsigned and doesn't underflow
+            if ((distance[i] & (1 << j)) != 0) {
+                // Found a 1 bit, this is the bucket index
+                bucketIndex = (i * 8) + (7 - j);
+                return std::min(bucketIndex, m_buckets.size() - 1);
+            }
+        }
+    }
+
+    // If the distance is 0 (same node ID), use the first bucket
+    return 0;
+}
+
 NodeID RoutingTable::generateRandomIDInBucket(size_t bucketIndex) const {
     // Generate a random ID in the range of the bucket
     // The bucket covers a specific prefix of the ID space
