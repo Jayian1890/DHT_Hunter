@@ -6,10 +6,22 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<TokenManager> TokenManager::s_instance = nullptr;
+std::mutex TokenManager::s_instanceMutex;
+
+std::shared_ptr<TokenManager> TokenManager::getInstance(const DHTConfig& config) {
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<TokenManager>(new TokenManager(config));
+    }
+
+    return s_instance;
+}
+
 TokenManager::TokenManager(const DHTConfig& config)
     : m_config(config), m_running(false), m_logger(event::Logger::forComponent("DHT.TokenManager")) {
-    m_logger.info("Creating token manager");
-
     // Generate initial secrets
     m_currentSecret = generateRandomSecret();
     m_previousSecret = generateRandomSecret();
@@ -18,6 +30,12 @@ TokenManager::TokenManager(const DHTConfig& config)
 
 TokenManager::~TokenManager() {
     stop();
+
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 bool TokenManager::start() {
@@ -33,7 +51,6 @@ bool TokenManager::start() {
     // Start the rotation thread
     m_rotationThread = std::thread(&TokenManager::rotateSecretPeriodically, this);
 
-    m_logger.info("Token manager started");
     return true;
 }
 

@@ -3,13 +3,32 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<PeerStorage> PeerStorage::s_instance = nullptr;
+std::mutex PeerStorage::s_instanceMutex;
+
+std::shared_ptr<PeerStorage> PeerStorage::getInstance(const DHTConfig& config) {
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<PeerStorage>(new PeerStorage(config));
+    }
+
+    return s_instance;
+}
+
 PeerStorage::PeerStorage(const DHTConfig& config)
     : m_config(config), m_running(false), m_logger(event::Logger::forComponent("DHT.PeerStorage")) {
-    m_logger.info("Creating peer storage");
 }
 
 PeerStorage::~PeerStorage() {
     stop();
+
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 bool PeerStorage::start() {
@@ -25,7 +44,6 @@ bool PeerStorage::start() {
     // Start the cleanup thread
     m_cleanupThread = std::thread(&PeerStorage::cleanupExpiredPeersPeriodically, this);
 
-    m_logger.info("Peer storage started");
     return true;
 }
 

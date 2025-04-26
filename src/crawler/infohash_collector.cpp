@@ -176,7 +176,7 @@ bool InfoHashCollector::loadInfoHashes(const std::string& filePath) {
     std::unordered_set<std::string> loadedInfoHashes;
     for (uint32_t i = 0; i < count; ++i) {
         dht_hunter::dht::InfoHash infoHash;
-        file.read(reinterpret_cast<char*>(infoHash.data()), infoHash.size());
+        file.read(reinterpret_cast<char*>(infoHash.data()), static_cast<std::streamsize>(infoHash.size()));
         if (!file && !file.eof()) {
             getLogger()->error("Failed to read infohash from file: {}", filePath);
             return false;

@@ -53,13 +53,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
     std::signal(SIGTERM, signalHandler); // Termination request
 
     // Default DHT port
-    const uint16_t DHT_PORT = 6881;
+    constexpr uint16_t DHT_PORT = 6881;
 
     // Create a DHT configuration
     dht_hunter::dht::DHTConfig dhtConfig(DHT_PORT);
 
     // Create a DHT node
-    logger.info("Creating DHT node on port {}", DHT_PORT);
     g_dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(dhtConfig);
 
     // Start the DHT node
@@ -73,21 +72,6 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Wait for the node to bootstrap
     logger.info("Waiting for DHT node to bootstrap...");
     std::this_thread::sleep_for(std::chrono::seconds(5));
-
-    // Log the number of nodes in the routing table
-    logger.info("DHT routing table has {} nodes", g_dhtNode->getRoutingTable()->getNodeCount());
-
-    // Perform a find_node lookup for a random node ID
-    dht_hunter::dht::NodeID randomID = dht_hunter::dht::generateRandomNodeID();
-    logger.info("Performing find_node lookup for random node ID: {}", dht_hunter::dht::nodeIDToString(randomID));
-
-    g_dhtNode->findClosestNodes(randomID, [&logger](const std::vector<std::shared_ptr<dht_hunter::dht::Node>>& nodes) {
-        logger.info("Found {} nodes", nodes.size());
-
-        for (const auto& node : nodes) {
-            logger.info("  Node: {} at {}", dht_hunter::dht::nodeIDToString(node->getID()), node->getEndpoint().toString());
-        }
-    });
 
     while (g_running) {
         // Sleep to avoid busy waiting

@@ -21,32 +21,42 @@ class PeerStorage;
 class TransactionManager;
 
 /**
- * @brief Handles DHT messages
+ * @brief Handles DHT messages (Singleton)
  */
 class MessageHandler {
 public:
     /**
-     * @brief Constructs a message handler
-     * @param config The DHT configuration
-     * @param nodeID The node ID
-     * @param messageSender The message sender
-     * @param routingTable The routing table
-     * @param tokenManager The token manager
-     * @param peerStorage The peer storage
-     * @param transactionManager The transaction manager
+     * @brief Gets the singleton instance of the message handler
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @param messageSender The message sender (only used if instance doesn't exist yet)
+     * @param routingTable The routing table (only used if instance doesn't exist yet)
+     * @param tokenManager The token manager (only used if instance doesn't exist yet)
+     * @param peerStorage The peer storage (only used if instance doesn't exist yet)
+     * @param transactionManager The transaction manager (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    MessageHandler(const DHTConfig& config,
-                  const NodeID& nodeID,
-                  std::shared_ptr<MessageSender> messageSender,
-                  std::shared_ptr<RoutingTable> routingTable,
-                  std::shared_ptr<TokenManager> tokenManager,
-                  std::shared_ptr<PeerStorage> peerStorage,
-                  std::shared_ptr<TransactionManager> transactionManager);
+    static std::shared_ptr<MessageHandler> getInstance(
+        const DHTConfig& config,
+        const NodeID& nodeID,
+        std::shared_ptr<MessageSender> messageSender,
+        std::shared_ptr<RoutingTable> routingTable,
+        std::shared_ptr<TokenManager> tokenManager,
+        std::shared_ptr<PeerStorage> peerStorage,
+        std::shared_ptr<TransactionManager> transactionManager);
 
     /**
      * @brief Destructor
      */
-    ~MessageHandler() = default;
+    ~MessageHandler();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    MessageHandler(const MessageHandler&) = delete;
+    MessageHandler& operator=(const MessageHandler&) = delete;
+    MessageHandler(MessageHandler&&) = delete;
+    MessageHandler& operator=(MessageHandler&&) = delete;
 
     /**
      * @brief Handles a raw message
@@ -119,6 +129,21 @@ private:
      * @param endpoint The endpoint
      */
     void updateRoutingTable(const NodeID& nodeID, const network::EndPoint& endpoint);
+
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    MessageHandler(const DHTConfig& config,
+                  const NodeID& nodeID,
+                  std::shared_ptr<MessageSender> messageSender,
+                  std::shared_ptr<RoutingTable> routingTable,
+                  std::shared_ptr<TokenManager> tokenManager,
+                  std::shared_ptr<PeerStorage> peerStorage,
+                  std::shared_ptr<TransactionManager> transactionManager);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<MessageHandler> s_instance;
+    static std::mutex s_instanceMutex;
 
     DHTConfig m_config;
     NodeID m_nodeID;

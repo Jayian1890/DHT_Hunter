@@ -13,20 +13,29 @@
 namespace dht_hunter::dht {
 
 /**
- * @brief Manages the UDP socket for a DHT node
+ * @brief Manages the UDP socket for a DHT node (Singleton)
  */
 class SocketManager {
 public:
     /**
-     * @brief Constructs a socket manager
-     * @param config The DHT configuration
+     * @brief Gets the singleton instance of the socket manager
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    explicit SocketManager(const DHTConfig& config);
+    static std::shared_ptr<SocketManager> getInstance(const DHTConfig& config);
 
     /**
      * @brief Destructor
      */
     ~SocketManager();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    SocketManager(const SocketManager&) = delete;
+    SocketManager& operator=(const SocketManager&) = delete;
+    SocketManager(SocketManager&&) = delete;
+    SocketManager& operator=(SocketManager&&) = delete;
 
     /**
      * @brief Starts the socket manager
@@ -62,6 +71,15 @@ public:
     ssize_t sendTo(const void* data, size_t size, const network::EndPoint& endpoint);
 
 private:
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    explicit SocketManager(const DHTConfig& config);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<SocketManager> s_instance;
+    static std::mutex s_instanceMutex;
+
     DHTConfig m_config;
     uint16_t m_port;
     std::atomic<bool> m_running;

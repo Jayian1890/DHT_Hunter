@@ -1,19 +1,56 @@
 #include "dht_hunter/dht/routing/routing_manager.hpp"
+#include "dht_hunter/dht/transactions/transaction_manager.hpp"
+#include "dht_hunter/dht/network/message_sender.hpp"
 #include <filesystem>
 
 namespace dht_hunter::dht {
 
-RoutingManager::RoutingManager(const DHTConfig& config, const NodeID& nodeID)
+// Initialize static members
+std::shared_ptr<RoutingManager> RoutingManager::s_instance = nullptr;
+std::mutex RoutingManager::s_instanceMutex;
+
+std::shared_ptr<RoutingManager> RoutingManager::getInstance(
+    const DHTConfig& config,
+    const NodeID& nodeID,
+    std::shared_ptr<RoutingTable> routingTable,
+    std::shared_ptr<TransactionManager> transactionManager,
+    std::shared_ptr<MessageSender> messageSender) {
+
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<RoutingManager>(new RoutingManager(
+            config, nodeID, routingTable, transactionManager, messageSender));
+    }
+
+    return s_instance;
+}
+
+RoutingManager::RoutingManager(const DHTConfig& config,
+                             const NodeID& nodeID,
+                             std::shared_ptr<RoutingTable> routingTable,
+                             std::shared_ptr<TransactionManager> transactionManager,
+                             std::shared_ptr<MessageSender> messageSender)
     : m_config(config),
       m_nodeID(nodeID),
-      m_routingTable(std::make_shared<RoutingTable>(nodeID, config.getKBucketSize())),
+      m_routingTable(routingTable),
+      m_transactionManager(transactionManager),
+      m_messageSender(messageSender),
       m_running(false),
       m_logger(event::Logger::forComponent("DHT.RoutingManager")) {
-    m_logger.info("Creating routing manager with node ID: {}", nodeIDToString(nodeID));
+
+    // Create the node verifier
+    m_nodeVerifier = std::make_shared<NodeVerifier>(config, nodeID, m_routingTable, transactionManager, messageSender);
 }
 
 RoutingManager::~RoutingManager() {
     stop();
+
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 bool RoutingManager::start() {
@@ -27,6 +64,14 @@ bool RoutingManager::start() {
     // Load the routing table
     if (!m_config.getRoutingTablePath().empty()) {
         loadRoutingTable(m_config.getRoutingTablePath());
+    }
+
+    // Start the node verifier
+    if (m_nodeVerifier) {
+        if (!m_nodeVerifier->start()) {
+            m_logger.error("Failed to start node verifier");
+            return false;
+        }
     }
 
     m_running = true;
@@ -48,6 +93,11 @@ void RoutingManager::stop() {
 
         m_running = false;
     } // Release the lock before joining the thread
+
+    // Stop the node verifier
+    if (m_nodeVerifier) {
+        m_nodeVerifier->stop();
+    }
 
     // Wait for the save thread to finish
     if (m_saveThread.joinable()) {
@@ -76,13 +126,19 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
         return false;
     }
 
-    bool result = m_routingTable->addNode(node);
-
-    if (result) {
-        m_logger.debug("Added node {} to routing table", nodeIDToString(node->getID()));
+    if (!m_nodeVerifier) {
+        m_logger.error("No node verifier available");
+        return false;
     }
 
-    return result;
+    // Add the node to the verification queue
+    return m_nodeVerifier->verifyNode(node, [this, node](bool success) {
+        if (success) {
+            m_logger.debug("Node {} verified and added to routing table", nodeIDToString(node->getID()));
+        } else {
+            m_logger.debug("Failed to verify node {}", nodeIDToString(node->getID()));
+        }
+    });
 }
 
 bool RoutingManager::removeNode(const NodeID& nodeID) {
@@ -116,7 +172,7 @@ std::vector<std::shared_ptr<Node>> RoutingManager::getClosestNodes(const NodeID&
     }
 
     // Log the distance between our node ID and the target ID
-    NodeID distance = calculateDistance(m_nodeID, targetID);
+    NodeID distance = m_nodeID.distanceTo(targetID);
     // Use the m_nodeID to avoid the unused private field warning
     std::string distanceStr = nodeIDToString(distance);
     m_logger.info("Distance between our node ID {} and target ID {}: {}",
@@ -149,19 +205,33 @@ bool RoutingManager::saveRoutingTable(const std::string& filePath) const {
         return false;
     }
 
-    // Create the directory if it doesn't exist
-    std::filesystem::path path(filePath);
-    std::filesystem::create_directories(path.parent_path());
-
-    bool result = m_routingTable->saveToFile(filePath);
-
-    if (result) {
-        m_logger.info("Saved routing table to {}", filePath);
-    } else {
-        m_logger.error("Failed to save routing table to {}", filePath);
+    if (filePath.empty()) {
+        m_logger.error("Empty file path provided for saving routing table");
+        return false;
     }
 
-    return result;
+    try {
+        // Check if the parent path is valid & create the directory if it doesn't exist
+        if (const std::filesystem::path path(filePath); !path.parent_path().empty()) {
+            std::filesystem::create_directories(path.parent_path());
+        }
+
+        bool result = m_routingTable->saveToFile(filePath);
+
+        if (result) {
+            m_logger.info("Saved routing table to {}", filePath);
+        } else {
+            m_logger.error("Failed to save routing table to {}", filePath);
+        }
+
+        return result;
+    } catch (const std::exception& e) {
+        m_logger.error("Exception while saving routing table to {}: {}", filePath, e.what());
+        return false;
+    } catch (...) {
+        m_logger.error("Unknown exception while saving routing table to {}", filePath);
+        return false;
+    }
 }
 
 bool RoutingManager::loadRoutingTable(const std::string& filePath) {
@@ -188,15 +258,37 @@ bool RoutingManager::loadRoutingTable(const std::string& filePath) {
 }
 
 void RoutingManager::saveRoutingTablePeriodically() {
-    while (m_running) {
-        // Sleep for a while
-        std::this_thread::sleep_for(std::chrono::seconds(m_config.getRoutingTableSaveInterval()));
+    try {
+        while (m_running) {
+            // Sleep for 60 seconds (save every minute)
+            std::this_thread::sleep_for(std::chrono::seconds(60));
 
-        // Save the routing table
-        if (!m_config.getRoutingTablePath().empty()) {
-            saveRoutingTable(m_config.getRoutingTablePath());
+            // Check if we're still running after the sleep
+            if (!m_running) {
+                break;
+            }
+
+            // Save the routing table
+            try {
+                std::string routingTablePath = m_config.getRoutingTablePath();
+                if (!routingTablePath.empty()) {
+                    saveRoutingTable(routingTablePath);
+                }
+            } catch (const std::exception& e) {
+                m_logger.error("Exception in periodic routing table save: {}", e.what());
+                // Continue running despite the error
+            } catch (...) {
+                m_logger.error("Unknown exception in periodic routing table save");
+                // Continue running despite the error
+            }
         }
+    } catch (const std::exception& e) {
+        m_logger.error("Exception in routing table save thread: {}", e.what());
+    } catch (...) {
+        m_logger.error("Unknown exception in routing table save thread");
     }
+
+    m_logger.info("Routing table save thread stopped");
 }
 
 } // namespace dht_hunter::dht

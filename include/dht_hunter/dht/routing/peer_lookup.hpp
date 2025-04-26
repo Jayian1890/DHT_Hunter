@@ -23,32 +23,42 @@ class TokenManager;
 class PeerStorage;
 
 /**
- * @brief Performs a peer lookup
+ * @brief Performs a peer lookup (Singleton)
  */
 class PeerLookup {
 public:
     /**
-     * @brief Constructs a peer lookup
-     * @param config The DHT configuration
-     * @param nodeID The node ID
-     * @param routingTable The routing table
-     * @param transactionManager The transaction manager
-     * @param messageSender The message sender
-     * @param tokenManager The token manager
-     * @param peerStorage The peer storage
+     * @brief Gets the singleton instance of the peer lookup
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @param routingTable The routing table (only used if instance doesn't exist yet)
+     * @param transactionManager The transaction manager (only used if instance doesn't exist yet)
+     * @param messageSender The message sender (only used if instance doesn't exist yet)
+     * @param tokenManager The token manager (only used if instance doesn't exist yet)
+     * @param peerStorage The peer storage (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    PeerLookup(const DHTConfig& config,
-              const NodeID& nodeID,
-              std::shared_ptr<RoutingTable> routingTable,
-              std::shared_ptr<TransactionManager> transactionManager,
-              std::shared_ptr<MessageSender> messageSender,
-              std::shared_ptr<TokenManager> tokenManager,
-              std::shared_ptr<PeerStorage> peerStorage);
+    static std::shared_ptr<PeerLookup> getInstance(
+        const DHTConfig& config,
+        const NodeID& nodeID,
+        std::shared_ptr<RoutingTable> routingTable,
+        std::shared_ptr<TransactionManager> transactionManager,
+        std::shared_ptr<MessageSender> messageSender,
+        std::shared_ptr<TokenManager> tokenManager,
+        std::shared_ptr<PeerStorage> peerStorage);
 
     /**
      * @brief Destructor
      */
-    ~PeerLookup() = default;
+    ~PeerLookup();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    PeerLookup(const PeerLookup&) = delete;
+    PeerLookup& operator=(const PeerLookup&) = delete;
+    PeerLookup(PeerLookup&&) = delete;
+    PeerLookup& operator=(PeerLookup&&) = delete;
 
     /**
      * @brief Performs a peer lookup
@@ -162,13 +172,28 @@ private:
         std::function<void(const std::vector<network::EndPoint>&)> lookupCallback;
         std::function<void(bool)> announceCallback;
         bool announcing;
-        
+
         Lookup(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback)
             : infoHash(infoHash), iteration(0), lookupCallback(callback), announcing(false) {}
-        
+
         Lookup(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback)
             : infoHash(infoHash), iteration(0), port(port), announceCallback(callback), announcing(true) {}
     };
+
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    PeerLookup(const DHTConfig& config,
+              const NodeID& nodeID,
+              std::shared_ptr<RoutingTable> routingTable,
+              std::shared_ptr<TransactionManager> transactionManager,
+              std::shared_ptr<MessageSender> messageSender,
+              std::shared_ptr<TokenManager> tokenManager,
+              std::shared_ptr<PeerStorage> peerStorage);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<PeerLookup> s_instance;
+    static std::mutex s_instanceMutex;
 
     DHTConfig m_config;
     NodeID m_nodeID;

@@ -10,6 +10,29 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<PeerLookup> PeerLookup::s_instance = nullptr;
+std::mutex PeerLookup::s_instanceMutex;
+
+std::shared_ptr<PeerLookup> PeerLookup::getInstance(
+    const DHTConfig& config,
+    const NodeID& nodeID,
+    std::shared_ptr<RoutingTable> routingTable,
+    std::shared_ptr<TransactionManager> transactionManager,
+    std::shared_ptr<MessageSender> messageSender,
+    std::shared_ptr<TokenManager> tokenManager,
+    std::shared_ptr<PeerStorage> peerStorage) {
+
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<PeerLookup>(new PeerLookup(
+            config, nodeID, routingTable, transactionManager, messageSender, tokenManager, peerStorage));
+    }
+
+    return s_instance;
+}
+
 PeerLookup::PeerLookup(const DHTConfig& config,
                      const NodeID& nodeID,
                      std::shared_ptr<RoutingTable> routingTable,
@@ -25,7 +48,14 @@ PeerLookup::PeerLookup(const DHTConfig& config,
       m_tokenManager(tokenManager),
       m_peerStorage(peerStorage),
       m_logger(event::Logger::forComponent("DHT.PeerLookup")) {
-    m_logger.info("Creating peer lookup");
+}
+
+PeerLookup::~PeerLookup() {
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 void PeerLookup::lookup(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback) {
@@ -45,7 +75,7 @@ void PeerLookup::lookup(const InfoHash& infoHash, std::function<void(const std::
 
     // Get the closest nodes from the routing table
     if (m_routingTable) {
-        lookup.nodes = m_routingTable->getClosestNodes(infoHash, m_config.getMaxResults());
+        lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
     }
 
     // Add the lookup
@@ -74,7 +104,7 @@ void PeerLookup::announce(const InfoHash& infoHash, uint16_t port, std::function
 
     // Get the closest nodes from the routing table
     if (m_routingTable) {
-        lookup.nodes = m_routingTable->getClosestNodes(infoHash, m_config.getMaxResults());
+        lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
     }
 
     // Add the lookup
@@ -115,11 +145,10 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
     // Sort the nodes by distance to the target
     std::sort(lookup.nodes.begin(), lookup.nodes.end(),
         [&lookup](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-            NodeID distanceA = calculateDistance(a->getID(), lookup.infoHash);
-            NodeID distanceB = calculateDistance(b->getID(), lookup.infoHash);
-            return std::lexicographical_compare(
-                distanceA.begin(), distanceA.end(),
-                distanceB.begin(), distanceB.end());
+            NodeID targetID(lookup.infoHash);
+            NodeID distanceA = a->getID().distanceTo(targetID);
+            NodeID distanceB = b->getID().distanceTo(targetID);
+            return distanceA < distanceB;
         });
 
     // Count the number of queries we need to send
@@ -402,11 +431,10 @@ bool PeerLookup::isLookupComplete(const std::string& lookupID) {
     std::vector<std::shared_ptr<Node>> sortedNodes = lookup.nodes;
     std::sort(sortedNodes.begin(), sortedNodes.end(),
         [&lookup](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-            NodeID distanceA = calculateDistance(a->getID(), lookup.infoHash);
-            NodeID distanceB = calculateDistance(b->getID(), lookup.infoHash);
-            return std::lexicographical_compare(
-                distanceA.begin(), distanceA.end(),
-                distanceB.begin(), distanceB.end());
+            NodeID targetID(lookup.infoHash);
+            NodeID distanceA = a->getID().distanceTo(targetID);
+            NodeID distanceB = b->getID().distanceTo(targetID);
+            return distanceA < distanceB;
         });
 
     // Check if we've queried the k closest nodes

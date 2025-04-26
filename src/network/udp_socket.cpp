@@ -79,7 +79,6 @@ public:
             return false;
         }
 
-        logger.debug("Socket bound to port {}", port);
         return true;
     }
 
@@ -191,7 +190,6 @@ public:
         m_running = true;
         m_receiveThread = std::thread(&UDPSocket::Impl::receiveLoop, this);
 
-        logger.debug("Receive loop started");
         return true;
     }
 
@@ -231,7 +229,6 @@ public:
 private:
     void receiveLoop() {
         auto logger = event::Logger::forComponent("Network.UDPSocket");
-        logger.debug("Receive loop thread started");
 
         std::array<uint8_t, 65536> buffer;
 

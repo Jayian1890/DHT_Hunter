@@ -8,6 +8,27 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<NodeLookup> NodeLookup::s_instance = nullptr;
+std::mutex NodeLookup::s_instanceMutex;
+
+std::shared_ptr<NodeLookup> NodeLookup::getInstance(
+    const DHTConfig& config,
+    const NodeID& nodeID,
+    std::shared_ptr<RoutingTable> routingTable,
+    std::shared_ptr<TransactionManager> transactionManager,
+    std::shared_ptr<MessageSender> messageSender) {
+
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<NodeLookup>(new NodeLookup(
+            config, nodeID, routingTable, transactionManager, messageSender));
+    }
+
+    return s_instance;
+}
+
 NodeLookup::NodeLookup(const DHTConfig& config,
                      const NodeID& nodeID,
                      std::shared_ptr<RoutingTable> routingTable,
@@ -19,7 +40,14 @@ NodeLookup::NodeLookup(const DHTConfig& config,
       m_transactionManager(transactionManager),
       m_messageSender(messageSender),
       m_logger(event::Logger::forComponent("DHT.NodeLookup")) {
-    m_logger.info("Creating node lookup");
+}
+
+NodeLookup::~NodeLookup() {
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 void NodeLookup::lookup(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback) {
@@ -76,8 +104,8 @@ void NodeLookup::sendQueries(const std::string& lookupID) {
     // Sort the nodes by distance to the target
     std::sort(lookup.nodes.begin(), lookup.nodes.end(),
         [&lookup](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-            NodeID distanceA = calculateDistance(a->getID(), lookup.targetID);
-            NodeID distanceB = calculateDistance(b->getID(), lookup.targetID);
+            NodeID distanceA = a->getID().distanceTo(lookup.targetID);
+            NodeID distanceB = b->getID().distanceTo(lookup.targetID);
             return std::lexicographical_compare(
                 distanceA.begin(), distanceA.end(),
                 distanceB.begin(), distanceB.end());
@@ -323,8 +351,8 @@ bool NodeLookup::isLookupComplete(const std::string& lookupID) {
     std::vector<std::shared_ptr<Node>> sortedNodes = lookup.nodes;
     std::sort(sortedNodes.begin(), sortedNodes.end(),
         [&lookup](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-            NodeID distanceA = calculateDistance(a->getID(), lookup.targetID);
-            NodeID distanceB = calculateDistance(b->getID(), lookup.targetID);
+            NodeID distanceA = a->getID().distanceTo(lookup.targetID);
+            NodeID distanceB = b->getID().distanceTo(lookup.targetID);
             return std::lexicographical_compare(
                 distanceA.begin(), distanceA.end(),
                 distanceB.begin(), distanceB.end());
@@ -355,8 +383,8 @@ void NodeLookup::completeLookup(const std::string& lookupID) {
     // Sort the nodes by distance to the target
     std::sort(lookup.nodes.begin(), lookup.nodes.end(),
         [&lookup](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-            NodeID distanceA = calculateDistance(a->getID(), lookup.targetID);
-            NodeID distanceB = calculateDistance(b->getID(), lookup.targetID);
+            NodeID distanceA = a->getID().distanceTo(lookup.targetID);
+            NodeID distanceB = b->getID().distanceTo(lookup.targetID);
             return std::lexicographical_compare(
                 distanceA.begin(), distanceA.end(),
                 distanceB.begin(), distanceB.end());

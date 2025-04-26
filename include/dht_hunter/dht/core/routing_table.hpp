@@ -117,7 +117,7 @@ public:
      * @param node The node to add
      * @return True if the node was added, false otherwise
      */
-    bool addNode(std::shared_ptr<Node> node);
+    bool addNode(const std::shared_ptr<Node> &node);
 
     /**
      * @brief Removes a node from the routing table

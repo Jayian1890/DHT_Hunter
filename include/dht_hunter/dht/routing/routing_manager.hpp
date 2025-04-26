@@ -3,6 +3,7 @@
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/dht_types.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
+#include "dht_hunter/dht/routing/node_verifier.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <memory>
 #include <thread>
@@ -13,21 +14,38 @@
 namespace dht_hunter::dht {
 
 /**
- * @brief Manages the routing table
+ * @brief Manages the routing table (Singleton)
  */
 class RoutingManager {
 public:
     /**
-     * @brief Constructs a routing manager
-     * @param config The DHT configuration
-     * @param nodeID The node ID
+     * @brief Gets the singleton instance of the routing manager
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @param routingTable The routing table (only used if instance doesn't exist yet)
+     * @param transactionManager The transaction manager (only used if instance doesn't exist yet)
+     * @param messageSender The message sender (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    RoutingManager(const DHTConfig& config, const NodeID& nodeID);
+    static std::shared_ptr<RoutingManager> getInstance(
+        const DHTConfig& config,
+        const NodeID& nodeID,
+        std::shared_ptr<RoutingTable> routingTable,
+        std::shared_ptr<TransactionManager> transactionManager,
+        std::shared_ptr<MessageSender> messageSender);
 
     /**
      * @brief Destructor
      */
     ~RoutingManager();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    RoutingManager(const RoutingManager&) = delete;
+    RoutingManager& operator=(const RoutingManager&) = delete;
+    RoutingManager(RoutingManager&&) = delete;
+    RoutingManager& operator=(RoutingManager&&) = delete;
 
     /**
      * @brief Starts the routing manager
@@ -113,9 +131,25 @@ private:
      */
     void saveRoutingTablePeriodically();
 
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    RoutingManager(const DHTConfig& config,
+                  const NodeID& nodeID,
+                  std::shared_ptr<RoutingTable> routingTable,
+                  std::shared_ptr<TransactionManager> transactionManager,
+                  std::shared_ptr<MessageSender> messageSender);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<RoutingManager> s_instance;
+    static std::mutex s_instanceMutex;
+
     DHTConfig m_config;
     NodeID m_nodeID;
     std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<NodeVerifier> m_nodeVerifier;
+    std::shared_ptr<TransactionManager> m_transactionManager;
+    std::shared_ptr<MessageSender> m_messageSender;
     std::atomic<bool> m_running;
     std::thread m_saveThread;
     mutable std::mutex m_mutex;

@@ -2,14 +2,33 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<SocketManager> SocketManager::s_instance = nullptr;
+std::mutex SocketManager::s_instanceMutex;
+
+std::shared_ptr<SocketManager> SocketManager::getInstance(const DHTConfig& config) {
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<SocketManager>(new SocketManager(config));
+    }
+
+    return s_instance;
+}
+
 SocketManager::SocketManager(const DHTConfig& config)
     : m_config(config), m_port(config.getPort()), m_running(false),
       m_logger(event::Logger::forComponent("DHT.SocketManager")) {
-    m_logger.info("Creating socket manager for port {}", m_port);
 }
 
 SocketManager::~SocketManager() {
     stop();
+
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 bool SocketManager::start(std::function<void(const uint8_t*, size_t, const network::EndPoint&)> receiveCallback) {

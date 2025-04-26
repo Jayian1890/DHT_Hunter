@@ -70,7 +70,7 @@ bool MetadataStorage::addMetadata(const std::array<uint8_t, 20>& infoHash, const
         file.write(reinterpret_cast<const char*>(&size), sizeof(size));
 
         // Write data
-        file.write(reinterpret_cast<const char*>(data), size);
+        file.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
 
         if (!file) {
             getLogger()->error("Failed to write metadata to file: {}", metadataPath.string());
@@ -124,7 +124,7 @@ std::optional<std::pair<std::vector<uint8_t>, uint32_t>> MetadataStorage::getMet
 
         // Read data
         std::vector<uint8_t> data(size);
-        file.read(reinterpret_cast<char*>(data.data()), size);
+        file.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
 
         if (!file) {
             getLogger()->error("Failed to read data from file: {}", metadataPath.string());

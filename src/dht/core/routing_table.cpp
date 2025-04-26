@@ -104,7 +104,7 @@ size_t KBucket::getNodeCount() const {
 
 bool KBucket::containsNodeID(const NodeID& nodeID, const NodeID& ownID) const {
     // Calculate the XOR distance between the node ID and the own ID
-    NodeID distance = calculateDistance(nodeID, ownID);
+    NodeID distance = nodeID.distanceTo(ownID);
 
     // Check if the first m_prefix bits of the distance are 0
     for (size_t i = 0; i < m_prefix / 8; ++i) {
@@ -135,8 +135,8 @@ RoutingTable::RoutingTable(const NodeID& ownID, size_t kBucketSize)
     m_logger.info("Routing table created with node ID: {}", nodeIDToString(ownID));
 }
 
-bool RoutingTable::addNode(std::shared_ptr<Node> node) {
-    if (!node || node->getID() == m_ownID) {
+bool RoutingTable::addNode(const std::shared_ptr<Node> &node) {
+    if (!node || !node->getID().isValid() || node->getID() == m_ownID) {
         return false;
     }
 
@@ -147,7 +147,6 @@ bool RoutingTable::addNode(std::shared_ptr<Node> node) {
 
     // Try to add the node to the bucket
     if (bucket.addNode(node)) {
-        m_logger.debug("Added node {} to routing table", nodeIDToString(node->getID()));
         return true;
     }
 
@@ -204,11 +203,9 @@ std::vector<std::shared_ptr<Node>> RoutingTable::getClosestNodes(const NodeID& t
     // Sort nodes by distance to target ID
     std::sort(allNodes.begin(), allNodes.end(),
         [&targetID](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-            NodeID distanceA = calculateDistance(a->getID(), targetID);
-            NodeID distanceB = calculateDistance(b->getID(), targetID);
-            return std::lexicographical_compare(
-                distanceA.begin(), distanceA.end(),
-                distanceB.begin(), distanceB.end());
+            NodeID distanceA = a->getID().distanceTo(targetID);
+            NodeID distanceB = b->getID().distanceTo(targetID);
+            return distanceA < distanceB;
         });
 
     // Return the k closest nodes
@@ -301,7 +298,7 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
     for (size_t i = 0; i < nodeCount; ++i) {
         // Read the node ID
         NodeID nodeID;
-        file.read(reinterpret_cast<char*>(nodeID.data()), nodeID.size());
+        file.read(reinterpret_cast<char*>(nodeID.data()), static_cast<std::streamsize>(nodeID.size()));
 
         // Read the address length and address
         uint16_t addressLength;

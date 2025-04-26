@@ -43,7 +43,7 @@ struct Transaction {
     TransactionResponseCallback responseCallback;
     TransactionErrorCallback errorCallback;
     TransactionTimeoutCallback timeoutCallback;
-    
+
     Transaction(const std::string& id,
                std::shared_ptr<QueryMessage> query,
                const network::EndPoint& endpoint,
@@ -60,20 +60,29 @@ struct Transaction {
 };
 
 /**
- * @brief Manages DHT transactions
+ * @brief Manages DHT transactions (Singleton)
  */
 class TransactionManager {
 public:
     /**
-     * @brief Constructs a transaction manager
-     * @param config The DHT configuration
+     * @brief Gets the singleton instance of the transaction manager
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    explicit TransactionManager(const DHTConfig& config);
+    static std::shared_ptr<TransactionManager> getInstance(const DHTConfig& config);
 
     /**
      * @brief Destructor
      */
     ~TransactionManager();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    TransactionManager(const TransactionManager&) = delete;
+    TransactionManager& operator=(const TransactionManager&) = delete;
+    TransactionManager(TransactionManager&&) = delete;
+    TransactionManager& operator=(TransactionManager&&) = delete;
 
     /**
      * @brief Starts the transaction manager
@@ -143,6 +152,15 @@ private:
      * @brief Checks for timed out transactions periodically
      */
     void checkTimeoutsPeriodically();
+
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    explicit TransactionManager(const DHTConfig& config);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<TransactionManager> s_instance;
+    static std::mutex s_instanceMutex;
 
     DHTConfig m_config;
     std::unordered_map<std::string, Transaction> m_transactions;

@@ -8,6 +8,26 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<Bootstrapper> Bootstrapper::s_instance = nullptr;
+std::mutex Bootstrapper::s_instanceMutex;
+
+std::shared_ptr<Bootstrapper> Bootstrapper::getInstance(
+    const DHTConfig& config,
+    const NodeID& nodeID,
+    std::shared_ptr<RoutingManager> routingManager,
+    std::shared_ptr<NodeLookup> nodeLookup) {
+
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<Bootstrapper>(new Bootstrapper(
+            config, nodeID, routingManager, nodeLookup));
+    }
+
+    return s_instance;
+}
+
 Bootstrapper::Bootstrapper(const DHTConfig& config,
                          const NodeID& /*nodeID*/,
                          std::shared_ptr<RoutingManager> routingManager,
@@ -16,65 +36,87 @@ Bootstrapper::Bootstrapper(const DHTConfig& config,
       m_routingManager(routingManager),
       m_nodeLookup(nodeLookup),
       m_logger(event::Logger::forComponent("DHT.Bootstrapper")) {
-    m_logger.info("Creating bootstrapper");
+}
+
+Bootstrapper::~Bootstrapper() {
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 void Bootstrapper::bootstrap(std::function<void(bool)> callback) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    // Store the callback for later use
+    m_bootstrapCallback = callback;
 
-    m_logger.info("Bootstrapping DHT node");
+    // Use a separate thread to perform the bootstrap process
+    std::thread bootstrapThread([this]() {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    // Check if we already have nodes in the routing table
-    if (m_routingManager && m_routingManager->getNodeCount() > 0) {
-        m_logger.info("Routing table already has {} nodes", m_routingManager->getNodeCount());
-
-        // Perform a random lookup to refresh the routing table
-        performRandomLookup(callback);
-        return;
-    }
-
-    // Get the bootstrap nodes
-    const auto& bootstrapNodes = m_config.getBootstrapNodes();
-
-    if (bootstrapNodes.empty()) {
-        m_logger.error("No bootstrap nodes configured");
-        if (callback) {
-            callback(false);
+        // Check if we already have nodes in the routing table
+        if (m_routingManager && m_routingManager->getNodeCount() > 0) {
+          m_logger.info("Routing table has {} nodes", m_routingManager->getNodeCount());
+          return;
         }
-        return;
-    }
 
-    // Resolve the bootstrap nodes
-    std::vector<network::EndPoint> endpoints;
+        m_logger.info("Routing table is empty, bootstrapping DHT node");
+        performRandomLookup(m_bootstrapCallback);
 
-    for (const auto& node : bootstrapNodes) {
-        auto resolvedEndpoints = resolveBootstrapNode(node);
-        endpoints.insert(endpoints.end(), resolvedEndpoints.begin(), resolvedEndpoints.end());
-    }
+        // Get the bootstrap nodes
+        const auto& bootstrapNodes = m_config.getBootstrapNodes();
 
-    if (endpoints.empty()) {
-        m_logger.error("Failed to resolve any bootstrap nodes");
-        if (callback) {
-            callback(false);
+        if (bootstrapNodes.empty()) {
+            m_logger.error("No bootstrap nodes configured");
+
+            if (m_bootstrapCallback) {
+                m_bootstrapCallback(false);
+            }
+            return;
         }
-        return;
-    }
 
-    m_logger.info("Resolved {} bootstrap endpoints", endpoints.size());
+        // Resolve the bootstrap nodes
+        std::vector<network::EndPoint> endpoints;
 
-    // Add the bootstrap nodes to the routing table
-    for (const auto& endpoint : endpoints) {
-        // Generate a random node ID for the bootstrap node
-        // This will be replaced with the actual node ID when we receive a response
-        auto node = std::make_shared<Node>(generateRandomNodeID(), endpoint);
-
-        if (m_routingManager) {
-            m_routingManager->addNode(node);
+        for (const auto& node : bootstrapNodes) {
+            auto resolvedEndpoints = resolveBootstrapNode(node);
+            endpoints.insert(endpoints.end(), resolvedEndpoints.begin(), resolvedEndpoints.end());
         }
-    }
 
-    // Perform a random lookup to find more nodes
-    performRandomLookup(callback);
+        if (endpoints.empty()) {
+            m_logger.error("Failed to resolve any bootstrap nodes");
+
+            if (m_bootstrapCallback) {
+                m_bootstrapCallback(false);
+            }
+            return;
+        }
+
+        m_logger.info("Resolved {} bootstrap endpoints", endpoints.size());
+
+
+        // Add the bootstrap nodes to the routing table
+        for (const auto& endpoint : endpoints) {
+            // Generate a random node ID for the bootstrap node
+            // This will be replaced with the actual node ID when we receive a response
+            auto node = std::make_shared<Node>(generateRandomNodeID(), endpoint);
+
+            if (m_routingManager) {
+                m_routingManager->addNode(node);
+            }
+        }
+
+        // Perform a random lookup to find more nodes
+        performRandomLookup(m_bootstrapCallback);
+    });
+
+    // Detach the thread so it can run independently
+    bootstrapThread.detach();
+
+    // Return immediately, the callback will be called when the bootstrap process completes
+
+
+
 }
 
 std::vector<network::EndPoint> Bootstrapper::resolveBootstrapNode(const std::string& node) {
@@ -124,14 +166,8 @@ std::vector<network::EndPoint> Bootstrapper::resolveBootstrapNode(const std::str
 }
 
 void Bootstrapper::performRandomLookup(std::function<void(bool)> callback) {
-    // Generate a random node ID
-    NodeID randomID = generateRandomNodeID();
-
-    m_logger.info("Performing lookup for random node ID: {}", nodeIDToString(randomID));
-
-    // Perform a lookup
     if (m_nodeLookup) {
-        m_nodeLookup->lookup(randomID, [this, callback](const std::vector<std::shared_ptr<Node>>& nodes) {
+        m_nodeLookup->lookup(generateRandomNodeID(), [this, callback](const std::vector<std::shared_ptr<Node>>& nodes) {
             m_logger.info("Random lookup found {} nodes", nodes.size());
 
             // Add the nodes to the routing table

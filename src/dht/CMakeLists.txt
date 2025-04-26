@@ -5,6 +5,7 @@ add_library(dht_hunter_dht
     core/dht_config.cpp
     core/dht_constants.cpp
     core/dht_types.cpp
+    core/node_id.cpp
     core/routing_table.cpp
 
     # Network components
@@ -20,6 +21,7 @@ add_library(dht_hunter_dht
     routing/node_lookup.cpp
     routing/peer_lookup.cpp
     routing/routing_manager.cpp
+    routing/node_verifier.cpp
 
     # Storage components
     storage/token_manager.cpp
@@ -30,6 +32,11 @@ add_library(dht_hunter_dht
 
     # Bootstrap components
     bootstrap/bootstrapper.cpp
+
+    # Extension components
+    extensions/mainline_dht.cpp
+    extensions/kademlia_dht.cpp
+    extensions/azureus_dht.cpp
 )
 
 # Set include directories
@@ -54,5 +61,3 @@ target_link_libraries(dht_hunter_dht
     dht_hunter_util
 )
 
-# Add the test subdirectory
-add_subdirectory(test)

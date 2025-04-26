@@ -3,6 +3,7 @@
 #include "dht_hunter/dht/core/dht_types.hpp"
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
+#include "dht_hunter/dht/extensions/dht_extension.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <memory>
 #include <functional>
@@ -23,6 +24,13 @@ class RoutingManager;
 class NodeLookup;
 class PeerLookup;
 class Bootstrapper;
+
+namespace extensions {
+    class DHTExtension;
+    class MainlineDHT;
+    class KademliaDHT;
+    class AzureusDHT;
+}
 
 /**
  * @brief A DHT node
@@ -124,6 +132,11 @@ private:
     std::shared_ptr<NodeLookup> m_nodeLookup;
     std::shared_ptr<PeerLookup> m_peerLookup;
     std::shared_ptr<Bootstrapper> m_bootstrapper;
+
+    // DHT extensions
+    std::shared_ptr<extensions::MainlineDHT> m_mainlineDHT;
+    std::shared_ptr<extensions::KademliaDHT> m_kademliaDHT;
+    std::shared_ptr<extensions::AzureusDHT> m_azureusDHT;
     std::thread m_saveRoutingTableThread;
     std::mutex m_mutex;
     event::Logger m_logger;

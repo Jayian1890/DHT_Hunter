@@ -21,28 +21,38 @@ class TransactionManager;
 class MessageSender;
 
 /**
- * @brief Performs a node lookup
+ * @brief Performs a node lookup (Singleton)
  */
 class NodeLookup {
 public:
     /**
-     * @brief Constructs a node lookup
-     * @param config The DHT configuration
-     * @param nodeID The node ID
-     * @param routingTable The routing table
-     * @param transactionManager The transaction manager
-     * @param messageSender The message sender
+     * @brief Gets the singleton instance of the node lookup
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @param routingTable The routing table (only used if instance doesn't exist yet)
+     * @param transactionManager The transaction manager (only used if instance doesn't exist yet)
+     * @param messageSender The message sender (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    NodeLookup(const DHTConfig& config,
-              const NodeID& nodeID,
-              std::shared_ptr<RoutingTable> routingTable,
-              std::shared_ptr<TransactionManager> transactionManager,
-              std::shared_ptr<MessageSender> messageSender);
+    static std::shared_ptr<NodeLookup> getInstance(
+        const DHTConfig& config,
+        const NodeID& nodeID,
+        std::shared_ptr<RoutingTable> routingTable,
+        std::shared_ptr<TransactionManager> transactionManager,
+        std::shared_ptr<MessageSender> messageSender);
 
     /**
      * @brief Destructor
      */
-    ~NodeLookup() = default;
+    ~NodeLookup();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    NodeLookup(const NodeLookup&) = delete;
+    NodeLookup& operator=(const NodeLookup&) = delete;
+    NodeLookup(NodeLookup&&) = delete;
+    NodeLookup& operator=(NodeLookup&&) = delete;
 
     /**
      * @brief Performs a node lookup
@@ -105,10 +115,23 @@ private:
         std::unordered_set<std::string> activeQueries;
         size_t iteration;
         std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback;
-        
+
         Lookup(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback)
             : targetID(targetID), iteration(0), callback(callback) {}
     };
+
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    NodeLookup(const DHTConfig& config,
+              const NodeID& nodeID,
+              std::shared_ptr<RoutingTable> routingTable,
+              std::shared_ptr<TransactionManager> transactionManager,
+              std::shared_ptr<MessageSender> messageSender);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<NodeLookup> s_instance;
+    static std::mutex s_instanceMutex;
 
     DHTConfig m_config;
     NodeID m_nodeID;

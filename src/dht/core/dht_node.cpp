@@ -9,6 +9,9 @@
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
+#include "dht_hunter/dht/extensions/mainline_dht.hpp"
+#include "dht_hunter/dht/extensions/kademlia_dht.hpp"
+#include "dht_hunter/dht/extensions/azureus_dht.hpp"
 
 namespace dht_hunter::dht {
 
@@ -21,16 +24,21 @@ DHTNode::DHTNode(const DHTConfig& config)
 
     // Create the components
     m_routingTable = std::make_shared<RoutingTable>(m_nodeID, config.getKBucketSize());
-    m_socketManager = std::make_shared<SocketManager>(config);
-    m_messageSender = std::make_shared<MessageSender>(config, m_socketManager);
-    m_tokenManager = std::make_shared<TokenManager>(config);
-    m_peerStorage = std::make_shared<PeerStorage>(config);
-    m_transactionManager = std::make_shared<TransactionManager>(config);
-    m_routingManager = std::make_shared<RoutingManager>(config, m_nodeID);
-    m_nodeLookup = std::make_shared<NodeLookup>(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
-    m_peerLookup = std::make_shared<PeerLookup>(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender, m_tokenManager, m_peerStorage);
-    m_bootstrapper = std::make_shared<Bootstrapper>(config, m_nodeID, m_routingManager, m_nodeLookup);
-    m_messageHandler = std::make_shared<MessageHandler>(config, m_nodeID, m_messageSender, m_routingTable, m_tokenManager, m_peerStorage, m_transactionManager);
+    m_socketManager = SocketManager::getInstance(config);
+    m_messageSender = MessageSender::getInstance(config, m_socketManager);
+    m_tokenManager = TokenManager::getInstance(config);
+    m_peerStorage = PeerStorage::getInstance(config);
+    m_transactionManager = TransactionManager::getInstance(config);
+    m_routingManager = RoutingManager::getInstance(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
+    m_nodeLookup = NodeLookup::getInstance(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
+    m_peerLookup = PeerLookup::getInstance(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender, m_tokenManager, m_peerStorage);
+    m_bootstrapper = Bootstrapper::getInstance(config, m_nodeID, m_routingManager, m_nodeLookup);
+    m_messageHandler = MessageHandler::getInstance(config, m_nodeID, m_messageSender, m_routingTable, m_tokenManager, m_peerStorage, m_transactionManager);
+
+    // Create DHT extensions
+    m_mainlineDHT = std::make_shared<extensions::MainlineDHT>(config, m_nodeID, m_routingTable);
+    m_kademliaDHT = std::make_shared<extensions::KademliaDHT>(config, m_nodeID, m_routingTable);
+    m_azureusDHT = std::make_shared<extensions::AzureusDHT>(config, m_nodeID, m_routingTable);
 }
 
 DHTNode::~DHTNode() {
@@ -44,8 +52,6 @@ bool DHTNode::start() {
         m_logger.warning("DHT node already running");
         return true;
     }
-
-    m_logger.info("Starting DHT node");
 
     // Start the components
     if (!m_socketManager->start([this](const uint8_t* data, size_t size, const network::EndPoint& sender) {
@@ -97,10 +103,38 @@ bool DHTNode::start() {
         return false;
     }
 
+    // Initialize DHT extensions
+    if (m_mainlineDHT) {
+        if (!m_mainlineDHT->initialize()) {
+            m_logger.error("Failed to initialize Mainline DHT extension, continuing without it");
+            m_mainlineDHT.reset();
+        } else {
+            m_logger.info("Mainline DHT extension initialized");
+        }
+    }
+
+    if (m_kademliaDHT) {
+        if (!m_kademliaDHT->initialize()) {
+            m_logger.error("Failed to initialize Kademlia DHT extension, continuing without it");
+            m_kademliaDHT.reset();
+        } else {
+            m_logger.info("Kademlia DHT extension initialized");
+        }
+    }
+
+    if (m_azureusDHT) {
+        if (!m_azureusDHT->initialize()) {
+            m_logger.error("Failed to initialize Azureus DHT extension, continuing without it");
+            m_azureusDHT.reset();
+        } else {
+            m_logger.info("Azureus DHT extension initialized");
+        }
+    }
+
     m_running = true;
 
     // Bootstrap the node
-    m_bootstrapper->bootstrap([this](bool success) {
+    m_bootstrapper->bootstrap([this](const bool success) {
         if (success) {
             m_logger.info("DHT node bootstrapped successfully");
         } else {
@@ -120,6 +154,17 @@ void DHTNode::stop() {
     }
 
     m_logger.info("Stopping DHT node");
+
+    // Stop the DHT extensions
+    if (m_azureusDHT) {
+        m_azureusDHT->shutdown();
+    }
+    if (m_kademliaDHT) {
+        m_kademliaDHT->shutdown();
+    }
+    if (m_mainlineDHT) {
+        m_mainlineDHT->shutdown();
+    }
 
     // Stop the components in reverse order
     m_routingManager->stop();

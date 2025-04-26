@@ -17,26 +17,36 @@ class RoutingManager;
 class NodeLookup;
 
 /**
- * @brief Bootstraps a DHT node
+ * @brief Bootstraps a DHT node (Singleton)
  */
 class Bootstrapper {
 public:
     /**
-     * @brief Constructs a bootstrapper
-     * @param config The DHT configuration
-     * @param nodeID The node ID
-     * @param routingManager The routing manager
-     * @param nodeLookup The node lookup
+     * @brief Gets the singleton instance of the bootstrapper
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @param routingManager The routing manager (only used if instance doesn't exist yet)
+     * @param nodeLookup The node lookup (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    Bootstrapper(const DHTConfig& config,
-                const NodeID& nodeID,
-                std::shared_ptr<RoutingManager> routingManager,
-                std::shared_ptr<NodeLookup> nodeLookup);
+    static std::shared_ptr<Bootstrapper> getInstance(
+        const DHTConfig& config,
+        const NodeID& nodeID,
+        std::shared_ptr<RoutingManager> routingManager,
+        std::shared_ptr<NodeLookup> nodeLookup);
 
     /**
      * @brief Destructor
      */
-    ~Bootstrapper() = default;
+    ~Bootstrapper();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    Bootstrapper(const Bootstrapper&) = delete;
+    Bootstrapper& operator=(const Bootstrapper&) = delete;
+    Bootstrapper(Bootstrapper&&) = delete;
+    Bootstrapper& operator=(Bootstrapper&&) = delete;
 
     /**
      * @brief Bootstraps the DHT node
@@ -58,11 +68,24 @@ private:
      */
     void performRandomLookup(std::function<void(bool)> callback);
 
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    Bootstrapper(const DHTConfig& config,
+                const NodeID& nodeID,
+                std::shared_ptr<RoutingManager> routingManager,
+                std::shared_ptr<NodeLookup> nodeLookup);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<Bootstrapper> s_instance;
+    static std::mutex s_instanceMutex;
+
     DHTConfig m_config;
     std::shared_ptr<RoutingManager> m_routingManager;
     std::shared_ptr<NodeLookup> m_nodeLookup;
     std::mutex m_mutex;
     event::Logger m_logger;
+    std::function<void(bool)> m_bootstrapCallback;  // Callback for bootstrap completion
 };
 
 } // namespace dht_hunter::dht

@@ -58,7 +58,7 @@ constexpr int ROUTING_TABLE_SAVE_INTERVAL = 600;
 /**
  * @brief Default k-bucket size (maximum number of nodes in a bucket)
  */
-constexpr size_t K_BUCKET_SIZE = 8;
+constexpr size_t K_BUCKET_SIZE = 16;
 
 /**
  * @brief Default MTU size for UDP packets
@@ -69,15 +69,16 @@ constexpr size_t DEFAULT_MTU_SIZE = 1400;
  * @brief Default bootstrap nodes
  */
 constexpr const char* DEFAULT_BOOTSTRAP_NODES[] = {
-    "router.bittorrent.com:6881",
+    "dht.aelitis.com:6881",
     "dht.transmissionbt.com:6881",
+    "dht.libtorrent.org:25401",
     "router.utorrent.com:6881"
 };
 
 /**
  * @brief Number of default bootstrap nodes
  */
-constexpr size_t DEFAULT_BOOTSTRAP_NODES_COUNT = 3;
+constexpr size_t DEFAULT_BOOTSTRAP_NODES_COUNT = 4;
 
 /**
  * @brief Default bootstrap timeout in seconds

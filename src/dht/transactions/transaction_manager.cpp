@@ -5,14 +5,33 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<TransactionManager> TransactionManager::s_instance = nullptr;
+std::mutex TransactionManager::s_instanceMutex;
+
+std::shared_ptr<TransactionManager> TransactionManager::getInstance(const DHTConfig& config) {
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<TransactionManager>(new TransactionManager(config));
+    }
+
+    return s_instance;
+}
+
 TransactionManager::TransactionManager(const DHTConfig& config)
     : m_config(config), m_running(false), m_rng(std::random_device{}()),
       m_logger(event::Logger::forComponent("DHT.TransactionManager")) {
-    m_logger.info("Creating transaction manager");
 }
 
 TransactionManager::~TransactionManager() {
     stop();
+
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 bool TransactionManager::start() {
@@ -28,7 +47,6 @@ bool TransactionManager::start() {
     // Start the timeout thread
     m_timeoutThread = std::thread(&TransactionManager::checkTimeoutsPeriodically, this);
 
-    m_logger.info("Transaction manager started");
     return true;
 }
 

@@ -14,21 +14,32 @@
 namespace dht_hunter::dht {
 
 /**
- * @brief Sends DHT messages
+ * @brief Sends DHT messages (Singleton)
  */
 class MessageSender {
 public:
     /**
-     * @brief Constructs a message sender
-     * @param config The DHT configuration
-     * @param socketManager The socket manager
+     * @brief Gets the singleton instance of the message sender
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param socketManager The socket manager (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    MessageSender(const DHTConfig& config, std::shared_ptr<SocketManager> socketManager);
+    static std::shared_ptr<MessageSender> getInstance(
+        const DHTConfig& config,
+        std::shared_ptr<SocketManager> socketManager);
 
     /**
      * @brief Destructor
      */
     ~MessageSender();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    MessageSender(const MessageSender&) = delete;
+    MessageSender& operator=(const MessageSender&) = delete;
+    MessageSender(MessageSender&&) = delete;
+    MessageSender& operator=(MessageSender&&) = delete;
 
     /**
      * @brief Starts the message sender
@@ -79,6 +90,15 @@ private:
      * @return True if the message was sent successfully, false otherwise
      */
     bool sendMessage(std::shared_ptr<Message> message, const network::EndPoint& endpoint);
+
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    MessageSender(const DHTConfig& config, std::shared_ptr<SocketManager> socketManager);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<MessageSender> s_instance;
+    static std::mutex s_instanceMutex;
 
     DHTConfig m_config;
     std::shared_ptr<SocketManager> m_socketManager;

@@ -7,13 +7,9 @@
 #include <memory>
 #include <optional>
 #include "dht_hunter/network/network_address.hpp"
+#include "dht_hunter/dht/core/node_id.hpp"
 
 namespace dht_hunter::dht {
-
-/**
- * @brief Type alias for a node ID (20 bytes)
- */
-using NodeID = std::array<uint8_t, 20>;
 
 /**
  * @brief Type alias for an info hash (20 bytes)
@@ -139,3 +135,5 @@ namespace std {
         }
     };
 }
+
+

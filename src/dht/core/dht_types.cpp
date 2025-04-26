@@ -1,29 +1,17 @@
 #include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/core/node_id.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
-#include "dht_hunter/event/logger.hpp"
 
+#include <algorithm>
+#include <array>
+#include <iomanip>
 #include <random>
 #include <sstream>
-#include <iomanip>
-#include <algorithm>
 
 namespace dht_hunter::dht {
 
-NodeID calculateDistance(const NodeID& a, const NodeID& b) {
-    NodeID distance;
-    for (size_t i = 0; i < a.size(); ++i) {
-        distance[i] = a[i] ^ b[i];
-    }
-    return distance;
-}
-
 std::string nodeIDToString(const NodeID& nodeID) {
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0');
-    for (const auto& byte : nodeID) {
-        ss << std::setw(2) << static_cast<int>(byte);
-    }
-    return ss.str();
+    return nodeID.toString();
 }
 
 std::string infoHashToString(const InfoHash& infoHash) {
@@ -36,26 +24,20 @@ std::string infoHashToString(const InfoHash& infoHash) {
 }
 
 NodeID generateRandomNodeID() {
-    NodeID nodeID;
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 255);
-    
-    for (size_t i = 0; i < nodeID.size(); ++i) {
-        nodeID[i] = static_cast<uint8_t>(dis(gen));
-    }
-    
-    return nodeID;
+    return NodeID::random();
 }
 
 bool isValidNodeID(const NodeID& nodeID) {
-    // Check if the node ID is all zeros
-    return !std::all_of(nodeID.begin(), nodeID.end(), [](uint8_t byte) { return byte == 0; });
+    return nodeID.isValid();
 }
 
 bool isValidInfoHash(const InfoHash& infoHash) {
     // Check if the info hash is all zeros
-    return !std::all_of(infoHash.begin(), infoHash.end(), [](uint8_t byte) { return byte == 0; });
+    return !std::ranges::all_of(infoHash, [](const uint8_t byte) { return byte == 0; });
+}
+
+NodeID calculateDistance(const NodeID& a, const NodeID& b) {
+    return a.distanceTo(b);
 }
 
 Node::Node(const NodeID& id, const network::EndPoint& endpoint)

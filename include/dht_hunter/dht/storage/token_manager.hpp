@@ -12,20 +12,29 @@
 namespace dht_hunter::dht {
 
 /**
- * @brief Manages tokens for DHT security
+ * @brief Manages tokens for DHT security (Singleton)
  */
 class TokenManager {
 public:
     /**
-     * @brief Constructs a token manager
-     * @param config The DHT configuration
+     * @brief Gets the singleton instance of the token manager
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    explicit TokenManager(const DHTConfig& config);
+    static std::shared_ptr<TokenManager> getInstance(const DHTConfig& config);
 
     /**
      * @brief Destructor
      */
     ~TokenManager();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    TokenManager(const TokenManager&) = delete;
+    TokenManager& operator=(const TokenManager&) = delete;
+    TokenManager(TokenManager&&) = delete;
+    TokenManager& operator=(TokenManager&&) = delete;
 
     /**
      * @brief Starts the token manager
@@ -83,6 +92,15 @@ private:
      * @return The token
      */
     std::string computeToken(const network::EndPoint& endpoint, const std::string& secret);
+
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    explicit TokenManager(const DHTConfig& config);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<TokenManager> s_instance;
+    static std::mutex s_instanceMutex;
 
     DHTConfig m_config;
     std::string m_currentSecret;

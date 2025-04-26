@@ -6,6 +6,29 @@
 
 namespace dht_hunter::dht {
 
+// Initialize static members
+std::shared_ptr<MessageHandler> MessageHandler::s_instance = nullptr;
+std::mutex MessageHandler::s_instanceMutex;
+
+std::shared_ptr<MessageHandler> MessageHandler::getInstance(
+    const DHTConfig& config,
+    const NodeID& nodeID,
+    std::shared_ptr<MessageSender> messageSender,
+    std::shared_ptr<RoutingTable> routingTable,
+    std::shared_ptr<TokenManager> tokenManager,
+    std::shared_ptr<PeerStorage> peerStorage,
+    std::shared_ptr<TransactionManager> transactionManager) {
+
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<MessageHandler>(new MessageHandler(
+            config, nodeID, messageSender, routingTable, tokenManager, peerStorage, transactionManager));
+    }
+
+    return s_instance;
+}
+
 MessageHandler::MessageHandler(const DHTConfig& config,
                              const NodeID& nodeID,
                              std::shared_ptr<MessageSender> messageSender,
@@ -21,7 +44,14 @@ MessageHandler::MessageHandler(const DHTConfig& config,
       m_peerStorage(peerStorage),
       m_transactionManager(transactionManager),
       m_logger(event::Logger::forComponent("DHT.MessageHandler")) {
-    m_logger.info("Creating message handler");
+}
+
+MessageHandler::~MessageHandler() {
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 void MessageHandler::handleRawMessage(const uint8_t* data, size_t size, const network::EndPoint& sender) {
@@ -29,15 +59,15 @@ void MessageHandler::handleRawMessage(const uint8_t* data, size_t size, const ne
         m_logger.error("Invalid message data");
         return;
     }
-    
+
     // Decode the message
     std::shared_ptr<Message> message = Message::decode(data, size);
-    
+
     if (!message) {
         m_logger.error("Failed to decode message from {}", sender.toString());
         return;
     }
-    
+
     // Handle the message
     handleMessage(message, sender);
 }
@@ -47,12 +77,12 @@ void MessageHandler::handleMessage(std::shared_ptr<Message> message, const netwo
         m_logger.error("Invalid message");
         return;
     }
-    
+
     // Update the routing table with the sender's node ID
     if (message->getNodeID()) {
         updateRoutingTable(message->getNodeID().value(), sender);
     }
-    
+
     // Handle the message based on its type
     switch (message->getType()) {
         case MessageType::Query:
@@ -75,7 +105,7 @@ void MessageHandler::handleQuery(std::shared_ptr<QueryMessage> query, const netw
         m_logger.error("Invalid query");
         return;
     }
-    
+
     // Log the query
     std::string methodStr;
     switch (query->getMethod()) {
@@ -86,7 +116,7 @@ void MessageHandler::handleQuery(std::shared_ptr<QueryMessage> query, const netw
         default: methodStr = "unknown";
     }
     m_logger.debug("Received {} query from {}", methodStr, sender.toString());
-    
+
     // Handle the query based on its method
     switch (query->getMethod()) {
         case QueryMethod::Ping:
@@ -112,9 +142,9 @@ void MessageHandler::handleResponse(std::shared_ptr<ResponseMessage> response, c
         m_logger.error("Invalid response");
         return;
     }
-    
+
     m_logger.debug("Received response from {}", sender.toString());
-    
+
     // Forward the response to the transaction manager
     if (m_transactionManager) {
         m_transactionManager->handleResponse(response, sender);
@@ -128,9 +158,9 @@ void MessageHandler::handleError(std::shared_ptr<ErrorMessage> error, const netw
         m_logger.error("Invalid error");
         return;
     }
-    
+
     m_logger.debug("Received error from {}: {} ({})", sender.toString(), error->getMessage(), static_cast<int>(error->getCode()));
-    
+
     // Forward the error to the transaction manager
     if (m_transactionManager) {
         m_transactionManager->handleError(error, sender);
@@ -144,10 +174,10 @@ void MessageHandler::handlePingQuery(std::shared_ptr<PingQuery> query, const net
         m_logger.error("Invalid ping query");
         return;
     }
-    
+
     // Create a ping response
     auto response = std::make_shared<PingResponse>(query->getTransactionID(), m_nodeID);
-    
+
     // Send the response
     if (m_messageSender) {
         m_messageSender->sendResponse(response, sender);
@@ -161,7 +191,7 @@ void MessageHandler::handleFindNodeQuery(std::shared_ptr<FindNodeQuery> query, c
         m_logger.error("Invalid find_node query");
         return;
     }
-    
+
     // Get the closest nodes to the target ID
     std::vector<std::shared_ptr<Node>> closestNodes;
     if (m_routingTable) {
@@ -169,10 +199,10 @@ void MessageHandler::handleFindNodeQuery(std::shared_ptr<FindNodeQuery> query, c
     } else {
         m_logger.error("No routing table available");
     }
-    
+
     // Create a find_node response
     auto response = std::make_shared<FindNodeResponse>(query->getTransactionID(), m_nodeID, closestNodes);
-    
+
     // Send the response
     if (m_messageSender) {
         m_messageSender->sendResponse(response, sender);
@@ -186,7 +216,7 @@ void MessageHandler::handleGetPeersQuery(std::shared_ptr<GetPeersQuery> query, c
         m_logger.error("Invalid get_peers query");
         return;
     }
-    
+
     // Generate a token for the sender
     std::string token;
     if (m_tokenManager) {
@@ -195,7 +225,7 @@ void MessageHandler::handleGetPeersQuery(std::shared_ptr<GetPeersQuery> query, c
         m_logger.error("No token manager available");
         token = "dummy_token";
     }
-    
+
     // Check if we have peers for the info hash
     std::vector<network::EndPoint> peers;
     if (m_peerStorage) {
@@ -203,7 +233,7 @@ void MessageHandler::handleGetPeersQuery(std::shared_ptr<GetPeersQuery> query, c
     } else {
         m_logger.error("No peer storage available");
     }
-    
+
     // Create a get_peers response
     std::shared_ptr<GetPeersResponse> response;
     if (!peers.empty()) {
@@ -213,14 +243,14 @@ void MessageHandler::handleGetPeersQuery(std::shared_ptr<GetPeersQuery> query, c
         // We don't have peers, return the closest nodes
         std::vector<std::shared_ptr<Node>> closestNodes;
         if (m_routingTable) {
-            closestNodes = m_routingTable->getClosestNodes(query->getInfoHash(), m_config.getKBucketSize());
+            closestNodes = m_routingTable->getClosestNodes(NodeID(query->getInfoHash()), m_config.getKBucketSize());
         } else {
             m_logger.error("No routing table available");
         }
-        
+
         response = std::make_shared<GetPeersResponse>(query->getTransactionID(), m_nodeID, closestNodes, token);
     }
-    
+
     // Send the response
     if (m_messageSender) {
         m_messageSender->sendResponse(response, sender);
@@ -234,7 +264,7 @@ void MessageHandler::handleAnnouncePeerQuery(std::shared_ptr<AnnouncePeerQuery> 
         m_logger.error("Invalid announce_peer query");
         return;
     }
-    
+
     // Verify the token
     bool validToken = false;
     if (m_tokenManager) {
@@ -243,37 +273,37 @@ void MessageHandler::handleAnnouncePeerQuery(std::shared_ptr<AnnouncePeerQuery> 
         m_logger.error("No token manager available");
         validToken = true;
     }
-    
+
     if (!validToken) {
         m_logger.error("Invalid token from {}", sender.toString());
-        
+
         // Send an error response
         auto error = std::make_shared<ErrorMessage>(query->getTransactionID(), ErrorCode::ProtocolError, "Invalid token");
-        
+
         if (m_messageSender) {
             m_messageSender->sendError(error, sender);
         } else {
             m_logger.error("No message sender available");
         }
-        
+
         return;
     }
-    
+
     // Store the peer
     uint16_t port = query->isImpliedPort() ? sender.getPort() : query->getPort();
-    
+
     if (m_peerStorage) {
         network::NetworkAddress address = sender.getAddress();
         network::EndPoint endpoint(address, port);
-        
+
         m_peerStorage->addPeer(query->getInfoHash(), endpoint);
     } else {
         m_logger.error("No peer storage available");
     }
-    
+
     // Create an announce_peer response
     auto response = std::make_shared<AnnouncePeerResponse>(query->getTransactionID(), m_nodeID);
-    
+
     // Send the response
     if (m_messageSender) {
         m_messageSender->sendResponse(response, sender);
@@ -287,10 +317,10 @@ void MessageHandler::updateRoutingTable(const NodeID& nodeID, const network::End
         m_logger.error("No routing table available");
         return;
     }
-    
+
     // Create a node
     auto node = std::make_shared<Node>(nodeID, endpoint);
-    
+
     // Add the node to the routing table
     if (m_routingTable->addNode(node)) {
         m_logger.debug("Added node {} to routing table", nodeIDToString(nodeID));
