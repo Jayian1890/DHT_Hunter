@@ -1,115 +1,36 @@
 #include "dht_hunter/dht/core/dht_node.hpp"
-#include "dht_hunter/dht/storage/dht_token_manager.hpp"
-#include "dht_hunter/dht/storage/dht_peer_storage.hpp"
-#include "dht_hunter/dht/network/dht_socket_manager.hpp"
-#include "dht_hunter/dht/network/dht_message_sender.hpp"
-#include "dht_hunter/dht/network/dht_message_handler.hpp"
-#include "dht_hunter/dht/network/dht_query_message.hpp"
-#include "dht_hunter/dht/network/dht_response_message.hpp"
-#include "dht_hunter/dht/network/dht_error_message.hpp"
-#include "dht_hunter/dht/routing/dht_routing_manager.hpp"
-#include "dht_hunter/dht/routing/dht_node_lookup.hpp"
-#include "dht_hunter/dht/routing/dht_peer_lookup.hpp"
-#include "dht_hunter/dht/transactions/dht_transaction_manager.hpp"
-#include "dht_hunter/dht/persistence/dht_persistence_manager.hpp"
-#include "dht_hunter/dht/bootstrap/dht_bootstrapper.hpp"
-#include "dht_hunter/dht/routing_table.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
-#include "dht_hunter/logforge/logger_macros.hpp"
-#include <filesystem>
-
-DEFINE_COMPONENT_LOGGER("DHT", "Node")
+#include "dht_hunter/dht/network/socket_manager.hpp"
+#include "dht_hunter/dht/network/message_sender.hpp"
+#include "dht_hunter/dht/network/message_handler.hpp"
+#include "dht_hunter/dht/routing/routing_manager.hpp"
+#include "dht_hunter/dht/routing/node_lookup.hpp"
+#include "dht_hunter/dht/routing/peer_lookup.hpp"
+#include "dht_hunter/dht/storage/token_manager.hpp"
+#include "dht_hunter/dht/storage/peer_storage.hpp"
+#include "dht_hunter/dht/transactions/transaction_manager.hpp"
+#include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
 
 namespace dht_hunter::dht {
 
-DHTNode::DHTNode(const DHTNodeConfig& config, const NodeID& nodeID)
-    : m_nodeID(nodeID),
-      m_port(config.getPort()),
+DHTNode::DHTNode(const DHTConfig& config)
+    : m_nodeID(generateRandomNodeID()),
       m_config(config),
       m_running(false),
-      m_routingTable(nodeID, config.getKBucketSize()),
-      m_routingTablePath(config.getRoutingTablePath()),
-      m_peerCachePath(config.getPeerCachePath()),
-      m_transactionsPath(config.getTransactionsPath().empty() ?
-                        config.getConfigDir() + "/transactions.dat" :
-                        config.getTransactionsPath()) {
+      m_logger(event::Logger::forComponent("DHT.Node")) {
+    m_logger.info("Creating DHT node with ID: {}", nodeIDToString(m_nodeID));
 
-    getLogger()->info("Creating DHT node with ID: {}, port: {}, config path: {}",
-                 nodeIDToString(m_nodeID), config.getPort(), m_routingTablePath);
-
-    // Initialize components
-    m_tokenManager = std::make_shared<DHTTokenManager>();
-    m_socketManager = std::make_shared<DHTSocketManager>(config);
-    m_messageSender = std::make_shared<DHTMessageSender>(config, m_socketManager);
-    m_routingManager = std::make_shared<DHTRoutingManager>(config, m_nodeID);
-    m_peerStorage = std::make_shared<DHTPeerStorage>(config);
-    m_transactionManager = std::make_shared<DHTTransactionManager>(config);
-    m_nodeLookup = std::make_shared<DHTNodeLookup>(config, m_nodeID, m_routingManager, m_transactionManager);
-    m_peerLookup = std::make_shared<DHTPeerLookup>(config, m_nodeID, m_routingManager, m_transactionManager, m_peerStorage, m_tokenManager);
-    m_persistenceManager = std::make_shared<DHTPersistenceManager>(config, m_routingManager, m_peerStorage, m_transactionManager);
-
-    // Create the message handler
-    m_messageHandler = std::make_shared<DHTMessageHandler>(
-        config,
-        m_nodeID,
-        m_messageSender,
-        m_routingManager,
-        m_transactionManager,
-        m_peerStorage,
-        m_tokenManager
-    );
-
-    // Ensure the config directory exists
-    try {
-        if (!std::filesystem::exists(config.getConfigDir())) {
-            getLogger()->info("Config directory does not exist, creating: {}", config.getConfigDir());
-            if (!std::filesystem::create_directories(config.getConfigDir())) {
-                getLogger()->error("Failed to create config directory: {}", config.getConfigDir());
-            }
-        }
-    } catch (const std::exception& e) {
-        getLogger()->error("Exception while ensuring config directory exists: {}", e.what());
-    }
-
-    // First try to load the node ID from the routing table file
-    std::string nodeIdFilePath = m_routingTablePath + ".nodeid";
-    bool nodeIdLoaded = false;
-
-    // Try to load from the nodeid file
-    std::ifstream nodeIdInFile(nodeIdFilePath, std::ios::binary);
-    if (nodeIdInFile.is_open()) {
-        NodeID storedNodeId;
-        if (nodeIdInFile.read(reinterpret_cast<char*>(storedNodeId.data()), static_cast<std::streamsize>(storedNodeId.size()))) {
-            // Update our node ID to match the stored one
-            m_nodeID = storedNodeId;
-            getLogger()->info("Loaded node ID from file: {}", nodeIDToString(m_nodeID));
-            nodeIdLoaded = true;
-        }
-        nodeIdInFile.close();
-    }
-
-    // If we couldn't load the node ID, save the new one
-    if (!nodeIdLoaded) {
-        // Save the node ID to a file
-        std::ofstream nodeIdOutFile(nodeIdFilePath, std::ios::binary);
-        if (nodeIdOutFile.is_open()) {
-            nodeIdOutFile.write(reinterpret_cast<const char*>(m_nodeID.data()), static_cast<std::streamsize>(m_nodeID.size()));
-            nodeIdOutFile.close();
-            getLogger()->info("Saved new node ID to file: {}", nodeIdFilePath);
-        } else {
-            getLogger()->error("Failed to save node ID to file: {}", nodeIdFilePath);
-        }
-    }
-}
-
-DHTNode::DHTNode(uint16_t port, const std::string& configDir, const NodeID& nodeID)
-    : DHTNode(DHTNodeConfig(), nodeID) {
-    // Legacy constructor delegates to the new constructor
-    // Set the port and config directory after construction
-    m_port = port;
-    m_config.setConfigDir(configDir);
-    m_routingTablePath = m_config.getRoutingTablePath();
-    m_peerCachePath = m_config.getPeerCachePath();
+    // Create the components
+    m_routingTable = std::make_shared<RoutingTable>(m_nodeID, config.getKBucketSize());
+    m_socketManager = std::make_shared<SocketManager>(config);
+    m_messageSender = std::make_shared<MessageSender>(config, m_socketManager);
+    m_tokenManager = std::make_shared<TokenManager>(config);
+    m_peerStorage = std::make_shared<PeerStorage>(config);
+    m_transactionManager = std::make_shared<TransactionManager>(config);
+    m_routingManager = std::make_shared<RoutingManager>(config, m_nodeID);
+    m_nodeLookup = std::make_shared<NodeLookup>(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
+    m_peerLookup = std::make_shared<PeerLookup>(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender, m_tokenManager, m_peerStorage);
+    m_bootstrapper = std::make_shared<Bootstrapper>(config, m_nodeID, m_routingManager, m_nodeLookup);
+    m_messageHandler = std::make_shared<MessageHandler>(config, m_nodeID, m_messageSender, m_routingTable, m_tokenManager, m_peerStorage, m_transactionManager);
 }
 
 DHTNode::~DHTNode() {
@@ -117,115 +38,100 @@ DHTNode::~DHTNode() {
 }
 
 bool DHTNode::start() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     if (m_running) {
-        getLogger()->warning("DHT node already running");
-        return false;
+        m_logger.warning("DHT node already running");
+        return true;
     }
 
-    // Start the socket manager
+    m_logger.info("Starting DHT node");
+
+    // Start the components
     if (!m_socketManager->start([this](const uint8_t* data, size_t size, const network::EndPoint& sender) {
-        // Handle received messages using the message handler
         if (m_messageHandler) {
             m_messageHandler->handleRawMessage(data, size, sender);
         }
     })) {
-        getLogger()->error("Failed to start socket manager");
+        m_logger.error("Failed to start socket manager");
         return false;
     }
 
-    // Start the message sender
     if (!m_messageSender->start()) {
-        getLogger()->error("Failed to start message sender");
+        m_logger.error("Failed to start message sender");
         m_socketManager->stop();
         return false;
     }
 
-    // Start the routing manager
-    if (!m_routingManager->start()) {
-        getLogger()->error("Failed to start routing manager");
+    if (!m_tokenManager->start()) {
+        m_logger.error("Failed to start token manager");
         m_messageSender->stop();
         m_socketManager->stop();
         return false;
     }
 
-    // Start the peer storage
     if (!m_peerStorage->start()) {
-        getLogger()->error("Failed to start peer storage");
-        m_routingManager->stop();
+        m_logger.error("Failed to start peer storage");
+        m_tokenManager->stop();
         m_messageSender->stop();
         m_socketManager->stop();
         return false;
     }
 
-    // Start the transaction manager
     if (!m_transactionManager->start()) {
-        getLogger()->error("Failed to start transaction manager");
+        m_logger.error("Failed to start transaction manager");
         m_peerStorage->stop();
-        m_routingManager->stop();
+        m_tokenManager->stop();
         m_messageSender->stop();
         m_socketManager->stop();
         return false;
     }
 
-    // Start the persistence manager
-    if (!m_persistenceManager->start()) {
-        getLogger()->error("Failed to start persistence manager");
+    if (!m_routingManager->start()) {
+        m_logger.error("Failed to start routing manager");
         m_transactionManager->stop();
         m_peerStorage->stop();
-        m_routingManager->stop();
+        m_tokenManager->stop();
         m_messageSender->stop();
         m_socketManager->stop();
         return false;
     }
 
-    // Note: The node lookup and peer lookup managers don't need to be started explicitly
-
-    // TODO: Start other component managers
-
     m_running = true;
-    getLogger()->info("DHT node started on port {}", m_port);
 
+    // Bootstrap the node
+    m_bootstrapper->bootstrap([this](bool success) {
+        if (success) {
+            m_logger.info("DHT node bootstrapped successfully");
+        } else {
+            m_logger.warning("DHT node bootstrap failed");
+        }
+    });
+
+    m_logger.info("DHT node started");
     return true;
 }
 
 void DHTNode::stop() {
-    // Use atomic operation to prevent multiple stops
-    bool expected = true;
-    if (!m_running.compare_exchange_strong(expected, false)) {
-        // Already stopped or stopping
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!m_running) {
         return;
     }
 
-    getLogger()->info("Stopping DHT node");
+    m_logger.info("Stopping DHT node");
 
-    // Stop components in reverse order of initialization
-    if (m_messageSender) {
-        m_messageSender->stop();
-    }
+    // Stop the components in reverse order
+    m_routingManager->stop();
+    m_transactionManager->stop();
+    m_peerStorage->stop();
+    m_tokenManager->stop();
+    m_messageSender->stop();
+    m_socketManager->stop();
 
-    if (m_socketManager) {
-        m_socketManager->stop();
-    }
+    m_running = false;
 
-    if (m_routingManager) {
-        m_routingManager->stop();
-    }
-
-    if (m_peerStorage) {
-        m_peerStorage->stop();
-    }
-
-    if (m_transactionManager) {
-        m_transactionManager->stop();
-    }
-
-    if (m_persistenceManager) {
-        m_persistenceManager->stop();
-    }
-
-    // TODO: Stop other component managers
-
-    getLogger()->info("DHT node stopped");
+    m_logger.info("DHT node stopped");
 }
 
 bool DHTNode::isRunning() const {
@@ -237,489 +143,121 @@ const NodeID& DHTNode::getNodeID() const {
 }
 
 uint16_t DHTNode::getPort() const {
-    return m_port;
+    return m_config.getPort();
 }
 
-const RoutingTable& DHTNode::getRoutingTable() const {
-    // For now, we still need to return the legacy routing table
-    // In the future, this will return m_routingManager->getRoutingTable()
+std::shared_ptr<RoutingTable> DHTNode::getRoutingTable() const {
     return m_routingTable;
 }
 
-void DHTNode::setInfoHashCollector(std::shared_ptr<crawler::InfoHashCollector> collector) {
-    m_infoHashCollector = collector;
-
-    // Pass the collector to the message handler
-    if (m_messageHandler) {
-        m_messageHandler->setInfoHashCollector(collector);
-    }
-
-    getLogger()->info("InfoHash collector set");
-}
-
-std::shared_ptr<crawler::InfoHashCollector> DHTNode::getInfoHashCollector() const {
-    return m_infoHashCollector;
-}
-
-std::shared_ptr<DHTMessageSender> DHTNode::getMessageSender() const {
-    return m_messageSender;
-}
-
-std::shared_ptr<DHTMessageHandler> DHTNode::getMessageHandler() const {
-    return m_messageHandler;
-}
-
-std::shared_ptr<DHTTransactionManager> DHTNode::getTransactionManager() const {
-    return m_transactionManager;
-}
-
-bool DHTNode::bootstrap(const network::EndPoint& endpoint) {
+void DHTNode::findClosestNodes(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback) {
     if (!m_running) {
-        getLogger()->error("Cannot bootstrap: DHT node not running");
-        return false;
-    }
-
-    getLogger()->info("Bootstrapping DHT node using {}", endpoint.toString());
-
-    // Send a find_node query to the bootstrap node
-    // We use our own node ID as the target to find nodes close to us
-    auto query = std::make_shared<FindNodeQuery>("", m_nodeID, m_nodeID);
-
-    // Set up a promise and condition variable to wait for the response
-    std::promise<bool> responsePromise;
-    std::mutex responseMutex;
-    std::condition_variable responseCV;
-    bool responseReceived = false;
-    bool success = false;
-
-    // Register the transaction with callbacks
-    std::string transactionID = m_transactionManager->createTransaction(
-        query, endpoint,
-        [&](const std::shared_ptr<ResponseMessage>& response) {
-            // Process the response
-            auto findNodeResponse = std::dynamic_pointer_cast<FindNodeResponse>(response);
-            if (findNodeResponse) {
-                // Process the nodes
-                const auto& nodes = findNodeResponse->getNodes();
-                getLogger()->debug("Received {} nodes from bootstrap node {}", nodes.size(), endpoint.toString());
-
-                // Add the nodes to our routing table
-                for (const auto& node : nodes) {
-                    m_routingManager->addNode(node->getID(), node->getEndpoint());
-                }
-
-                // Mark as successful if we got at least one node
-                success = !nodes.empty();
-            }
-
-            // Signal that we've received a response
-            std::lock_guard<std::mutex> lock(responseMutex);
-            responseReceived = true;
-            responseCV.notify_one();
-        },
-        [&](const std::shared_ptr<ErrorMessage>& error) {
-            getLogger()->warning("Received error from bootstrap node: {} ({})",
-                error->getMessage(), error->getCode());
-
-            // Signal that we've received a response
-            std::lock_guard<std::mutex> lock(responseMutex);
-            responseReceived = true;
-            responseCV.notify_one();
-        },
-        [&]() {
-            getLogger()->warning("Bootstrap request to {} timed out", endpoint.toString());
-
-            // Signal that we've received a response
-            std::lock_guard<std::mutex> lock(responseMutex);
-            responseReceived = true;
-            responseCV.notify_one();
+        m_logger.error("DHT node not running");
+        if (callback) {
+            callback({});
         }
-    );
-
-    if (transactionID.empty()) {
-        getLogger()->error("Failed to create transaction for bootstrap query to {}", endpoint.toString());
-        return false;
-    }
-
-    // Send the query
-    if (!m_messageSender->sendQuery(query, endpoint)) {
-        getLogger()->error("Failed to send bootstrap query to {}", endpoint.toString());
-        return false;
-    }
-
-    // Wait for a response with a timeout
-    {
-        std::unique_lock<std::mutex> lock(responseMutex);
-        if (!responseCV.wait_for(lock, std::chrono::seconds(5), [&]() { return responseReceived; })) {
-            getLogger()->warning("Timed out waiting for bootstrap response from {}", endpoint.toString());
-            return false;
-        }
-    }
-
-    return success;
-}
-
-bool DHTNode::bootstrap(const std::vector<network::EndPoint>& endpoints) {
-    if (endpoints.empty()) {
-        getLogger()->error("Cannot bootstrap: No endpoints provided");
-        return false;
-    }
-
-    bool success = false;
-    for (const auto& endpoint : endpoints) {
-        if (bootstrap(endpoint)) {
-            success = true;
-        }
-    }
-
-    return success;
-}
-
-bool DHTNode::bootstrapWithDefaultNodes(const DHTBootstrapperConfig& bootstrapperConfig) {
-    if (!m_running) {
-        getLogger()->error("Cannot bootstrap: DHT node not running");
-        return false;
-    }
-
-    getLogger()->info("Bootstrapping DHT node with default nodes");
-
-    // Create a bootstrapper with the provided config
-    DHTBootstrapper bootstrapper(bootstrapperConfig);
-
-    // Bootstrap the node
-    auto result = bootstrapper.bootstrap(shared_from_this());
-
-    // Log the result
-    if (result.success) {
-        getLogger()->info("Bootstrap successful: {}/{} attempts in {} ms",
-            result.successfulAttempts, result.totalAttempts, result.duration.count());
-    } else {
-        getLogger()->warning("Bootstrap failed: {}/{} attempts in {} ms",
-            result.successfulAttempts, result.totalAttempts, result.duration.count());
-    }
-
-    return result.success;
-}
-
-bool DHTNode::ping(const network::EndPoint& endpoint,
-                  ResponseCallback responseCallback,
-                  ErrorCallback errorCallback,
-                  TimeoutCallback timeoutCallback) {
-    if (!m_running) {
-        getLogger()->error("Cannot ping: DHT node not running");
-        return false;
-    }
-
-    if (!m_messageSender || !m_transactionManager) {
-        getLogger()->error("Cannot ping: Required components not available");
-        return false;
-    }
-
-    // Create a ping query
-    auto query = std::make_shared<PingQuery>();
-    query->setNodeID(m_nodeID);
-
-    // Create a transaction
-    std::string transactionID = m_transactionManager->createTransaction(
-        query,
-        endpoint,
-        responseCallback,
-        errorCallback,
-        timeoutCallback
-    );
-
-    if (transactionID.empty()) {
-        getLogger()->error("Failed to create transaction for ping to {}", endpoint.toString());
-        return false;
-    }
-
-    // Send the query
-    return m_messageSender->sendQuery(query, endpoint);
-}
-
-bool DHTNode::findNode(const NodeID& targetID,
-                      const network::EndPoint& endpoint,
-                      ResponseCallback responseCallback,
-                      ErrorCallback errorCallback,
-                      TimeoutCallback timeoutCallback) {
-    if (!m_running) {
-        getLogger()->error("Cannot find_node: DHT node not running");
-        return false;
-    }
-
-    if (!m_messageSender || !m_transactionManager) {
-        getLogger()->error("Cannot find_node: Required components not available");
-        return false;
-    }
-
-    // Create a find_node query
-    auto query = std::make_shared<FindNodeQuery>(targetID);
-    query->setNodeID(m_nodeID);
-
-    // Create a transaction
-    std::string transactionID = m_transactionManager->createTransaction(
-        query,
-        endpoint,
-        responseCallback,
-        errorCallback,
-        timeoutCallback
-    );
-
-    if (transactionID.empty()) {
-        getLogger()->error("Failed to create transaction for find_node to {}", endpoint.toString());
-        return false;
-    }
-
-    // Send the query
-    return m_messageSender->sendQuery(query, endpoint);
-}
-
-bool DHTNode::getPeers(const InfoHash& infoHash,
-                      const network::EndPoint& endpoint,
-                      ResponseCallback responseCallback,
-                      ErrorCallback errorCallback,
-                      TimeoutCallback timeoutCallback) {
-    if (!m_running) {
-        getLogger()->error("Cannot get_peers: DHT node not running");
-        return false;
-    }
-
-    if (!m_messageSender || !m_transactionManager) {
-        getLogger()->error("Cannot get_peers: Required components not available");
-        return false;
-    }
-
-    // Create a get_peers query
-    auto query = std::make_shared<GetPeersQuery>(infoHash);
-    query->setNodeID(m_nodeID);
-
-    // Create a transaction
-    std::string transactionID = m_transactionManager->createTransaction(
-        query,
-        endpoint,
-        responseCallback,
-        errorCallback,
-        timeoutCallback
-    );
-
-    if (transactionID.empty()) {
-        getLogger()->error("Failed to create transaction for get_peers to {}", endpoint.toString());
-        return false;
-    }
-
-    // Send the query
-    return m_messageSender->sendQuery(query, endpoint);
-}
-
-bool DHTNode::announcePeer(const InfoHash& infoHash,
-                          uint16_t port,
-                          const std::string& token,
-                          const network::EndPoint& endpoint,
-                          ResponseCallback responseCallback,
-                          ErrorCallback errorCallback,
-                          TimeoutCallback timeoutCallback) {
-    if (!m_running) {
-        getLogger()->error("Cannot announce_peer: DHT node not running");
-        return false;
-    }
-
-    if (!m_messageSender || !m_transactionManager) {
-        getLogger()->error("Cannot announce_peer: Required components not available");
-        return false;
-    }
-
-    // Create an announce_peer query
-    auto query = std::make_shared<AnnouncePeerQuery>(infoHash, port);
-    query->setNodeID(m_nodeID);
-    query->setToken(token);
-
-    // Create a transaction
-    std::string transactionID = m_transactionManager->createTransaction(
-        query,
-        endpoint,
-        responseCallback,
-        errorCallback,
-        timeoutCallback
-    );
-
-    if (transactionID.empty()) {
-        getLogger()->error("Failed to create transaction for announce_peer to {}", endpoint.toString());
-        return false;
-    }
-
-    // Send the query
-    return m_messageSender->sendQuery(query, endpoint);
-}
-
-bool DHTNode::findClosestNodes(const NodeID& targetID, NodeLookupCallback callback) {
-    if (!m_running) {
-        getLogger()->error("Cannot find closest nodes: DHT node not running");
-        return false;
+        return;
     }
 
     if (!m_nodeLookup) {
-        getLogger()->error("Cannot find closest nodes: Node lookup manager not available");
-        return false;
+        m_logger.error("No node lookup available");
+        if (callback) {
+            callback({});
+        }
+        return;
     }
 
-    // Start a node lookup
-    std::string lookupID = m_nodeLookup->startLookup(targetID, callback);
-
-    if (lookupID.empty()) {
-        getLogger()->error("Failed to start node lookup for target {}", nodeIDToString(targetID));
-        return false;
-    }
-
-    getLogger()->debug("Started node lookup {} for target {}", lookupID, nodeIDToString(targetID));
-    return true;
+    m_nodeLookup->lookup(targetID, callback);
 }
 
-bool DHTNode::findPeers(const InfoHash& infoHash, GetPeersLookupCallback callback) {
+void DHTNode::getPeers(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback) {
     if (!m_running) {
-        getLogger()->error("Cannot find peers: DHT node not running");
-        return false;
+        m_logger.error("DHT node not running");
+        if (callback) {
+            callback({});
+        }
+        return;
     }
 
     if (!m_peerLookup) {
-        getLogger()->error("Cannot find peers: Peer lookup manager not available");
-        return false;
+        m_logger.error("No peer lookup available");
+        if (callback) {
+            callback({});
+        }
+        return;
     }
 
-    // Start a peer lookup
-    std::string lookupID = m_peerLookup->startLookup(infoHash, callback);
-
-    if (lookupID.empty()) {
-        getLogger()->error("Failed to start peer lookup for info hash {}", infoHashToString(infoHash));
-        return false;
-    }
-
-    getLogger()->debug("Started peer lookup {} for info hash {}", lookupID, infoHashToString(infoHash));
-    return true;
+    m_peerLookup->lookup(infoHash, callback);
 }
 
-bool DHTNode::announceAsPeer(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback) {
+void DHTNode::announcePeer(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback) {
     if (!m_running) {
-        getLogger()->error("Cannot announce as peer: DHT node not running");
-        return false;
+        m_logger.error("DHT node not running");
+        if (callback) {
+            callback(false);
+        }
+        return;
     }
 
     if (!m_peerLookup) {
-        getLogger()->error("Cannot announce as peer: Peer lookup manager not available");
-        return false;
+        m_logger.error("No peer lookup available");
+        if (callback) {
+            callback(false);
+        }
+        return;
     }
 
-    // Announce as a peer
-    return m_peerLookup->announceAsPeer(infoHash, port, callback);
+    m_peerLookup->announce(infoHash, port, callback);
 }
 
-bool DHTNode::storePeer(const InfoHash& infoHash, const network::EndPoint& endpoint) {
-    if (!m_peerStorage) {
-        getLogger()->error("Cannot store peer: No peer storage available");
-        return false;
-    }
-
-    return m_peerStorage->storePeer(infoHash, endpoint);
-}
-
-std::vector<network::EndPoint> DHTNode::getStoredPeers(const InfoHash& infoHash) const {
-    if (!m_peerStorage) {
-        getLogger()->error("Cannot get stored peers: No peer storage available");
-        return {};
-    }
-
-    return m_peerStorage->getStoredPeers(infoHash);
-}
-
-size_t DHTNode::getStoredPeerCount(const InfoHash& infoHash) const {
-    if (!m_peerStorage) {
-        getLogger()->error("Cannot get stored peer count: No peer storage available");
-        return 0;
-    }
-
-    return m_peerStorage->getStoredPeerCount(infoHash);
-}
-
-size_t DHTNode::getTotalStoredPeerCount() const {
-    if (!m_peerStorage) {
-        getLogger()->error("Cannot get total stored peer count: No peer storage available");
-        return 0;
-    }
-
-    return m_peerStorage->getTotalStoredPeerCount();
-}
-
-size_t DHTNode::getInfoHashCount() const {
-    if (!m_peerStorage) {
-        getLogger()->error("Cannot get info hash count: No peer storage available");
-        return 0;
-    }
-
-    return m_peerStorage->getInfoHashCount();
-}
-
-bool DHTNode::saveRoutingTable(const std::string& filePath) const {
-    if (!m_persistenceManager) {
-        getLogger()->error("Cannot save routing table: Persistence manager not available");
-        return false;
-    }
-
-    return m_persistenceManager->saveRoutingTable(filePath);
-}
-
-bool DHTNode::loadRoutingTable(const std::string& filePath) {
-    if (!m_persistenceManager) {
-        getLogger()->error("Cannot load routing table: Persistence manager not available");
-        return false;
-    }
-
-    return m_persistenceManager->loadRoutingTable(filePath);
-}
-
-bool DHTNode::loadNodeID(const std::string& filePath) {
-    if (!m_persistenceManager) {
-        getLogger()->error("Cannot load node ID: Persistence manager not available");
-        return false;
-    }
-
-    return m_persistenceManager->loadNodeID(filePath, m_nodeID);
-}
-
-bool DHTNode::savePeerCache(const std::string& filePath) const {
-    if (!m_peerStorage) {
-        getLogger()->error("Cannot save peer cache: No peer storage available");
-        return false;
-    }
-
-    return m_peerStorage->savePeerCache(filePath);
-}
-
-bool DHTNode::loadPeerCache(const std::string& filePath) {
-    if (!m_peerStorage) {
-        getLogger()->error("Cannot load peer cache: No peer storage available");
-        return false;
-    }
-
-    return m_peerStorage->loadPeerCache(filePath);
-}
-
-bool DHTNode::saveNodeID(const std::string& filePath) const {
-    if (!m_persistenceManager) {
-        getLogger()->error("Cannot save node ID: Persistence manager not available");
-        return false;
-    }
-
-    return m_persistenceManager->saveNodeID(filePath, m_nodeID);
-}
-
-bool DHTNode::performRandomNodeLookup() {
+void DHTNode::ping(const std::shared_ptr<Node>& node, std::function<void(bool)> callback) {
     if (!m_running) {
-        getLogger()->warning("Cannot perform random node lookup: DHT node not running");
-        return false;
+        m_logger.error("DHT node not running");
+        if (callback) {
+            callback(false);
+        }
+        return;
     }
 
-    // TODO: Implement performRandomNodeLookup using component managers
+    if (!m_messageSender || !m_transactionManager) {
+        m_logger.error("No message sender or transaction manager available");
+        if (callback) {
+            callback(false);
+        }
+        return;
+    }
 
-    return false; // Placeholder
+    // Create a ping query
+    auto query = std::make_shared<PingQuery>("", m_nodeID);
+
+    // Send the query
+    std::string transactionID = m_transactionManager->createTransaction(
+        query,
+        node->getEndpoint(),
+        [callback](std::shared_ptr<ResponseMessage> /*response*/, const network::EndPoint& /*sender*/) {
+            if (callback) {
+                callback(true);
+            }
+        },
+        [callback](std::shared_ptr<ErrorMessage> /*error*/, const network::EndPoint& /*sender*/) {
+            if (callback) {
+                callback(false);
+            }
+        },
+        [callback]() {
+            if (callback) {
+                callback(false);
+            }
+        });
+
+    if (!transactionID.empty()) {
+        m_messageSender->sendQuery(query, node->getEndpoint());
+    } else {
+        m_logger.error("Failed to create transaction");
+        if (callback) {
+            callback(false);
+        }
+    }
 }
 
 } // namespace dht_hunter::dht

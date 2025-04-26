@@ -18,18 +18,13 @@ public:
     explicit BencodeException(const std::string& message) : std::runtime_error(message) {}
 };
 
-// Forward declarations
+// Forward declaration
 class BencodeValue;
 
 /**
  * @brief Alias for a bencode list
  */
 using BencodeList = std::vector<std::shared_ptr<BencodeValue>>;
-
-/**
- * @brief Alias for a bencode dictionary
- */
-using BencodeDict = std::map<std::string, std::shared_ptr<BencodeValue>>;
 
 /**
  * @class BencodeValue
@@ -40,7 +35,7 @@ public:
     using String = std::string;
     using Integer = int64_t;
     using List = BencodeList;
-    using Dictionary = BencodeDict;
+    using Dictionary = std::map<std::string, std::shared_ptr<BencodeValue>>;
     using Value = std::variant<String, Integer, List, Dictionary>;
 
     /**
@@ -110,6 +105,14 @@ public:
     const String& getString() const;
 
     /**
+     * @brief Gets a string value for a key in a dictionary.
+     * @param key The key to look up.
+     * @return The string value, or std::nullopt if the key does not exist or the value is not a string.
+     * @throws BencodeException if the bencode value is not a dictionary.
+     */
+    std::optional<String> getString(const std::string& key) const;
+
+    /**
      * @brief Gets the integer value.
      * @return The integer value.
      * @throws BencodeException if the bencode value is not an integer.
@@ -124,11 +127,34 @@ public:
     const List& getList() const;
 
     /**
+     * @brief Gets a value from a list at the specified index.
+     * @param index The index.
+     * @return The value at the specified index.
+     * @throws BencodeException if the bencode value is not a list or the index is out of range.
+     */
+    std::shared_ptr<BencodeValue> at(size_t index) const;
+
+    /**
+     * @brief Gets the size of a list.
+     * @return The size of the list.
+     * @throws BencodeException if the bencode value is not a list.
+     */
+    size_t size() const;
+
+    /**
      * @brief Gets the dictionary value.
      * @return The dictionary value.
      * @throws BencodeException if the bencode value is not a dictionary.
      */
-    const Dictionary& getDictionary() const;
+    const Dictionary& getDict() const;
+
+    /**
+     * @brief Gets a dictionary value for a key.
+     * @param key The key to look up.
+     * @return The dictionary value for the key, or std::nullopt if the key does not exist or the value is not a dictionary.
+     * @throws BencodeException if the bencode value is not a dictionary.
+     */
+    std::optional<Dictionary> getDict(const std::string& key) const;
 
     /**
      * @brief Gets a value from a dictionary by key.
@@ -138,13 +164,7 @@ public:
      */
     std::shared_ptr<BencodeValue> get(const std::string& key) const;
 
-    /**
-     * @brief Gets a string value from a dictionary by key.
-     * @param key The key to look up.
-     * @return The string value associated with the key, or std::nullopt if the key is not found or the value is not a string.
-     * @throws BencodeException if the bencode value is not a dictionary.
-     */
-    std::optional<String> getString(const std::string& key) const;
+
 
     /**
      * @brief Gets an integer value from a dictionary by key.
@@ -169,6 +189,8 @@ public:
      * @throws BencodeException if the bencode value is not a dictionary.
      */
     std::optional<Dictionary> getDictionary(const std::string& key) const;
+
+
 
     /**
      * @brief Sets a value in a dictionary.
@@ -214,13 +236,13 @@ public:
      * @param value The dictionary value to set.
      * @throws BencodeException if the bencode value is not a dictionary.
      */
-    void setDictionary(const std::string& key, const Dictionary& value);
+    void setDict(const std::string& key, const Dictionary& value);
 
     /**
      * @brief Sets the value to a dictionary.
      * @param value The dictionary value to set.
      */
-    void setDictionary(const Dictionary& value);
+    void setDict(const Dictionary& value);
 
     /**
      * @brief Adds a value to a list.
@@ -235,6 +257,8 @@ public:
      * @throws BencodeException if the bencode value is not a list.
      */
     void addString(const String& value);
+
+
 
     /**
      * @brief Adds an integer value to a list.
@@ -287,13 +311,15 @@ public:
 
 
 
+
+
     /**
-     * @brief Sets the value to a dictionary
-     * @param dict The dictionary
+     * @brief Checks if a dictionary contains a key
+     * @param key The key to check
+     * @return True if the dictionary contains the key, false otherwise
+     * @throws BencodeException if the bencode value is not a dictionary
      */
-    void setDict(const Dictionary& dict) {
-        m_value = dict;
-    }
+    bool contains(const std::string& key) const;
 
     /**
      * @brief Assignment operator for string
@@ -330,7 +356,7 @@ public:
      * @param dict The dictionary to assign
      * @return Reference to this object
      */
-    BencodeValue& operator=(const BencodeDict& dict) {
+    BencodeValue& operator=(const Dictionary& dict) {
         setDict(dict);
         return *this;
     }
@@ -351,6 +377,13 @@ public:
      * @return The encoded string.
      */
     static std::string encode(const BencodeValue& value);
+
+    /**
+     * @brief Encodes a shared_ptr<BencodeValue> to a string.
+     * @param value The shared_ptr<BencodeValue> to encode.
+     * @return The encoded string.
+     */
+    static std::string encode(const std::shared_ptr<BencodeValue>& value);
 
     /**
      * @brief Encodes a string to a bencode string.
@@ -442,78 +475,8 @@ private:
     static BencodeValue::Dictionary decodeDictionary(const std::string& data, size_t& pos);
 };
 
-/**
- * @class BencodeParser
- * @brief Parser for bencode data
- */
-class BencodeParser {
-public:
-    /**
-     * @brief Parses a bencode string into a BencodeValue
-     * @param data The bencode string to parse
-     * @return The parsed BencodeValue
-     * @throws BencodeException if the string is not valid bencode
-     */
-    BencodeValue parse(const std::string& data) {
-        size_t pos = 0;
-        return *BencodeDecoder::decode(data, pos);
-    }
-};
 
-/**
- * @brief Encodes a BencodeValue to a string
- * @param value The BencodeValue to encode
- * @return The encoded string
- */
-inline std::string encode(const BencodeValue& value) {
-    std::string result;
-    if (value.isString()) {
-        const auto& str = value.getString();
-        result = std::to_string(str.size()) + ":" + str;
-    } else if (value.isInteger()) {
-        result = "i" + std::to_string(value.getInteger()) + "e";
-    } else if (value.isList()) {
-        result = "l";
-        for (const auto& item : value.getList()) {
-            result += encode(*item);
-        }
-        result += "e";
-    } else if (value.isDictionary()) {
-        result = "d";
-        for (const auto& [key, val] : value.getDictionary()) {
-            result += std::to_string(key.size()) + ":" + key + encode(*val);
-        }
-        result += "e";
-    }
-    return result;
-}
 
-/**
- * @brief Encodes a BencodeDict to a string
- * @param dict The BencodeDict to encode
- * @return The encoded string
- */
-inline std::string encode(const BencodeDict& dict) {
-    std::string result = "d";
-    for (const auto& [key, val] : dict) {
-        result += std::to_string(key.size()) + ":" + key + encode(*val);
-    }
-    result += "e";
-    return result;
-}
 
-/**
- * @brief Encodes a BencodeList to a string
- * @param list The BencodeList to encode
- * @return The encoded string
- */
-inline std::string encode(const BencodeList& list) {
-    std::string result = "l";
-    for (const auto& item : list) {
-        result += encode(*item);
-    }
-    result += "e";
-    return result;
-}
 
 } // namespace dht_hunter::bencode

@@ -1,10 +1,15 @@
 #include "dht_hunter/bencode/bencode.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
-#include "dht_hunter/logforge/logger_macros.hpp"
 #include <sstream>
 #include <algorithm>
 
-DEFINE_COMPONENT_LOGGER("Bencode", "Parser")
+namespace {
+    dht_hunter::logforge::LogForge& getLogger() {
+        return dht_hunter::logforge::LogForge::getInstance();
+    }
+}
+
+
 
 namespace dht_hunter::bencode {
 // BencodeValue implementation
@@ -46,11 +51,44 @@ const BencodeValue::List& BencodeValue::getList() const {
     }
     return std::get<List>(m_value);
 }
-const BencodeValue::Dictionary& BencodeValue::getDictionary() const {
+
+std::shared_ptr<BencodeValue> BencodeValue::at(size_t index) const {
+    if (!isList()) {
+        throw BencodeException("Value is not a list");
+    }
+    const auto& list = std::get<List>(m_value);
+    if (index >= list.size()) {
+        throw BencodeException("Index out of range");
+    }
+    return list[index];
+}
+
+size_t BencodeValue::size() const {
+    if (!isList()) {
+        throw BencodeException("Value is not a list");
+    }
+    const auto& list = std::get<List>(m_value);
+    return list.size();
+}
+const BencodeValue::Dictionary& BencodeValue::getDict() const {
     if (!isDictionary()) {
         throw BencodeException("Value is not a dictionary");
     }
     return std::get<Dictionary>(m_value);
+}
+
+
+
+std::optional<BencodeValue::Dictionary> BencodeValue::getDict(const std::string& key) const {
+    return getDictionary(key);
+}
+
+bool BencodeValue::contains(const std::string& key) const {
+    if (!isDictionary()) {
+        throw BencodeException("Value is not a dictionary");
+    }
+    const auto& dict = std::get<Dictionary>(m_value);
+    return dict.find(key) != dict.end();
 }
 std::shared_ptr<BencodeValue> BencodeValue::get(const std::string& key) const {
     if (!isDictionary()) {
@@ -87,7 +125,7 @@ std::optional<BencodeValue::List> BencodeValue::getList(const std::string& key) 
 std::optional<BencodeValue::Dictionary> BencodeValue::getDictionary(const std::string& key) const {
     auto value = get(key);
     if (value && value->isDictionary()) {
-        return value->getDictionary();
+        return value->getDict();
     }
     return std::nullopt;
 }
@@ -111,13 +149,15 @@ void BencodeValue::setList(const std::string& key, const List& value) {
 void BencodeValue::setList(const List& value) {
     m_value = value;
 }
-void BencodeValue::setDictionary(const std::string& key, const Dictionary& value) {
+void BencodeValue::setDict(const std::string& key, const Dictionary& value) {
     set(key, std::make_shared<BencodeValue>(value));
 }
 
-void BencodeValue::setDictionary(const Dictionary& value) {
+void BencodeValue::setDict(const Dictionary& value) {
     m_value = value;
 }
+
+
 void BencodeValue::add(std::shared_ptr<BencodeValue> value) {
     if (!isList()) {
         throw BencodeException("Value is not a list");
@@ -144,6 +184,13 @@ BencodeValue::Value& BencodeValue::getValue() {
     return m_value;
 }
 // BencodeEncoder implementation
+std::string BencodeEncoder::encode(const std::shared_ptr<BencodeValue>& value) {
+    if (!value) {
+        throw BencodeException("Null BencodeValue");
+    }
+    return encode(*value);
+}
+
 std::string BencodeEncoder::encode(const BencodeValue& value) {
     if (value.isString()) {
         return encodeString(value.getString());
@@ -152,7 +199,7 @@ std::string BencodeEncoder::encode(const BencodeValue& value) {
     } else if (value.isList()) {
         return encodeList(value.getList());
     } else if (value.isDictionary()) {
-        return encodeDictionary(value.getDictionary());
+        return encodeDictionary(value.getDict());
     }
     throw BencodeException("Unknown value type");
 }
@@ -191,7 +238,9 @@ std::shared_ptr<BencodeValue> BencodeDecoder::decode(const std::string& data) {
     size_t pos = 0;
     auto result = decode(data, pos);
     if (pos != data.size()) {
-        getLogger()->warning("Decoded only {} of {} bytes", pos, data.size());
+        std::stringstream ss;
+        ss << "Decoded only " << pos << " of " << data.size() << " bytes";
+        getLogger().warning("Bencode.Parser", ss.str());
     }
     return result;
 }
