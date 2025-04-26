@@ -128,11 +128,33 @@ size_t KBucket::getPrefix() const {
     return m_prefix;
 }
 
+// Initialize static members
+std::shared_ptr<RoutingTable> RoutingTable::s_instance = nullptr;
+std::mutex RoutingTable::s_instanceMutex;
+
+std::shared_ptr<RoutingTable> RoutingTable::getInstance(const NodeID& ownID, size_t kBucketSize) {
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+
+    if (!s_instance) {
+        s_instance = std::shared_ptr<RoutingTable>(new RoutingTable(ownID, kBucketSize));
+    }
+
+    return s_instance;
+}
+
 RoutingTable::RoutingTable(const NodeID& ownID, size_t kBucketSize)
     : m_ownID(ownID), m_kBucketSize(kBucketSize), m_logger(event::Logger::forComponent("DHT.RoutingTable")) {
     // Start with a single bucket with prefix 0
     m_buckets.emplace_back(0, kBucketSize);
     m_logger.info("Routing table created with node ID: {}", nodeIDToString(ownID));
+}
+
+RoutingTable::~RoutingTable() {
+    // Clear the singleton instance
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (s_instance.get() == this) {
+        s_instance.reset();
+    }
 }
 
 bool RoutingTable::addNode(const std::shared_ptr<Node> &node) {

@@ -23,7 +23,7 @@ DHTNode::DHTNode(const DHTConfig& config)
     m_logger.info("Creating DHT node with ID: {}", nodeIDToString(m_nodeID));
 
     // Create the components
-    m_routingTable = std::make_shared<RoutingTable>(m_nodeID, config.getKBucketSize());
+    m_routingTable = RoutingTable::getInstance(m_nodeID, config.getKBucketSize());
     m_socketManager = SocketManager::getInstance(config);
     m_messageSender = MessageSender::getInstance(config, m_socketManager);
     m_tokenManager = TokenManager::getInstance(config);

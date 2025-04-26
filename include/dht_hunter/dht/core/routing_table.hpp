@@ -101,16 +101,30 @@ private:
 };
 
 /**
- * @brief A routing table for the DHT
+ * @brief A routing table for the DHT (Singleton)
  */
 class RoutingTable {
 public:
     /**
-     * @brief Constructs a routing table
-     * @param ownID The ID of the node that owns this routing table
-     * @param kBucketSize The maximum number of nodes in each k-bucket
+     * @brief Gets the singleton instance of the routing table
+     * @param ownID The ID of the node that owns this routing table (only used if instance doesn't exist yet)
+     * @param kBucketSize The maximum number of nodes in each k-bucket (only used if instance doesn't exist yet)
+     * @return The singleton instance
      */
-    RoutingTable(const NodeID& ownID, size_t kBucketSize = K_BUCKET_SIZE);
+    static std::shared_ptr<RoutingTable> getInstance(const NodeID& ownID, size_t kBucketSize = K_BUCKET_SIZE);
+
+    /**
+     * @brief Destructor
+     */
+    ~RoutingTable();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    RoutingTable(const RoutingTable&) = delete;
+    RoutingTable& operator=(const RoutingTable&) = delete;
+    RoutingTable(RoutingTable&&) = delete;
+    RoutingTable& operator=(RoutingTable&&) = delete;
 
     /**
      * @brief Adds a node to the routing table
@@ -168,6 +182,15 @@ public:
     bool loadFromFile(const std::string& filePath);
 
 private:
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    RoutingTable(const NodeID& ownID, size_t kBucketSize = K_BUCKET_SIZE);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<RoutingTable> s_instance;
+    static std::mutex s_instanceMutex;
+
     /**
      * @brief Gets the appropriate k-bucket for a node ID
      * @param nodeID The node ID
