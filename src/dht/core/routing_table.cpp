@@ -13,8 +13,6 @@ KBucket::KBucket(KBucket&& other) noexcept
     : m_prefix(other.m_prefix),
       m_kSize(other.m_kSize),
       m_nodes(std::move(other.m_nodes)) {
-    // Note: We don't move the mutex as that would be unsafe
-    // Instead, we create a new mutex for this instance
 }
 
 KBucket& KBucket::operator=(KBucket&& other) noexcept {
@@ -26,7 +24,6 @@ KBucket& KBucket::operator=(KBucket&& other) noexcept {
         m_prefix = other.m_prefix;
         m_kSize = other.m_kSize;
         m_nodes = std::move(other.m_nodes);
-        // Note: We don't move the mutex as that would be unsafe
     }
     return *this;
 }
@@ -146,7 +143,7 @@ RoutingTable::RoutingTable(const NodeID& ownID, size_t kBucketSize)
     : m_ownID(ownID), m_kBucketSize(kBucketSize), m_logger(event::Logger::forComponent("DHT.RoutingTable")) {
     // Start with a single bucket with prefix 0
     m_buckets.emplace_back(0, kBucketSize);
-    m_logger.info("Routing table created with node ID: {}", nodeIDToString(ownID));
+    m_logger.debug("Routing table created with node ID: {}", nodeIDToString(ownID));
 }
 
 RoutingTable::~RoutingTable() {
@@ -313,10 +310,14 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
     m_buckets.emplace_back(0, m_kBucketSize);
 
     // Read the number of nodes
-    size_t nodeCount;
+    size_t nodeCount = 0;
     file.read(reinterpret_cast<char*>(&nodeCount), sizeof(nodeCount));
 
-    // Read each node
+    if (nodeCount == 0) {
+        m_logger.debug("No nodes found in routing table file: {}", filePath);
+        return true;
+    }
+
     for (size_t i = 0; i < nodeCount; ++i) {
         // Read the node ID
         NodeID nodeID;

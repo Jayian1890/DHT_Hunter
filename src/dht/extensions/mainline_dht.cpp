@@ -37,7 +37,7 @@ bool MainlineDHT::initialize() {
     // TODO: Implement Mainline-specific initialization
 
     m_initialized = true;
-    m_logger.info("Mainline DHT extension initialized");
+    m_logger.debug("Mainline DHT extension initialized");
     return true;
 }
 
@@ -46,7 +46,7 @@ void MainlineDHT::shutdown() {
         return;
     }
 
-    m_logger.info("Shutting down Mainline DHT extension");
+    m_logger.debug("Shutting down Mainline DHT extension");
     m_initialized = false;
 }
 

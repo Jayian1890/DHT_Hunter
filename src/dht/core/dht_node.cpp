@@ -20,7 +20,6 @@ DHTNode::DHTNode(const DHTConfig& config)
       m_config(config),
       m_running(false),
       m_logger(event::Logger::forComponent("DHT.Node")) {
-    m_logger.info("Creating DHT node with ID: {}", nodeIDToString(m_nodeID));
 
     // Create the components
     m_routingTable = RoutingTable::getInstance(m_nodeID, config.getKBucketSize());
@@ -104,31 +103,19 @@ bool DHTNode::start() {
     }
 
     // Initialize DHT extensions
-    if (m_mainlineDHT) {
-        if (!m_mainlineDHT->initialize()) {
-            m_logger.error("Failed to initialize Mainline DHT extension, continuing without it");
-            m_mainlineDHT.reset();
-        } else {
-            m_logger.info("Mainline DHT extension initialized");
-        }
+    if (m_mainlineDHT && !m_mainlineDHT->initialize()) {
+        m_logger.error("Failed to initialize Mainline DHT extension, continuing without it");
+        m_mainlineDHT.reset();
     }
 
-    if (m_kademliaDHT) {
-        if (!m_kademliaDHT->initialize()) {
-            m_logger.error("Failed to initialize Kademlia DHT extension, continuing without it");
-            m_kademliaDHT.reset();
-        } else {
-            m_logger.info("Kademlia DHT extension initialized");
-        }
+    if (m_kademliaDHT && !m_kademliaDHT->initialize()) {
+        m_logger.error("Failed to initialize Kademlia DHT extension, continuing without it");
+        m_kademliaDHT.reset();
     }
 
-    if (m_azureusDHT) {
-        if (!m_azureusDHT->initialize()) {
-            m_logger.error("Failed to initialize Azureus DHT extension, continuing without it");
-            m_azureusDHT.reset();
-        } else {
-            m_logger.info("Azureus DHT extension initialized");
-        }
+    if (m_azureusDHT && !m_azureusDHT->initialize()) {
+        m_logger.error("Failed to initialize Azureus DHT extension, continuing without it");
+        m_azureusDHT.reset();
     }
 
     m_running = true;
@@ -142,7 +129,7 @@ bool DHTNode::start() {
         }
     });
 
-    m_logger.info("DHT node started");
+    m_logger.info("DHT node created with ID: {}", nodeIDToString(m_nodeID));
     return true;
 }
 
@@ -195,7 +182,10 @@ std::shared_ptr<RoutingTable> DHTNode::getRoutingTable() const {
     return m_routingTable;
 }
 
-void DHTNode::findClosestNodes(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback) {
+void DHTNode::findClosestNodes(const NodeID& targetID,
+    const std::function<void(const std::vector<std::shared_ptr<Node>> &)>
+        &callback)
+    const {
     if (!m_running) {
         m_logger.error("DHT node not running");
         if (callback) {
@@ -215,7 +205,9 @@ void DHTNode::findClosestNodes(const NodeID& targetID, std::function<void(const 
     m_nodeLookup->lookup(targetID, callback);
 }
 
-void DHTNode::getPeers(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback) {
+void DHTNode::getPeers(const InfoHash& infoHash,
+    const std::function<void(const std::vector<network::EndPoint> &)> &callback)
+    const {
     if (!m_running) {
         m_logger.error("DHT node not running");
         if (callback) {
@@ -235,7 +227,8 @@ void DHTNode::getPeers(const InfoHash& infoHash, std::function<void(const std::v
     m_peerLookup->lookup(infoHash, callback);
 }
 
-void DHTNode::announcePeer(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback) {
+void DHTNode::announcePeer(const InfoHash& infoHash, const uint16_t port,
+                           const std::function<void(bool)> &callback) const {
     if (!m_running) {
         m_logger.error("DHT node not running");
         if (callback) {
@@ -255,7 +248,7 @@ void DHTNode::announcePeer(const InfoHash& infoHash, uint16_t port, std::functio
     m_peerLookup->announce(infoHash, port, callback);
 }
 
-void DHTNode::ping(const std::shared_ptr<Node>& node, std::function<void(bool)> callback) {
+void DHTNode::ping(const std::shared_ptr<Node>& node, const std::function<void(bool)>& callback) {
     if (!m_running) {
         m_logger.error("DHT node not running");
         if (callback) {
@@ -279,12 +272,12 @@ void DHTNode::ping(const std::shared_ptr<Node>& node, std::function<void(bool)> 
     std::string transactionID = m_transactionManager->createTransaction(
         query,
         node->getEndpoint(),
-        [callback](std::shared_ptr<ResponseMessage> /*response*/, const network::EndPoint& /*sender*/) {
+        [callback](const std::shared_ptr<ResponseMessage>& /*response*/, const network::EndPoint& /*sender*/) {
             if (callback) {
                 callback(true);
             }
         },
-        [callback](std::shared_ptr<ErrorMessage> /*error*/, const network::EndPoint& /*sender*/) {
+        [callback](const std::shared_ptr<ErrorMessage>& /*error*/, const network::EndPoint& /*sender*/) {
             if (callback) {
                 callback(false);
             }

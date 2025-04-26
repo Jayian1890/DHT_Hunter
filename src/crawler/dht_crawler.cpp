@@ -264,13 +264,13 @@ bool DHTCrawler::initializeDHTNode() {
         getLogger()->info("Creating DHT node on port {} with config directory {}", m_config.dhtPort, m_config.configDir);
 
         // Create the DHT node config
-        dht::DHTNodeConfig dhtNodeConfig;
-        dhtNodeConfig.setPort(m_config.dhtPort);
-        dhtNodeConfig.setConfigDir(m_config.configDir);
+        dht::DHTConfig dhtNodeConfig(m_config.dhtPort, m_config.configDir);
         dhtNodeConfig.setKBucketSize(m_config.kBucketSize);
-        dhtNodeConfig.setLookupAlpha(m_config.lookupAlpha);
-        dhtNodeConfig.setLookupMaxResults(m_config.lookupMaxResults);
-        dhtNodeConfig.setSaveRoutingTableOnNewNode(m_config.saveRoutingTableOnNewNode);
+        dhtNodeConfig.setAlpha(m_config.lookupAlpha);
+        dhtNodeConfig.setMaxResults(m_config.lookupMaxResults);
+
+        // Set the routing table path to be in the config directory
+        dhtNodeConfig.setRoutingTablePath(dhtNodeConfig.getFullPath("routing_table.dat"));
 
         // Create the DHT node with the config
         m_dhtNode = std::make_shared<dht::DHTNode>(dhtNodeConfig);
@@ -336,13 +336,17 @@ bool DHTCrawler::initializeDHTNode() {
 }
 bool DHTCrawler::initializeInfoHashCollector() {
     // Ensure the info hash collector's save directory exists
-    std::filesystem::path savePath(m_config.infoHashCollectorConfig.savePath);
+    std::filesystem::path configPath(m_config.configDir);
+    std::filesystem::path savePath = configPath / m_config.infoHashCollectorConfig.savePath;
     std::filesystem::path saveDir = savePath.parent_path();
     getLogger()->info("Ensuring info hash collector save directory exists: {}", saveDir.string());
     if (!util::FilesystemUtils::ensureDirectoryExists(saveDir)) {
         getLogger()->error("Failed to create info hash collector save directory: {}", saveDir.string());
         return false;
     }
+
+    // Update the save path to include the config directory
+    m_config.infoHashCollectorConfig.savePath = savePath.string();
 
     // Create the info hash collector
     m_infoHashCollector = std::make_shared<InfoHashCollector>(m_config.infoHashCollectorConfig);
@@ -402,11 +406,16 @@ bool DHTCrawler::initializeMetadataStorage() {
     getLogger()->debug("  Storage directory: {}", m_config.metadataStorageDirectory);
 
     // Ensure the metadata storage directory exists
-    getLogger()->info("Ensuring metadata storage directory exists: {}", m_config.metadataStorageDirectory);
-    if (!util::FilesystemUtils::ensureDirectoryExists(m_config.metadataStorageDirectory)) {
-        getLogger()->error("Failed to create metadata storage directory: {}", m_config.metadataStorageDirectory);
+    std::filesystem::path configPath(m_config.configDir);
+    std::filesystem::path storageDir = configPath / m_config.metadataStorageDirectory;
+    getLogger()->info("Ensuring metadata storage directory exists: {}", storageDir.string());
+    if (!util::FilesystemUtils::ensureDirectoryExists(storageDir)) {
+        getLogger()->error("Failed to create metadata storage directory: {}", storageDir.string());
         return false;
     }
+
+    // Update the storage directory to include the config directory
+    m_config.metadataStorageDirectory = storageDir.string();
 
     // Create the metadata storage
     try {

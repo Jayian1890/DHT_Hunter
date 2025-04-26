@@ -38,7 +38,6 @@ bool NodeVerifier::start() {
     // Start the processing thread
     m_processingThread = std::thread(&NodeVerifier::processQueue, this);
 
-    m_logger.info("Node verifier started");
     return true;
 }
 

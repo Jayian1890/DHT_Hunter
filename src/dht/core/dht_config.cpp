@@ -10,8 +10,9 @@ DHTConfig::DHTConfig()
       m_maxResults(DEFAULT_LOOKUP_MAX_RESULTS),
       m_routingTableSaveInterval(ROUTING_TABLE_SAVE_INTERVAL),
       m_routingTablePath("routing_table.dat"),
-      m_tokenRotationInterval(DEFAULT_TOKEN_ROTATION_INTERVAL) {
-    
+      m_tokenRotationInterval(DEFAULT_TOKEN_ROTATION_INTERVAL),
+      m_configDir("config") {
+
     // Add default bootstrap nodes
     for (size_t i = 0; i < DEFAULT_BOOTSTRAP_NODES_COUNT; ++i) {
         m_bootstrapNodes.push_back(DEFAULT_BOOTSTRAP_NODES[i]);
@@ -21,6 +22,12 @@ DHTConfig::DHTConfig()
 DHTConfig::DHTConfig(uint16_t port)
     : DHTConfig() {
     m_port = port;
+}
+
+DHTConfig::DHTConfig(uint16_t port, const std::string& configDir)
+    : DHTConfig() {
+    m_port = port;
+    m_configDir = configDir;
 }
 
 uint16_t DHTConfig::getPort() const {
@@ -89,6 +96,31 @@ int DHTConfig::getTokenRotationInterval() const {
 
 void DHTConfig::setTokenRotationInterval(int interval) {
     m_tokenRotationInterval = interval;
+}
+
+const std::string& DHTConfig::getConfigDir() const {
+    return m_configDir;
+}
+
+void DHTConfig::setConfigDir(const std::string& configDir) {
+    m_configDir = configDir;
+}
+
+std::string DHTConfig::getFullPath(const std::string& relativePath) const {
+    if (relativePath.empty()) {
+        return m_configDir;
+    }
+
+    std::filesystem::path configPath(m_configDir);
+    std::filesystem::path relPath(relativePath);
+
+    // If the path is already absolute, return it as is
+    if (relPath.is_absolute()) {
+        return relativePath;
+    }
+
+    // Combine the config directory with the relative path
+    return (configPath / relPath).string();
 }
 
 } // namespace dht_hunter::dht

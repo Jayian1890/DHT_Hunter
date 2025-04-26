@@ -42,7 +42,7 @@ bool KademliaDHT::initialize() {
     // However, we're reusing the existing routing table for simplicity
 
     m_initialized = true;
-    m_logger.info("Kademlia DHT extension initialized");
+    m_logger.debug("Kademlia DHT extension initialized");
     return true;
 }
 
@@ -51,7 +51,7 @@ void KademliaDHT::shutdown() {
         return;
     }
 
-    m_logger.info("Shutting down Kademlia DHT extension");
+    m_logger.debug("Shutting down Kademlia DHT extension");
     m_initialized = false;
 }
 

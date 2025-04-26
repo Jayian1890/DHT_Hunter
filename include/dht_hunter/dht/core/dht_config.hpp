@@ -25,6 +25,13 @@ public:
     explicit DHTConfig(uint16_t port);
 
     /**
+     * @brief Constructs a DHT configuration with a specific port and config directory
+     * @param port The UDP port to use
+     * @param configDir The configuration directory
+     */
+    DHTConfig(uint16_t port, const std::string& configDir);
+
+    /**
      * @brief Gets the UDP port
      * @return The UDP port
      */
@@ -126,6 +133,25 @@ public:
      */
     void setTokenRotationInterval(int interval);
 
+    /**
+     * @brief Gets the configuration directory
+     * @return The configuration directory
+     */
+    const std::string& getConfigDir() const;
+
+    /**
+     * @brief Sets the configuration directory
+     * @param configDir The configuration directory
+     */
+    void setConfigDir(const std::string& configDir);
+
+    /**
+     * @brief Gets the full path for a file in the configuration directory
+     * @param relativePath The relative path to the file
+     * @return The full path to the file
+     */
+    std::string getFullPath(const std::string& relativePath) const;
+
 private:
     uint16_t m_port;
     size_t m_kBucketSize;
@@ -135,6 +161,7 @@ private:
     int m_routingTableSaveInterval;
     std::string m_routingTablePath;
     int m_tokenRotationInterval;
+    std::string m_configDir;
 };
 
 } // namespace dht_hunter::dht

@@ -88,14 +88,18 @@ public:
      * @param targetID The target ID
      * @param callback The callback to call with the result
      */
-    void findClosestNodes(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback);
+    void findClosestNodes(const NodeID& targetID,
+        const std::function<void(const std::vector<std::shared_ptr<Node>> &)>
+            &callback) const;
 
     /**
      * @brief Gets peers for an info hash
      * @param infoHash The info hash
      * @param callback The callback to call with the result
      */
-    void getPeers(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback);
+    void getPeers(const InfoHash& infoHash,
+             const std::function<void(const std::vector<network::EndPoint> &)>
+                 &callback) const;
 
     /**
      * @brief Announces a peer for an info hash
@@ -103,14 +107,15 @@ public:
      * @param port The port
      * @param callback The callback to call with the result
      */
-    void announcePeer(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback);
+    void announcePeer(const InfoHash& infoHash, uint16_t port,
+                      const std::function<void(bool)> &callback) const;
 
     /**
      * @brief Pings a node
      * @param node The node to ping
      * @param callback The callback to call with the result
      */
-    void ping(const std::shared_ptr<Node>& node, std::function<void(bool)> callback);
+    void ping(const std::shared_ptr<Node>& node, const std::function<void(bool)>& callback);
 
 private:
     /**

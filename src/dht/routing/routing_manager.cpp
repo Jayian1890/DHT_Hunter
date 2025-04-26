@@ -63,7 +63,9 @@ bool RoutingManager::start() {
 
     // Load the routing table
     if (!m_config.getRoutingTablePath().empty()) {
-        loadRoutingTable(m_config.getRoutingTablePath());
+        // Use the full path with config directory
+        std::string fullPath = m_config.getFullPath(m_config.getRoutingTablePath());
+        loadRoutingTable(fullPath);
     }
 
     // Start the node verifier
@@ -79,7 +81,6 @@ bool RoutingManager::start() {
     // Start the save thread
     m_saveThread = std::thread(&RoutingManager::saveRoutingTablePeriodically, this);
 
-    m_logger.info("Routing manager started");
     return true;
 }
 
@@ -106,7 +107,9 @@ void RoutingManager::stop() {
 
     // Save the routing table - do this outside the lock
     if (!m_config.getRoutingTablePath().empty()) {
-        saveRoutingTable(m_config.getRoutingTablePath());
+        // Use the full path with config directory
+        std::string fullPath = m_config.getFullPath(m_config.getRoutingTablePath());
+        saveRoutingTable(fullPath);
     }
 
     m_logger.info("Routing manager stopped");
@@ -272,7 +275,9 @@ void RoutingManager::saveRoutingTablePeriodically() {
             try {
                 std::string routingTablePath = m_config.getRoutingTablePath();
                 if (!routingTablePath.empty()) {
-                    saveRoutingTable(routingTablePath);
+                    // Use the full path with config directory
+                    std::string fullPath = m_config.getFullPath(routingTablePath);
+                    saveRoutingTable(fullPath);
                 }
             } catch (const std::exception& e) {
                 m_logger.error("Exception in periodic routing table save: {}", e.what());

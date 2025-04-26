@@ -45,7 +45,7 @@ bool AzureusDHT::initialize() {
     // but in a real implementation, we would need to handle these differences
 
     m_initialized = true;
-    m_logger.info("Azureus DHT extension initialized");
+    m_logger.debug("Azureus DHT extension initialized");
     return true;
 }
 
@@ -54,7 +54,7 @@ void AzureusDHT::shutdown() {
         return;
     }
 
-    m_logger.info("Shutting down Azureus DHT extension");
+    m_logger.debug("Shutting down Azureus DHT extension");
     m_initialized = false;
 }
 
