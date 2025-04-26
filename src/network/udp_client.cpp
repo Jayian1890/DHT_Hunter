@@ -1,5 +1,5 @@
 #include "dht_hunter/network/udp_client.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
+#include "dht_hunter/event/logger.hpp"
 
 namespace dht_hunter::network {
 
@@ -11,61 +11,61 @@ UDPClient::~UDPClient() {
 }
 
 bool UDPClient::start() {
-    auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPClient");
-    
+    auto logger = event::Logger::forComponent("Network.UDPClient");
+
     if (m_running) {
-        logger->warning("Client is already running");
+        logger.warning("Client is already running");
         return true;
     }
-    
+
     if (!m_socket.isValid()) {
-        logger->error("Socket is invalid");
+        logger.error("Socket is invalid");
         return false;
     }
-    
+
     // Bind to a random port
     if (!m_socket.bind(0)) {
-        logger->error("Failed to bind socket");
+        logger.error("Failed to bind socket");
         return false;
     }
-    
+
     if (!m_socket.startReceiveLoop()) {
-        logger->error("Failed to start receive loop");
+        logger.error("Failed to start receive loop");
         return false;
     }
-    
+
     m_running = true;
-    logger->info("UDP client started");
+    logger.debug("UDP client started");
     return true;
 }
 
 void UDPClient::stop() {
-    auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPClient");
-    
+    auto logger = event::Logger::forComponent("Network.UDPClient");
+
     if (!m_running) {
-        logger->warning("Client is not running");
+        logger.warning("Client is not running");
         return;
     }
-    
+
     m_socket.stopReceiveLoop();
     m_socket.close();
     m_running = false;
-    
-    logger->info("UDP client stopped");
+
+    logger.debug("UDP client stopped");
 }
 
 bool UDPClient::isRunning() const {
     return m_running;
 }
 
-int UDPClient::send(const std::vector<uint8_t>& data, const std::string& address, uint16_t port) {
-    auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPClient");
-    
+ssize_t UDPClient::send(const std::vector<uint8_t>& data, const std::string& address, uint16_t port) {
+    auto logger = event::Logger::forComponent("Network.UDPClient");
+
     if (!m_running) {
-        logger->error("Cannot send: Client is not running");
+        logger.error("Cannot send: Client is not running");
         return -1;
     }
-    
+
     return m_socket.sendTo(data.data(), data.size(), address, port);
 }
 

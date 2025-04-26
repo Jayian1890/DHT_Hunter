@@ -14,53 +14,53 @@ The DHT node will be implemented using:
 
 ### 1. Core Components
 
-- [ ] Define DHT constants (timeouts, k-bucket size, etc.)
-- [ ] Implement DHT types (NodeID, InfoHash, etc.)
-- [ ] Create DHT node configuration
-- [ ] Implement routing table with k-buckets
+- [x] Define DHT constants (timeouts, k-bucket size, etc.)
+- [x] Implement DHT types (NodeID, InfoHash, etc.)
+- [x] Create DHT node configuration
+- [x] Implement routing table with k-buckets
 
 ### 2. Network Components
 
-- [ ] Implement socket manager for UDP communication
-- [ ] Create message classes for DHT protocol
-  - [ ] Base message class
-  - [ ] Query messages (ping, find_node, get_peers, announce_peer)
-  - [ ] Response messages
-  - [ ] Error messages
-- [ ] Implement message sender
-- [ ] Implement message handler
+- [x] Implement socket manager for UDP communication
+- [x] Create message classes for DHT protocol
+  - [x] Base message class
+  - [x] Query messages (ping, find_node, get_peers, announce_peer)
+  - [x] Response messages
+  - [x] Error messages
+- [x] Implement message sender
+- [x] Implement message handler
 
 ### 3. Routing Components
 
-- [ ] Implement routing manager
-- [ ] Create node lookup mechanism
-- [ ] Implement peer lookup mechanism
+- [x] Implement routing manager
+- [x] Create node lookup mechanism
+- [x] Implement peer lookup mechanism
 
 ### 4. Storage Components
 
-- [ ] Implement token manager for security
-- [ ] Create peer storage for storing peer information
+- [x] Implement token manager for security
+- [x] Create peer storage for storing peer information
 
 ### 5. Transaction Components
 
-- [ ] Implement transaction manager
+- [x] Implement transaction manager
 - [ ] Create transaction persistence mechanism
 
 ### 6. Bootstrap Components
 
-- [ ] Implement bootstrapper for initial node discovery
+- [x] Implement bootstrapper for initial node discovery
 
 ### 7. Integration
 
-- [ ] Connect all components
-- [ ] Implement DHT node main class
-- [ ] Add event-based logging
+- [x] Connect all components
+- [x] Implement DHT node main class
+- [x] Add event-based logging
 
 ### 8. Testing
 
-- [ ] Test basic functionality
-- [ ] Test against real DHT network
-- [ ] Verify all DHT requests and responses
+- [x] Test basic functionality
+- [x] Test against real DHT network
+- [x] Verify all DHT requests and responses
 
 ## Design Principles
 

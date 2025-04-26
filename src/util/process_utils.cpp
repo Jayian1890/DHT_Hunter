@@ -1,6 +1,4 @@
 #include "dht_hunter/util/process_utils.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
-#include "dht_hunter/logforge/logger_macros.hpp"
 #include <sstream>
 #include <iomanip>
 
@@ -14,8 +12,6 @@
 #include <unistd.h>
 #include <sys/resource.h>
 #endif
-
-DEFINE_COMPONENT_LOGGER("Util", "ProcessUtils")
 
 namespace dht_hunter::util {
 
@@ -49,10 +45,10 @@ uint64_t ProcessUtils::getMemoryUsage() {
         fclose(fp);
         return (uint64_t)rss * (uint64_t)sysconf(_SC_PAGESIZE);
 #endif
-    } catch (const std::exception& e) {
-        getLogger()->error("Exception while getting memory usage: {}", e.what());
+    } catch (const std::exception&) {
+        // Silently handle exceptions
     } catch (...) {
-        getLogger()->error("Unknown exception while getting memory usage");
+        // Silently handle unknown exceptions
     }
 
     return 0;

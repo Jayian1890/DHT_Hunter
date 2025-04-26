@@ -1,5 +1,7 @@
 #include "dht_hunter/dht/core/dht_types.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
+#include "dht_hunter/event/logger.hpp"
+
 #include <random>
 #include <sstream>
 #include <iomanip>
@@ -24,27 +26,6 @@ std::string nodeIDToString(const NodeID& nodeID) {
     return ss.str();
 }
 
-std::optional<NodeID> stringToNodeID(const std::string& str) {
-    // Check if the string is a valid hex string of the right length
-    if (str.length() != 40) {
-        return std::nullopt;
-    }
-
-    for (char c : str) {
-        if (!std::isxdigit(c)) {
-            return std::nullopt;
-        }
-    }
-
-    NodeID nodeID;
-    for (size_t i = 0; i < 20; ++i) {
-        std::string byteStr = str.substr(i * 2, 2);
-        nodeID[i] = static_cast<uint8_t>(std::stoi(byteStr, nullptr, 16));
-    }
-
-    return nodeID;
-}
-
 std::string infoHashToString(const InfoHash& infoHash) {
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
@@ -54,37 +35,16 @@ std::string infoHashToString(const InfoHash& infoHash) {
     return ss.str();
 }
 
-std::optional<InfoHash> stringToInfoHash(const std::string& str) {
-    // Check if the string is a valid hex string of the right length
-    if (str.length() != 40) {
-        return std::nullopt;
-    }
-
-    for (char c : str) {
-        if (!std::isxdigit(c)) {
-            return std::nullopt;
-        }
-    }
-
-    InfoHash infoHash;
-    for (size_t i = 0; i < 20; ++i) {
-        std::string byteStr = str.substr(i * 2, 2);
-        infoHash[i] = static_cast<uint8_t>(std::stoi(byteStr, nullptr, 16));
-    }
-
-    return infoHash;
-}
-
 NodeID generateRandomNodeID() {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    static std::uniform_int_distribution<uint8_t> dist(0, 255);
-
     NodeID nodeID;
-    for (auto& byte : nodeID) {
-        byte = dist(gen);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 255);
+    
+    for (size_t i = 0; i < nodeID.size(); ++i) {
+        nodeID[i] = static_cast<uint8_t>(dis(gen));
     }
-
+    
     return nodeID;
 }
 
@@ -99,7 +59,7 @@ bool isValidInfoHash(const InfoHash& infoHash) {
 }
 
 Node::Node(const NodeID& id, const network::EndPoint& endpoint)
-    : m_id(id), m_endpoint(endpoint) {
+    : m_id(id), m_endpoint(endpoint), m_lastSeen(std::chrono::steady_clock::now()) {
 }
 
 const NodeID& Node::getID() const {
@@ -112,6 +72,14 @@ const network::EndPoint& Node::getEndpoint() const {
 
 void Node::setEndpoint(const network::EndPoint& endpoint) {
     m_endpoint = endpoint;
+}
+
+std::chrono::steady_clock::time_point Node::getLastSeen() const {
+    return m_lastSeen;
+}
+
+void Node::updateLastSeen() {
+    m_lastSeen = std::chrono::steady_clock::now();
 }
 
 } // namespace dht_hunter::dht

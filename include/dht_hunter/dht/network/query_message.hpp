@@ -5,7 +5,7 @@
 #include <memory>
 #include <optional>
 #include <vector>
-#include <bencode.hpp>
+#include "dht_hunter/bencode/bencode.hpp"
 
 namespace dht_hunter::dht {
 
@@ -51,11 +51,11 @@ public:
     std::vector<uint8_t> encode() const override;
 
     /**
-     * @brief Decodes a query message from a bencode dictionary
-     * @param dict The bencode dictionary
+     * @brief Decodes a query message from a bencode value
+     * @param value The bencode value
      * @return The decoded query message, or nullptr if decoding failed
      */
-    static std::shared_ptr<QueryMessage> decode(const bencode::dict& dict);
+    static std::shared_ptr<QueryMessage> decode(const dht_hunter::bencode::BencodeValue& value);
 
 protected:
     /**
@@ -68,7 +68,7 @@ protected:
      * @brief Gets the arguments for the query
      * @return The arguments
      */
-    virtual bencode::dict getArguments() const = 0;
+    virtual std::shared_ptr<dht_hunter::bencode::BencodeValue> getArguments() const = 0;
 
     QueryMethod m_method;
 };
@@ -92,7 +92,7 @@ public:
      * @param arguments The arguments
      * @return The ping query
      */
-    static std::shared_ptr<PingQuery> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& arguments);
+    static std::shared_ptr<PingQuery> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments);
 
 protected:
     /**
@@ -105,7 +105,7 @@ protected:
      * @brief Gets the arguments for the query
      * @return The arguments
      */
-    bencode::dict getArguments() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getArguments() const override;
 };
 
 /**
@@ -134,7 +134,7 @@ public:
      * @param arguments The arguments
      * @return The find_node query
      */
-    static std::shared_ptr<FindNodeQuery> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& arguments);
+    static std::shared_ptr<FindNodeQuery> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments);
 
 protected:
     /**
@@ -147,7 +147,7 @@ protected:
      * @brief Gets the arguments for the query
      * @return The arguments
      */
-    bencode::dict getArguments() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getArguments() const override;
 
 private:
     NodeID m_targetID;
@@ -179,7 +179,7 @@ public:
      * @param arguments The arguments
      * @return The get_peers query
      */
-    static std::shared_ptr<GetPeersQuery> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& arguments);
+    static std::shared_ptr<GetPeersQuery> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments);
 
 protected:
     /**
@@ -192,7 +192,7 @@ protected:
      * @brief Gets the arguments for the query
      * @return The arguments
      */
-    bencode::dict getArguments() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getArguments() const override;
 
 private:
     InfoHash m_infoHash;
@@ -245,7 +245,7 @@ public:
      * @param arguments The arguments
      * @return The announce_peer query
      */
-    static std::shared_ptr<AnnouncePeerQuery> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& arguments);
+    static std::shared_ptr<AnnouncePeerQuery> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments);
 
 protected:
     /**
@@ -258,7 +258,7 @@ protected:
      * @brief Gets the arguments for the query
      * @return The arguments
      */
-    bencode::dict getArguments() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getArguments() const override;
 
 private:
     InfoHash m_infoHash;

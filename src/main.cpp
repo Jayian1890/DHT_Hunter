@@ -1,220 +1,106 @@
 #include <iostream>
-#include <string>
 #include <thread>
 #include <chrono>
 #include <csignal>
 #include <atomic>
-#include <filesystem>
-#include <dht_hunter/logforge/logger_macros.hpp>
-
+#include <iomanip>
+#include <sstream>
 #include "dht_hunter/logforge/logforge.hpp"
-#include "dht_hunter/logforge/log_initializer.hpp"
-#include "dht_hunter/crawler/dht_crawler.hpp"
-#include "dht_hunter/util/filesystem_utils.hpp"
-#include "dht_hunter/util/process_utils.hpp"
-
-namespace {
-    // This will be initialized during static initialization, before main() is called
-    struct LogInitializer {
-        LogInitializer() {
-            // Initialize logging with empty filename to use executable name
-            dht_hunter::logforge::getLogInitializer().initializeLogger(
-                dht_hunter::logforge::LogLevel::INFO,  // Console level
-                dht_hunter::logforge::LogLevel::TRACE,  // File level
-                "",  // Empty string means use executable name for log file
-                true,  // Use colors
-                false  // Async logging disabled
-            );
-        }
-    };
-
-    // This static instance will be initialized before main() is called
-    static LogInitializer g_logInitializer;
-}
-
-DEFINE_COMPONENT_LOGGER("Main", "Application")
+#include "dht_hunter/event/event_bus.hpp"
+#include "dht_hunter/event/log_event_handler.hpp"
+#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/network/udp_server.hpp"
+#include "dht_hunter/dht/core/dht_node.hpp"
+#include "dht_hunter/dht/core/dht_config.hpp"
 
 // Global variables for signal handling
 std::atomic<bool> g_running(true);
-std::atomic<bool> g_shutdown_requested(false);
-std::shared_ptr<dht_hunter::crawler::DHTCrawler> g_crawler;
+std::shared_ptr<dht_hunter::network::UDPServer> g_server;
+std::shared_ptr<dht_hunter::dht::DHTNode> g_dhtNode;
 
-// Signal handler
+// Signal handler for graceful shutdown
 void signalHandler(int signal) {
-    if (g_shutdown_requested.load()) {
-        // If shutdown was already requested, force exit
-        std::cerr << "Forced exit due to second signal " << signal << std::endl;
-        std::exit(1);
-    }
-
     std::cout << "Received signal " << signal << ", shutting down gracefully..." << std::endl;
-    g_shutdown_requested.store(true);
-    g_running.store(false);
-}
+    g_running = false;
 
-/**
- * @brief Create a DHTCrawler with default settings
- * @return Configured DHTCrawler instance
- */
-std::shared_ptr<dht_hunter::crawler::DHTCrawler> createCrawler() {
-    // Create default crawler config
-    dht_hunter::crawler::DHTCrawlerConfig config;
-
-    // Get the executable path and set the config directory next to it
-    auto execPath = dht_hunter::util::FilesystemUtils::getExecutablePath();
-    std::string configDir = "config"; // Default fallback
-
-    if (execPath) {
-        // Set config directory next to the executable
-        configDir = (execPath->parent_path() / "config").string();
-        getLogger()->info("Setting config directory next to executable: {}", configDir);
-    } else {
-        getLogger()->warning("Could not determine executable path, using default config directory: {}", configDir);
+    // Stop the DHT node if it's running
+    if (g_dhtNode) {
+        g_dhtNode->stop();
     }
-
-    // Set default values for crawler config
-    config.dhtPort = 6882;  // Use a different port to avoid conflicts
-    config.configDir = configDir;
-    config.maxConcurrentLookups = 50;  // Increased for better performance
-    config.maxLookupsPerMinute = 500;  // Increased for better performance
-    config.lookupInterval = std::chrono::milliseconds(50);  // Faster lookups
-    config.statusInterval = std::chrono::seconds(60);
-
-    // DHT node configuration
-    config.kBucketSize = 16;  // Maximum number of nodes in a k-bucket
-    config.lookupAlpha = 5;   // Alpha parameter for parallel lookups
-    config.lookupMaxResults = 16;  // Maximum number of nodes to store in a lookup result
-    config.saveRoutingTableOnNewNode = true;  // Whether to save the routing table after each new node is added
-
-    // Set bootstrap nodes
-    config.bootstrapNodes = {
-        "router.bittorrent.com:6881",
-        "dht.transmissionbt.com:6881",
-        "router.utorrent.com:6881",
-        "router.bitcomet.com:6881",
-        "dht.aelitis.com:6881"
-    };
-
-    // Set InfoHash collector config
-    config.infoHashCollectorConfig.maxStoredInfoHashes = 10000000;  // Store up to 10 million infohashes
-    config.infoHashCollectorConfig.saveInterval = std::chrono::minutes(5);  // Save every 5 minutes
-    config.infoHashCollectorConfig.deduplicateInfoHashes = true;
-    config.infoHashCollectorConfig.filterInvalidInfoHashes = true;
-    config.infoHashCollectorConfig.maxQueueSize = 1000000;  // Large queue size
-    config.infoHashCollectorConfig.savePath = config.configDir + "/infohashes.dat";
-
-    // Update metadata storage directory to use the new config directory
-    config.metadataStorageDirectory = config.configDir + "/metadata";
-
-    // Create the crawler
-    auto crawler = std::make_shared<dht_hunter::crawler::DHTCrawler>(config);
-
-    // Set status callback for logging
-    crawler->setStatusCallback([](uint64_t infoHashesDiscovered, uint64_t infoHashesQueued,
-                                uint64_t metadataFetched, double lookupRate, double metadataFetchRate,
-                                uint64_t totalInfoHashes, size_t routingTableSize, uint64_t memoryUsage) {
-        getLogger()->info("Crawler Status:");
-        getLogger()->info("  InfoHashes Discovered: {} (session) / {} (total)", infoHashesDiscovered, totalInfoHashes);
-        getLogger()->info("  InfoHashes Queued: {}", infoHashesQueued);
-        getLogger()->info("  Metadata Fetched: {}", metadataFetched);
-        getLogger()->info("  Routing Table Size: {} nodes", routingTableSize);
-        getLogger()->info("  Memory Usage: {}", dht_hunter::util::ProcessUtils::formatSize(memoryUsage));
-        getLogger()->info("  Lookup Rate: {:.2f} lookups/minute", lookupRate);
-        getLogger()->info("  Metadata Fetch Rate: {:.2f} fetches/minute", metadataFetchRate);
-    });
-
-    return crawler;
 }
 
 int main(int /*argc*/, char* /*argv*/[]) {
-    // Log the actual log filename being used
-    getLogger()->info("Using log file: {}.log", dht_hunter::util::FilesystemUtils::getExecutableName());
+    // Initialize the LogForge singleton with default settings
+    auto& logForge = dht_hunter::logforge::LogForge::getInstance();
+    logForge.init(dht_hunter::logforge::LogLevel::TRACE,  // Console level
+                 dht_hunter::logforge::LogLevel::TRACE,  // File level
+                 "dht_hunter.log",                     // Explicitly specify log filename
+                 true,                                   // Use colors
+                 false);                                // Async logging disabled
 
-    // Set initial window title
-    std::string initialTitle = dht_hunter::util::FilesystemUtils::getExecutableName() + " - Starting...";
-    dht_hunter::util::FilesystemUtils::setTerminalTitle(initialTitle);
+    // Create and register the LogForge event handler
+    auto logEventHandler = dht_hunter::event::LogEventHandler::create();
+    dht_hunter::event::EventBus::getInstance().subscribe("LogEvent", logEventHandler);
 
-    // Config directory will be created by the crawler when it starts
+    // Create a logger for the main component
+    auto logger = dht_hunter::event::Logger::forComponent("Main");
 
-    // Register signal handlers
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    // Log messages
+    logger.info("Using event-based logging system");
 
-    // Record start time for uptime calculation
-    auto startTime = std::chrono::steady_clock::now();
+    // Register signal handlers for graceful shutdown
+    std::signal(SIGINT, signalHandler);  // Ctrl+C
+    std::signal(SIGTERM, signalHandler); // Termination request
 
-    // Create and start the crawler
-    getLogger()->info("Creating DHT Crawler with optimized settings");
-    g_crawler = createCrawler();
+    // Default DHT port
+    const uint16_t DHT_PORT = 6881;
 
-    // Start the crawler
-    getLogger()->info("Starting DHT Crawler...");
-    if (!g_crawler->start()) {
-        getLogger()->error("Failed to start DHT Crawler");
+    // Create a DHT configuration
+    dht_hunter::dht::DHTConfig dhtConfig(DHT_PORT);
+
+    // Create a DHT node
+    logger.info("Creating DHT node on port {}", DHT_PORT);
+    g_dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(dhtConfig);
+
+    // Start the DHT node
+    if (!g_dhtNode->start()) {
+        logger.error("Failed to start DHT node on port {}", DHT_PORT);
         return 1;
     }
 
-    getLogger()->info("DHT Crawler started successfully");
+    logger.info("DHT node started with ID: {}", dht_hunter::dht::nodeIDToString(g_dhtNode->getNodeID()));
 
-    // Main loop
-    getLogger()->info("DHT Hunter running, press Ctrl+C to exit");
+    // Wait for the node to bootstrap
+    logger.info("Waiting for DHT node to bootstrap...");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    // Sleep until shutdown is requested
-    while (g_running) {
-        // Sleep for a short time
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // Log the number of nodes in the routing table
+    logger.info("DHT routing table has {} nodes", g_dhtNode->getRoutingTable()->getNodeCount());
 
-        // Check if shutdown was requested
-        if (g_shutdown_requested.load()) {
-            break;
+    // Perform a find_node lookup for a random node ID
+    dht_hunter::dht::NodeID randomID = dht_hunter::dht::generateRandomNodeID();
+    logger.info("Performing find_node lookup for random node ID: {}", dht_hunter::dht::nodeIDToString(randomID));
+
+    g_dhtNode->findClosestNodes(randomID, [&logger](const std::vector<std::shared_ptr<dht_hunter::dht::Node>>& nodes) {
+        logger.info("Found {} nodes", nodes.size());
+
+        for (const auto& node : nodes) {
+            logger.info("  Node: {} at {}", dht_hunter::dht::nodeIDToString(node->getID()), node->getEndpoint().toString());
         }
+    });
+
+    while (g_running) {
+        // Sleep to avoid busy waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // Graceful shutdown
-    getLogger()->info("Initiating graceful shutdown");
+    // Clean up
+    logger.info("Shutting down DHT node");
+    if (g_dhtNode) {
+        g_dhtNode->stop();
+        g_dhtNode.reset();
+    }
 
-    // Stop the crawler
-    getLogger()->info("Stopping DHT Crawler");
-    g_crawler->stop();
-
-    // Get final statistics
-    uint64_t infoHashesDiscovered = g_crawler->getInfoHashesDiscovered();
-    uint64_t metadataFetched = g_crawler->getMetadataFetched();
-
-    // Get total infohashes
-    uint64_t totalInfoHashes = g_crawler->getTotalInfoHashes();
-
-    // Print final statistics
-    getLogger()->info("Final statistics:");
-    getLogger()->info("  InfoHashes discovered: {} (session) / {} (total)", infoHashesDiscovered, totalInfoHashes);
-    getLogger()->info("  Metadata items fetched: {}", metadataFetched);
-
-    // Calculate uptime
-    auto now = std::chrono::steady_clock::now();
-    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
-    auto days = static_cast<int>(uptime / 86400);
-    auto hours = static_cast<int>((uptime % 86400) / 3600);
-    auto minutes = static_cast<int>((uptime % 3600) / 60);
-    auto seconds = static_cast<int>(uptime % 60);
-
-    // Calculate infohash rate
-    double infoHashRate = static_cast<double>(infoHashesDiscovered) / (uptime > 0 ? uptime : 1);
-
-    getLogger()->info("  Uptime: {}d {:02d}h {:02d}m {:02d}s", days, hours, minutes, seconds);
-    getLogger()->info("  InfoHash discovery rate: {:.2f} per second", infoHashRate);
-
-    // Set final window title with stats
-    std::string finalTitle = dht_hunter::util::FilesystemUtils::getExecutableName() +
-                           " - Stopped - InfoHashes: " + std::to_string(totalInfoHashes) +
-                           " - Metadata: " + std::to_string(metadataFetched);
-    dht_hunter::util::FilesystemUtils::setTerminalTitle(finalTitle);
-
-    // Release resources
-    g_crawler.reset();
-
-    // Flush logs before exit
-    dht_hunter::logforge::LogForge::flush();
-
-    getLogger()->info("DHT Hunter stopped successfully");
+    logger.info("DHT node shutdown complete");
     return 0;
 }

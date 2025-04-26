@@ -3,7 +3,12 @@
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
 #include "dht_hunter/event/logger.hpp"
-#include <bencode.hpp>
+#include "dht_hunter/bencode/bencode.hpp"
+
+// Alias for convenience
+using BencodeDict = dht_hunter::bencode::BencodeValue::Dictionary;
+using BencodeValue = std::shared_ptr<dht_hunter::bencode::BencodeValue>;
+using BencodeList = dht_hunter::bencode::BencodeValue::List;
 
 namespace dht_hunter::dht {
 
@@ -31,58 +36,62 @@ std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
     if (!data || size == 0) {
         return nullptr;
     }
-    
+
     auto logger = event::Logger::forComponent("DHT.Message");
-    
+
     try {
         // Decode the bencode data
-        bencode::data bencodeData = bencode::decode({reinterpret_cast<const char*>(data), size});
-        
+        std::string dataStr(reinterpret_cast<const char*>(data), size);
+        size_t pos = 0;
+        auto bencodeData = dht_hunter::bencode::BencodeDecoder::decode(dataStr, pos);
+
+        // Check if we decoded the entire message
+        if (pos != dataStr.size()) {
+            logger.error("Decoded only " + std::to_string(pos) + " of " + std::to_string(dataStr.size()) + " bytes");
+        }
+
         // Check if the data is a dictionary
-        if (!std::holds_alternative<bencode::dict>(bencodeData)) {
+        if (!bencodeData->isDictionary()) {
             logger.error("Decoded data is not a dictionary");
             return nullptr;
         }
-        
-        // Get the dictionary
-        const auto& dict = std::get<bencode::dict>(bencodeData);
-        
+
         // Check if the dictionary has a transaction ID
-        auto tIt = dict.find("t");
-        if (tIt == dict.end() || !std::holds_alternative<bencode::string>(tIt->second)) {
+        auto tValue = bencodeData->getString("t");
+        if (!tValue) {
             logger.error("Dictionary does not have a valid transaction ID");
             return nullptr;
         }
-        
+
         // Get the transaction ID
-        std::string transactionID = std::get<bencode::string>(tIt->second);
-        
+        std::string transactionID = *tValue;
+
         // Check if the dictionary has a message type
-        auto yIt = dict.find("y");
-        if (yIt == dict.end() || !std::holds_alternative<bencode::string>(yIt->second)) {
+        auto yValue = bencodeData->getString("y");
+        if (!yValue) {
             logger.error("Dictionary does not have a valid message type");
             return nullptr;
         }
-        
+
         // Get the message type
-        std::string messageType = std::get<bencode::string>(yIt->second);
-        
+        std::string messageType = *yValue;
+
         // Decode the message based on its type
         if (messageType == "q") {
             // Query message
-            return QueryMessage::decode(dict);
+            return QueryMessage::decode(*bencodeData);
         } else if (messageType == "r") {
             // Response message
-            return ResponseMessage::decode(dict);
+            return ResponseMessage::decode(*bencodeData);
         } else if (messageType == "e") {
             // Error message
-            return ErrorMessage::decode(dict);
+            return ErrorMessage::decode(*bencodeData);
         } else {
-            logger.error("Unknown message type: {}", messageType);
+            logger.error("Unknown message type: " + messageType);
             return nullptr;
         }
     } catch (const std::exception& e) {
-        logger.error("Failed to decode message: {}", e.what());
+        logger.error("Failed to decode message: " + std::string(e.what()));
         return nullptr;
     }
 }

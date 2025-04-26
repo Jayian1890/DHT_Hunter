@@ -14,35 +14,35 @@ PeerStorage::~PeerStorage() {
 
 bool PeerStorage::start() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     if (m_running) {
         m_logger.warning("Peer storage already running");
         return true;
     }
-    
+
     m_running = true;
-    
+
     // Start the cleanup thread
     m_cleanupThread = std::thread(&PeerStorage::cleanupExpiredPeersPeriodically, this);
-    
+
     m_logger.info("Peer storage started");
     return true;
 }
 
 void PeerStorage::stop() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     if (!m_running) {
         return;
     }
-    
+
     m_running = false;
-    
+
     // Wait for the cleanup thread to finish
     if (m_cleanupThread.joinable()) {
         m_cleanupThread.join();
     }
-    
+
     m_logger.info("Peer storage stopped");
 }
 
@@ -52,7 +52,7 @@ bool PeerStorage::isRunning() const {
 
 void PeerStorage::addPeer(const InfoHash& infoHash, const network::EndPoint& endpoint) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     // Check if the info hash exists
     auto it = m_peers.find(infoHash);
     if (it == m_peers.end()) {
@@ -61,7 +61,7 @@ void PeerStorage::addPeer(const InfoHash& infoHash, const network::EndPoint& end
         m_logger.debug("Added peer {} for info hash {}", endpoint.toString(), infoHashToString(infoHash));
         return;
     }
-    
+
     // Check if the peer already exists
     auto& peers = it->second;
     for (auto& peer : peers) {
@@ -72,43 +72,43 @@ void PeerStorage::addPeer(const InfoHash& infoHash, const network::EndPoint& end
             return;
         }
     }
-    
+
     // Add the peer
     peers.emplace_back(endpoint);
-    
+
     // If we have too many peers, remove the oldest one
     if (peers.size() > MAX_PEERS_PER_INFOHASH) {
         // Find the oldest peer
         auto oldest = peers.begin();
-        for (auto it = peers.begin() + 1; it != peers.end(); ++it) {
-            if (it->timestamp < oldest->timestamp) {
-                oldest = it;
+        for (auto peerIt = peers.begin() + 1; peerIt != peers.end(); ++peerIt) {
+            if (peerIt->timestamp < oldest->timestamp) {
+                oldest = peerIt;
             }
         }
-        
+
         // Remove the oldest peer
         m_logger.debug("Removed peer {} for info hash {} (too many peers)", oldest->endpoint.toString(), infoHashToString(infoHash));
         peers.erase(oldest);
     }
-    
+
     m_logger.debug("Added peer {} for info hash {}", endpoint.toString(), infoHashToString(infoHash));
 }
 
 std::vector<network::EndPoint> PeerStorage::getPeers(const InfoHash& infoHash) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     // Check if the info hash exists
     auto it = m_peers.find(infoHash);
     if (it == m_peers.end()) {
         return {};
     }
-    
+
     // Convert the timestamped peers to endpoints
     std::vector<network::EndPoint> endpoints;
     for (const auto& peer : it->second) {
         endpoints.push_back(peer.endpoint);
     }
-    
+
     return endpoints;
 }
 
@@ -119,36 +119,36 @@ size_t PeerStorage::getInfoHashCount() const {
 
 size_t PeerStorage::getPeerCount(const InfoHash& infoHash) const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     // Check if the info hash exists
     auto it = m_peers.find(infoHash);
     if (it == m_peers.end()) {
         return 0;
     }
-    
+
     return it->second.size();
 }
 
 size_t PeerStorage::getTotalPeerCount() const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     size_t count = 0;
     for (const auto& entry : m_peers) {
         count += entry.second.size();
     }
-    
+
     return count;
 }
 
 void PeerStorage::cleanupExpiredPeers() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     auto now = std::chrono::steady_clock::now();
-    
+
     // Iterate over all info hashes
     for (auto it = m_peers.begin(); it != m_peers.end();) {
         auto& peers = it->second;
-        
+
         // Remove expired peers
         peers.erase(
             std::remove_if(peers.begin(), peers.end(),
@@ -157,7 +157,7 @@ void PeerStorage::cleanupExpiredPeers() {
                     return elapsed >= PEER_TTL;
                 }),
             peers.end());
-        
+
         // If there are no peers left, remove the info hash
         if (peers.empty()) {
             it = m_peers.erase(it);
@@ -165,7 +165,7 @@ void PeerStorage::cleanupExpiredPeers() {
             ++it;
         }
     }
-    
+
     m_logger.debug("Cleaned up expired peers, {} info hashes, {} total peers", m_peers.size(), getTotalPeerCount());
 }
 
@@ -173,7 +173,7 @@ void PeerStorage::cleanupExpiredPeersPeriodically() {
     while (m_running) {
         // Sleep for a while
         std::this_thread::sleep_for(std::chrono::seconds(PEER_CLEANUP_INTERVAL));
-        
+
         // Clean up expired peers
         cleanupExpiredPeers();
     }

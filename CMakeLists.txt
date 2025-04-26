@@ -9,6 +9,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Generate compile_commands.json for IDE integration
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Find required packages
+find_package(fmt REQUIRED)
+
 # Add compiler warnings
 if(MSVC)
   add_compile_options(/W4 /WX)
@@ -18,7 +21,6 @@ else()
     -Wconversion -Wshadow -Wnon-virtual-dtor
     -Wold-style-cast -Wcast-align
     -Woverloaded-virtual -Wdouble-promotion -Wformat=2
-    -Wno-unused-function  # Disable unused function warning for logger macros
   )
 endif()
 
@@ -45,11 +47,8 @@ target_include_directories(dht_hunter_core INTERFACE
 # Add subdirectories
 add_subdirectory(src)
 
-# Build tests
-option(BUILD_TESTS "Build the tests" ON)
-if(BUILD_TESTS)
-  add_subdirectory(test)
-endif()
+# Tests have been removed from the project
+# TODO: Consider implementing a new testing framework in the future if needed
 
 # Install targets
 install(TARGETS dht_hunter

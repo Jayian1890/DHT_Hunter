@@ -24,6 +24,29 @@ public:
     KBucket(size_t prefix, size_t kSize);
 
     /**
+     * @brief Move constructor
+     * @param other The k-bucket to move from
+     */
+    KBucket(KBucket&& other) noexcept;
+
+    /**
+     * @brief Move assignment operator
+     * @param other The k-bucket to move from
+     * @return Reference to this k-bucket
+     */
+    KBucket& operator=(KBucket&& other) noexcept;
+
+    /**
+     * @brief Copy constructor (deleted)
+     */
+    KBucket(const KBucket&) = delete;
+
+    /**
+     * @brief Copy assignment operator (deleted)
+     */
+    KBucket& operator=(const KBucket&) = delete;
+
+    /**
      * @brief Adds a node to the bucket
      * @param node The node to add
      * @return True if the node was added, false otherwise

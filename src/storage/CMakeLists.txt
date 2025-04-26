@@ -9,12 +9,8 @@ target_include_directories(dht_hunter_storage
     ${CMAKE_SOURCE_DIR}/include
 )
 
-# Link with other libraries
+# Link with core library only
 target_link_libraries(dht_hunter_storage
     PUBLIC
     dht_hunter_core
-    PRIVATE
-    dht_hunter_logforge
-    dht_hunter_util
-    dht_hunter_metadata
 )

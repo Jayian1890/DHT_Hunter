@@ -15,8 +15,5 @@ target_compile_features(dht_hunter_bencode
     cxx_std_17
 )
 
-# Link with the logging library
-target_link_libraries(dht_hunter_bencode
-    PUBLIC
-    dht_hunter_logforge
-)
+# No external dependencies
+# target_link_libraries(dht_hunter_bencode)

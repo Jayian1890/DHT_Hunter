@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <sys/types.h>  // for ssize_t
 
 namespace dht_hunter::network {
 
@@ -49,7 +50,7 @@ public:
      * @param port The client's port.
      * @return The number of bytes sent, or -1 on error.
      */
-    int sendTo(const std::vector<uint8_t>& data, const std::string& address, uint16_t port);
+    ssize_t sendTo(const std::vector<uint8_t>& data, const std::string& address, uint16_t port);
 
     /**
      * @brief Set a callback function to be called when data is received.

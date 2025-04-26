@@ -21,12 +21,5 @@ target_compile_features(dht_hunter_metadata
     cxx_std_17
 )
 
-# Link with other libraries
-target_link_libraries(dht_hunter_metadata
-    PUBLIC
-    dht_hunter_logforge
-    dht_hunter_util
-    dht_hunter_network
-    dht_hunter_bencode
-    dht_hunter_storage
-)
+# No external dependencies
+# target_link_libraries(dht_hunter_metadata)

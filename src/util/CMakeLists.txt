@@ -11,12 +11,8 @@ target_include_directories(dht_hunter_util
     ${CMAKE_SOURCE_DIR}/include
 )
 
-# Link dependencies
-target_link_libraries(dht_hunter_util
-    PUBLIC
-    dht_hunter_core
-    dht_hunter_logforge
-)
+# No dependencies
+# target_link_libraries(dht_hunter_util)
 
 # Install the library
 install(TARGETS dht_hunter_util

@@ -1,11 +1,7 @@
 #include "dht_hunter/util/hash.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
-#include "dht_hunter/logforge/logger_macros.hpp"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
-
-DEFINE_COMPONENT_LOGGER("Util", "Hash")
 
 namespace dht_hunter::util {
 

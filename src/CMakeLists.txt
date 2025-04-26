@@ -1,29 +1,22 @@
-# Add subdirectories for each component in dependency order
-add_subdirectory(logforge)  # Base logging component
+# Add only the necessary components
+add_subdirectory(logforge)  # Logging component
+add_subdirectory(network)   # Network component
+add_subdirectory(event)     # Event system
 add_subdirectory(util)      # Utility functions
-add_subdirectory(network)   # Network functionality
-add_subdirectory(bencode)   # Bencode parsing
-add_subdirectory(dht)       # DHT protocol implementation
-add_subdirectory(metadata)  # Metadata handling
-add_subdirectory(storage)   # Storage functionality
-add_subdirectory(crawler)   # DHT crawler
-add_subdirectory(ui)        # User interface
+add_subdirectory(bencode)   # Bencode component
+add_subdirectory(dht)       # DHT component
 
 # Main executable
 add_executable(dht_hunter main.cpp)
 
-# Link with all component libraries
+# Link with component libraries
 target_link_libraries(dht_hunter
     PRIVATE
     dht_hunter_logforge
-    dht_hunter_util
     dht_hunter_network
+    dht_hunter_event
+    dht_hunter_util
     dht_hunter_dht
-    dht_hunter_bencode
-    dht_hunter_metadata
-    dht_hunter_storage
-    dht_hunter_crawler
-    dht_hunter_ui
 )
 
 # Set include directories

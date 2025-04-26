@@ -16,10 +16,5 @@ target_compile_features(dht_hunter_crawler
     cxx_std_17
 )
 
-# Link with other libraries
-target_link_libraries(dht_hunter_crawler
-    PUBLIC
-    dht_hunter_logforge
-    dht_hunter_util
-    dht_hunter_dht
-)
+# No external dependencies
+# target_link_libraries(dht_hunter_crawler)

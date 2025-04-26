@@ -4,7 +4,7 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <bencode.hpp>
+#include "dht_hunter/bencode/bencode.hpp"
 
 namespace dht_hunter::dht {
 
@@ -56,11 +56,11 @@ public:
     std::vector<uint8_t> encode() const override;
 
     /**
-     * @brief Decodes an error message from a bencode dictionary
-     * @param dict The bencode dictionary
+     * @brief Decodes an error message from a bencode value
+     * @param value The bencode value
      * @return The decoded error message, or nullptr if decoding failed
      */
-    static std::shared_ptr<ErrorMessage> decode(const bencode::dict& dict);
+    static std::shared_ptr<ErrorMessage> decode(const dht_hunter::bencode::BencodeValue& value);
 
 private:
     ErrorCode m_code;

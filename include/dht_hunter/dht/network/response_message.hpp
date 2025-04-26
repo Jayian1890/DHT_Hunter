@@ -4,7 +4,7 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <bencode.hpp>
+#include "dht_hunter/bencode/bencode.hpp"
 
 namespace dht_hunter::dht {
 
@@ -33,18 +33,18 @@ public:
     std::vector<uint8_t> encode() const override;
 
     /**
-     * @brief Decodes a response message from a bencode dictionary
-     * @param dict The bencode dictionary
+     * @brief Decodes a response message from a bencode value
+     * @param value The bencode value
      * @return The decoded response message, or nullptr if decoding failed
      */
-    static std::shared_ptr<ResponseMessage> decode(const bencode::dict& dict);
+    static std::shared_ptr<ResponseMessage> decode(const dht_hunter::bencode::BencodeValue& value);
 
 protected:
     /**
      * @brief Gets the response values
      * @return The response values
      */
-    virtual bencode::dict getResponseValues() const = 0;
+    virtual std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const = 0;
 };
 
 /**
@@ -66,14 +66,14 @@ public:
      * @param responseValues The response values
      * @return The ping response
      */
-    static std::shared_ptr<PingResponse> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& responseValues);
+    static std::shared_ptr<PingResponse> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues);
 
 protected:
     /**
      * @brief Gets the response values
      * @return The response values
      */
-    bencode::dict getResponseValues() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const override;
 };
 
 /**
@@ -102,14 +102,14 @@ public:
      * @param responseValues The response values
      * @return The find_node response
      */
-    static std::shared_ptr<FindNodeResponse> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& responseValues);
+    static std::shared_ptr<FindNodeResponse> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues);
 
 protected:
     /**
      * @brief Gets the response values
      * @return The response values
      */
-    bencode::dict getResponseValues() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const override;
 
 private:
     std::vector<std::shared_ptr<Node>> m_nodes;
@@ -175,14 +175,14 @@ public:
      * @param responseValues The response values
      * @return The get_peers response
      */
-    static std::shared_ptr<GetPeersResponse> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& responseValues);
+    static std::shared_ptr<GetPeersResponse> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues);
 
 protected:
     /**
      * @brief Gets the response values
      * @return The response values
      */
-    bencode::dict getResponseValues() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const override;
 
 private:
     std::vector<std::shared_ptr<Node>> m_nodes;
@@ -211,14 +211,14 @@ public:
      * @param responseValues The response values
      * @return The announce_peer response
      */
-    static std::shared_ptr<AnnouncePeerResponse> create(const std::string& transactionID, const NodeID& nodeID, const bencode::dict& responseValues);
+    static std::shared_ptr<AnnouncePeerResponse> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues);
 
 protected:
     /**
      * @brief Gets the response values
      * @return The response values
      */
-    bencode::dict getResponseValues() const override;
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const override;
 };
 
 } // namespace dht_hunter::dht

@@ -36,25 +36,44 @@ public:
         // Get the appropriate logger for the component
         auto logger = logforge::LogForge::getInstance().getLogger(logEvent->getComponent());
 
+        // Format the message with context data if available
+        std::string formattedMessage = logEvent->getMessage();
+        const auto& context = logEvent->getContext();
+        if (!context.empty()) {
+            formattedMessage += " {";
+            bool first = true;
+            for (const auto& [key, value] : context) {
+                if (!first) {
+                    formattedMessage += ", ";
+                }
+                formattedMessage += key + ": " + value;
+                first = false;
+            }
+            formattedMessage += "}";
+        }
+
         // Log the message with the appropriate level
         switch (logEvent->getLevel()) {
             case logforge::LogLevel::TRACE:
-                logger->trace(logEvent->getMessage());
+                logger->trace(formattedMessage);
                 break;
             case logforge::LogLevel::DEBUG:
-                logger->debug(logEvent->getMessage());
+                logger->debug(formattedMessage);
                 break;
             case logforge::LogLevel::INFO:
-                logger->info(logEvent->getMessage());
+                logger->info(formattedMessage);
                 break;
             case logforge::LogLevel::WARNING:
-                logger->warning(logEvent->getMessage());
+                logger->warning(formattedMessage);
                 break;
             case logforge::LogLevel::ERROR:
-                logger->error(logEvent->getMessage());
+                logger->error(formattedMessage);
                 break;
             case logforge::LogLevel::CRITICAL:
-                logger->critical(logEvent->getMessage());
+                logger->critical(formattedMessage);
+                break;
+            case logforge::LogLevel::OFF:
+                // Do nothing for OFF level
                 break;
         }
     }

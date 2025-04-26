@@ -59,7 +59,6 @@ private:
     void performRandomLookup(std::function<void(bool)> callback);
 
     DHTConfig m_config;
-    NodeID m_nodeID;
     std::shared_ptr<RoutingManager> m_routingManager;
     std::shared_ptr<NodeLookup> m_nodeLookup;
     std::mutex m_mutex;

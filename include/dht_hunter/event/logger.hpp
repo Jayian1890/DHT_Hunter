@@ -5,6 +5,7 @@
 #include "dht_hunter/logforge/logforge.hpp"
 #include <string>
 #include <memory>
+#include <fmt/format.h>
 
 namespace dht_hunter::event {
 
@@ -32,6 +33,16 @@ public:
     }
 
     /**
+     * @brief Log a formatted message at the TRACE level.
+     * @param format The format string.
+     * @param args The format arguments.
+     */
+    template<typename... Args>
+    void trace(fmt::format_string<Args...> format, Args&&... args) {
+        log(logforge::LogLevel::TRACE, fmt::format(format, std::forward<Args>(args)...));
+    }
+
+    /**
      * @brief Log a message at the DEBUG level.
      * @param message The message to log.
      */
@@ -40,11 +51,31 @@ public:
     }
 
     /**
+     * @brief Log a formatted message at the DEBUG level.
+     * @param format The format string.
+     * @param args The format arguments.
+     */
+    template<typename... Args>
+    void debug(fmt::format_string<Args...> format, Args&&... args) {
+        log(logforge::LogLevel::DEBUG, fmt::format(format, std::forward<Args>(args)...));
+    }
+
+    /**
      * @brief Log a message at the INFO level.
      * @param message The message to log.
      */
-    void info(const std::string& message) {
+    void info(const std::string& message) const {
         log(logforge::LogLevel::INFO, message);
+    }
+
+    /**
+     * @brief Log a formatted message at the INFO level.
+     * @param format The format string.
+     * @param args The format arguments.
+     */
+    template<typename... Args>
+    void info(fmt::format_string<Args...> format, Args&&... args) const {
+        log(logforge::LogLevel::INFO, fmt::format(format, std::forward<Args>(args)...));
     }
 
     /**
@@ -56,11 +87,31 @@ public:
     }
 
     /**
+     * @brief Log a formatted message at the WARNING level.
+     * @param format The format string.
+     * @param args The format arguments.
+     */
+    template<typename... Args>
+    void warning(fmt::format_string<Args...> format, Args&&... args) {
+        log(logforge::LogLevel::WARNING, fmt::format(format, std::forward<Args>(args)...));
+    }
+
+    /**
      * @brief Log a message at the ERROR level.
      * @param message The message to log.
      */
-    void error(const std::string& message) {
+    void error(const std::string& message) const {
         log(logforge::LogLevel::ERROR, message);
+    }
+
+    /**
+     * @brief Log a formatted message at the ERROR level.
+     * @param format The format string.
+     * @param args The format arguments.
+     */
+    template<typename... Args>
+    void error(fmt::format_string<Args...> format, Args&&... args) const {
+        log(logforge::LogLevel::ERROR, fmt::format(format, std::forward<Args>(args)...));
     }
 
     /**
@@ -69,6 +120,16 @@ public:
      */
     void critical(const std::string& message) {
         log(logforge::LogLevel::CRITICAL, message);
+    }
+
+    /**
+     * @brief Log a formatted message at the CRITICAL level.
+     * @param format The format string.
+     * @param args The format arguments.
+     */
+    template<typename... Args>
+    void critical(fmt::format_string<Args...> format, Args&&... args) {
+        log(logforge::LogLevel::CRITICAL, fmt::format(format, std::forward<Args>(args)...));
     }
 
     /**
@@ -92,7 +153,7 @@ private:
      * @param level The log level.
      * @param message The message to log.
      */
-    void log(logforge::LogLevel level, const std::string& message) {
+    void log(logforge::LogLevel level, const std::string& message) const {
         auto event = std::make_shared<LogEvent>(m_component, message, level);
 
         // Add context data

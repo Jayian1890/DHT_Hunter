@@ -1,6 +1,4 @@
 #include "dht_hunter/util/filesystem_utils.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
-#include "dht_hunter/logforge/logger_macros.hpp"
 
 #include <fstream>
 #include <array>
@@ -15,7 +13,7 @@
 #include <limits.h>
 #endif
 
-DEFINE_COMPONENT_LOGGER("Util", "FilesystemUtils")
+// No logging in utility functions
 
 namespace dht_hunter::util {
 
@@ -29,16 +27,12 @@ bool FilesystemUtils::ensureDirectoryExists(
             if (std::filesystem::is_directory(path)) {
                 if (loggerCallback) {
                     loggerCallback("debug", "Directory already exists: " + path.string());
-                } else {
-                    getLogger()->debug("Directory already exists: {}", path.string());
                 }
                 return true;
             } else {
                 // Path exists but is not a directory
                 if (loggerCallback) {
                     loggerCallback("error", "Path exists but is not a directory: " + path.string());
-                } else {
-                    getLogger()->error("Path exists but is not a directory: {}", path.string());
                 }
                 return false;
             }
@@ -47,31 +41,23 @@ bool FilesystemUtils::ensureDirectoryExists(
         // Create the directory
         if (loggerCallback) {
             loggerCallback("info", "Creating directory: " + path.string());
-        } else {
-            getLogger()->info("Creating directory: {}", path.string());
         }
 
         if (!std::filesystem::create_directories(path)) {
             if (loggerCallback) {
                 loggerCallback("error", "Failed to create directory: " + path.string());
-            } else {
-                getLogger()->error("Failed to create directory: {}", path.string());
             }
             return false;
         }
 
         if (loggerCallback) {
             loggerCallback("debug", "Created directory: " + path.string());
-        } else {
-            getLogger()->debug("Created directory: {}", path.string());
         }
 
         return true;
     } catch (const std::exception& e) {
         if (loggerCallback) {
             loggerCallback("error", "Exception while creating directory " + path.string() + ": " + e.what());
-        } else {
-            getLogger()->error("Exception while creating directory {}: {}", path.string(), e.what());
         }
         return false;
     }
@@ -105,16 +91,12 @@ bool FilesystemUtils::isDirectoryWritable(
 
         if (loggerCallback) {
             loggerCallback("debug", "Testing if directory is writable: " + path.string());
-        } else {
-            getLogger()->debug("Testing if directory is writable: {}", path.string());
         }
 
         std::ofstream testFile(testFilePath);
         if (!testFile) {
             if (loggerCallback) {
                 loggerCallback("error", "Directory is not writable: " + path.string());
-            } else {
-                getLogger()->error("Directory is not writable: {}", path.string());
             }
             return false;
         }
@@ -125,16 +107,12 @@ bool FilesystemUtils::isDirectoryWritable(
 
         if (loggerCallback) {
             loggerCallback("debug", "Directory is writable: " + path.string());
-        } else {
-            getLogger()->debug("Directory is writable: {}", path.string());
         }
 
         return true;
     } catch (const std::exception& e) {
         if (loggerCallback) {
             loggerCallback("error", "Exception while testing directory writability " + path.string() + ": " + e.what());
-        } else {
-            getLogger()->error("Exception while testing directory writability {}: {}", path.string(), e.what());
         }
         return false;
     }
@@ -146,7 +124,7 @@ std::optional<std::filesystem::path> FilesystemUtils::getExecutablePath() {
         // Windows implementation
         std::array<char, MAX_PATH> buffer;
         if (GetModuleFileNameA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size())) == 0) {
-            getLogger()->error("Failed to get executable path: GetModuleFileNameA failed");
+            // Failed to get executable path
             return std::nullopt;
         }
         return std::filesystem::path(buffer.data());
@@ -155,7 +133,7 @@ std::optional<std::filesystem::path> FilesystemUtils::getExecutablePath() {
         std::array<char, PATH_MAX> buffer;
         uint32_t size = buffer.size();
         if (_NSGetExecutablePath(buffer.data(), &size) != 0) {
-            getLogger()->error("Failed to get executable path: _NSGetExecutablePath failed");
+            // Failed to get executable path
             return std::nullopt;
         }
         return std::filesystem::path(buffer.data());
@@ -164,14 +142,14 @@ std::optional<std::filesystem::path> FilesystemUtils::getExecutablePath() {
         std::array<char, PATH_MAX> buffer;
         ssize_t count = readlink("/proc/self/exe", buffer.data(), buffer.size());
         if (count <= 0) {
-            getLogger()->error("Failed to get executable path: readlink failed");
+            // Failed to get executable path
             return std::nullopt;
         }
         buffer[count] = '\0';
         return std::filesystem::path(buffer.data());
 #endif
     } catch (const std::exception& e) {
-        getLogger()->error("Exception while getting executable path: {}", e.what());
+        // Exception while getting executable path
         return std::nullopt;
     }
 }

@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <cstdint>
+#include <sys/types.h>  // for ssize_t
 
 namespace dht_hunter::network {
 
@@ -39,7 +40,7 @@ public:
      * @param port The destination port.
      * @return The number of bytes sent, or -1 on error.
      */
-    int sendTo(const void* data, size_t size, const std::string& address, uint16_t port);
+    ssize_t sendTo(const void* data, size_t size, const std::string& address, uint16_t port);
 
     /**
      * @brief Receive data from the socket.
@@ -49,7 +50,7 @@ public:
      * @param port Output parameter for the sender's port.
      * @return The number of bytes received, or -1 on error.
      */
-    int receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port);
+    ssize_t receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port);
 
     /**
      * @brief Set a callback function to be called when data is received.

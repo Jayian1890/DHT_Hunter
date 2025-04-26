@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <functional>
 #include <memory>
 #include <optional>
 #include "dht_hunter/network/network_address.hpp"
@@ -42,25 +41,11 @@ NodeID calculateDistance(const NodeID& a, const NodeID& b);
 std::string nodeIDToString(const NodeID& nodeID);
 
 /**
- * @brief Converts a string to a node ID
- * @param str The string representation of the node ID
- * @return The node ID, or an empty optional if the string is invalid
- */
-std::optional<NodeID> stringToNodeID(const std::string& str);
-
-/**
  * @brief Converts an info hash to a string
  * @param infoHash The info hash
  * @return The string representation of the info hash
  */
 std::string infoHashToString(const InfoHash& infoHash);
-
-/**
- * @brief Converts a string to an info hash
- * @param str The string representation of the info hash
- * @return The info hash, or an empty optional if the string is invalid
- */
-std::optional<InfoHash> stringToInfoHash(const std::string& str);
 
 /**
  * @brief Generates a random node ID
@@ -101,12 +86,6 @@ public:
     const NodeID& getID() const;
 
     /**
-     * @brief Gets the node ID (alias for getID for compatibility)
-     * @return The node ID
-     */
-    const NodeID& getNodeID() const { return getID(); }
-
-    /**
      * @brief Gets the endpoint of the node
      * @return The endpoint of the node
      */
@@ -118,24 +97,45 @@ public:
      */
     void setEndpoint(const network::EndPoint& endpoint);
 
+    /**
+     * @brief Gets the last seen time
+     * @return The last seen time
+     */
+    std::chrono::steady_clock::time_point getLastSeen() const;
+
+    /**
+     * @brief Updates the last seen time to now
+     */
+    void updateLastSeen();
+
 private:
     NodeID m_id;
     network::EndPoint m_endpoint;
+    std::chrono::steady_clock::time_point m_lastSeen;
 };
 
-// Custom hash function for NodeID and InfoHash
 } // namespace dht_hunter::dht
 
 // Add hash support for NodeID and InfoHash
+namespace dht_hunter::dht {
+    // Common hash function for both NodeID and InfoHash
+    template<typename T>
+    size_t hashBytes(const T& bytes) {
+        size_t result = 0;
+        for (size_t i = 0; i < bytes.size(); ++i) {
+            result = result * 31 + bytes[i];
+        }
+        return result;
+    }
+}
+
+// Define a single hash specialization for std::array<uint8_t, 20>
+// This will work for both NodeID and InfoHash since they're both aliases for the same type
 namespace std {
     template<>
-    struct hash<dht_hunter::dht::NodeID> {
-        size_t operator()(const dht_hunter::dht::NodeID& id) const {
-            size_t result = 0;
-            for (size_t i = 0; i < id.size(); ++i) {
-                result = result * 31 + id[i];
-            }
-            return result;
+    struct hash<std::array<uint8_t, 20>> {
+        size_t operator()(const std::array<uint8_t, 20>& bytes) const {
+            return dht_hunter::dht::hashBytes(bytes);
         }
     };
 }

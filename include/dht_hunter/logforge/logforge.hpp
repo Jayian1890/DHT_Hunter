@@ -14,7 +14,6 @@
 #include "formatter.hpp"
 #include "log_common.hpp"
 #include "rotating_file_sink.hpp"
-#include "dht_hunter/util/filesystem_utils.hpp"
 
 namespace dht_hunter::logforge {
 
@@ -177,9 +176,19 @@ private:
 /**
  * @class LogForge
  * @brief Main logger class that handles log messages and distributes them to sinks.
+ * Implemented as a singleton that can be initialized in main().
  */
 class LogForge final {
 public:
+    /**
+     * @brief Get the singleton instance of LogForge.
+     * @return Reference to the singleton instance.
+     */
+    static LogForge& getInstance() {
+        static LogForge instance;
+        return instance;
+    }
+
     /**
      * @brief Destructor for proper cleanup.
      */
@@ -193,7 +202,7 @@ public:
      * @param useColors Whether to use colored output in the console.
      * @param async Whether to use asynchronous logging.
      */
-    static void init(const LogLevel consoleLevel = LogLevel::TRACE,
+    void init(const LogLevel consoleLevel = LogLevel::TRACE,
                     const LogLevel fileLevel = LogLevel::TRACE,
                     const std::string& filename = "",  // Empty string means use executable name
                     bool useColors = true,
@@ -213,8 +222,8 @@ public:
         // Determine log filename
         std::string logFilename = filename;
         if (logFilename.empty()) {
-            // Use executable name if no filename provided
-            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
+            // Use a default name if no filename provided
+            logFilename = "dht_hunter.log";
         }
 
         // Create file sink
@@ -235,177 +244,18 @@ public:
     }
 
     /**
-     * @brief Initializes the logging system with a size-based rotating file sink.
-     * @param consoleLevel The minimum log level for the console sink.
-     * @param fileLevel The minimum log level for the file sink.
-     * @param filename The name of the log file.
-     * @param maxSizeBytes The maximum size of a log file before rotation (in bytes).
-     * @param maxFiles The maximum number of log files to keep.
-     * @param useColors Whether to use colored output in the console.
-     * @param async Whether to use asynchronous logging.
-     */
-    static void initWithSizeRotation(const LogLevel consoleLevel = LogLevel::TRACE,
-                                    const LogLevel fileLevel = LogLevel::TRACE,
-                                    const std::string& filename = "",  // Empty string means use executable name
-                                    size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
-                                    size_t maxFiles = 5,
-                                    bool useColors = true,
-                                    const bool async = false) { // Changed default to false to avoid hanging
-        const std::lock_guard lock(s_mutex);
-
-        // Create default sinks if not already initialized
-        if (s_initialized) {
-            return;
-        }
-
-        // Create console sink with color support
-        const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
-        consoleSink->setLevel(consoleLevel);
-        addSink(consoleSink, false); // Don't lock mutex, it's already locked
-
-        // Determine log filename
-        std::string logFilename = filename;
-        if (logFilename.empty()) {
-            // Use executable name if no filename provided
-            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
-        }
-
-        // Create rotating file sink with size-based rotation
-        const auto fileSink = std::make_shared<RotatingFileSink>(logFilename, maxSizeBytes, maxFiles);
-        fileSink->setLevel(fileLevel);
-        addSink(fileSink, false); // Don't lock mutex, it's already locked
-
-        // Set async mode
-        s_asyncLoggingEnabled = async;
-
-        // Initialize the worker thread if async logging is enabled
-        if (async) {
-            initWorkerThread();
-            registerCleanupFunction();
-        }
-
-        s_initialized = true;
-    }
-
-    /**
-     * @brief Initializes the logging system with a time-based rotating file sink.
-     * @param consoleLevel The minimum log level for the console sink.
-     * @param fileLevel The minimum log level for the file sink.
-     * @param filename The name of the log file.
-     * @param rotationHours The time interval for rotation (in hours).
-     * @param maxFiles The maximum number of log files to keep.
-     * @param useColors Whether to use colored output in the console.
-     * @param async Whether to use asynchronous logging.
-     */
-    static void initWithTimeRotation(const LogLevel consoleLevel = LogLevel::TRACE,
-                                    const LogLevel fileLevel = LogLevel::TRACE,
-                                    const std::string& filename = "",  // Empty string means use executable name
-                                    int rotationHours = 24,  // 24 hours default
-                                    size_t maxFiles = 5,
-                                    bool useColors = true,
-                                    const bool async = false) { // Changed default to false to avoid hanging
-        const std::lock_guard lock(s_mutex);
-
-        // Create default sinks if not already initialized
-        if (s_initialized) {
-            return;
-        }
-
-        // Create console sink with color support
-        const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
-        consoleSink->setLevel(consoleLevel);
-        addSink(consoleSink, false); // Don't lock mutex, it's already locked
-
-        // Determine log filename
-        std::string logFilename = filename;
-        if (logFilename.empty()) {
-            // Use executable name if no filename provided
-            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
-        }
-
-        // Create rotating file sink with time-based rotation
-        const auto fileSink = std::make_shared<RotatingFileSink>(logFilename, std::chrono::hours(rotationHours), maxFiles);
-        fileSink->setLevel(fileLevel);
-        addSink(fileSink, false); // Don't lock mutex, it's already locked
-
-        // Set async mode
-        s_asyncLoggingEnabled = async;
-
-        // Initialize the worker thread if async logging is enabled
-        if (async) {
-            initWorkerThread();
-            registerCleanupFunction();
-        }
-
-        s_initialized = true;
-    }
-
-    /**
-     * @brief Initializes the logging system with a rotating file sink that uses both size and time-based rotation.
-     * @param consoleLevel The minimum log level for the console sink.
-     * @param fileLevel The minimum log level for the file sink.
-     * @param filename The name of the log file.
-     * @param maxSizeBytes The maximum size of a log file before rotation (in bytes).
-     * @param rotationHours The time interval for rotation (in hours).
-     * @param maxFiles The maximum number of log files to keep.
-     * @param useColors Whether to use colored output in the console.
-     * @param async Whether to use asynchronous logging.
-     */
-    static void initWithSizeAndTimeRotation(const LogLevel consoleLevel = LogLevel::TRACE,
-                                           const LogLevel fileLevel = LogLevel::TRACE,
-                                           const std::string& filename = "",  // Empty string means use executable name
-                                           size_t maxSizeBytes = 10 * 1024 * 1024,  // 10 MB default
-                                           int rotationHours = 24,  // 24 hours default
-                                           size_t maxFiles = 5,
-                                           bool useColors = true,
-                                           const bool async = false) { // Changed default to false to avoid hanging
-        const std::lock_guard lock(s_mutex);
-
-        // Create default sinks if not already initialized
-        if (s_initialized) {
-            return;
-        }
-
-        // Create console sink with color support
-        const auto consoleSink = std::make_shared<ConsoleSink>(useColors);
-        consoleSink->setLevel(consoleLevel);
-        addSink(consoleSink, false); // Don't lock mutex, it's already locked
-
-        // Determine log filename
-        std::string logFilename = filename;
-        if (logFilename.empty()) {
-            // Use executable name if no filename provided
-            logFilename = util::FilesystemUtils::getExecutableName() + ".log";
-        }
-
-        // Create rotating file sink with both size and time-based rotation
-        const auto fileSink = std::make_shared<RotatingFileSink>(logFilename, maxSizeBytes, std::chrono::hours(rotationHours), maxFiles);
-        fileSink->setLevel(fileLevel);
-        addSink(fileSink, false); // Don't lock mutex, it's already locked
-
-        // Set async mode
-        s_asyncLoggingEnabled = async;
-
-        // Initialize the worker thread if async logging is enabled
-        if (async) {
-            initWorkerThread();
-            registerCleanupFunction();
-        }
-
-        s_initialized = true;
-    }
-
-    /**
      * @brief Gets a logger with the specified name.
      * @param name The name of the logger.
      * @return A shared pointer to the logger.
      */
-    static std::shared_ptr<LogForge> getLogger(const std::string& name) {
+    std::shared_ptr<LogForge> getLogger(const std::string& name) {
         const std::lock_guard lock(s_mutex);
 
         // Initialize if not already done
         if (!s_initialized) {
+            // Initialize with default settings
             init();
+            // No logging during auto-initialization to avoid potential recursion
         }
 
         // Check if logger already exists
@@ -425,7 +275,7 @@ public:
      * @param lockMutex Whether to lock the mutex (set to false if the caller already holds the lock)
      */
     template<typename T>
-    static void addSink(const std::shared_ptr<T> &sink, bool lockMutex = true) {
+    void addSink(const std::shared_ptr<T> &sink, bool lockMutex = true) {
         static_assert(std::is_base_of_v<LogSink, T>, "Sink must inherit from LogSink");
         if (lockMutex) {
             const std::lock_guard lock(s_mutex);
@@ -447,7 +297,7 @@ public:
      * @brief Sets the global log level for all loggers.
      * @param level The log level to set.
      */
-    static void setGlobalLevel(const LogLevel level) {
+    void setGlobalLevel(const LogLevel level) {
         const std::lock_guard lock(s_mutex);
         s_globalLevel = level;
     }
@@ -534,13 +384,13 @@ public:
      * This method ensures that all queued log messages are written to their destinations.
      * It only has an effect when asynchronous logging is enabled.
      */
-    static void flush();
+    void flush();
 
     /**
      * @brief Checks if asynchronous logging is enabled.
      * @return True if asynchronous logging is enabled, false otherwise.
      */
-    static bool isAsyncLoggingEnabled();
+    bool isAsyncLoggingEnabled();
 
     /**
      * @brief Shuts down the logging system.
@@ -549,15 +399,31 @@ public:
      * flushes any pending messages, and clears all sinks and loggers.
      * It's particularly useful for testing and when you need to reset the logger state.
      */
-    static void shutdown();
+    void shutdown();
 
 private:
+    /**
+     * @brief Default constructor for the singleton instance.
+     */
+    LogForge() : m_name("LogForge") {
+    }
+
     /**
      * @brief Constructs a LogForge with the specified name.
      * @param name The name of the logger.
      */
     explicit LogForge(std::string name) : m_name(std::move(name)) {
     }
+
+    /**
+     * @brief Delete copy constructor.
+     */
+    LogForge(const LogForge&) = delete;
+
+    /**
+     * @brief Delete assignment operator.
+     */
+    LogForge& operator=(const LogForge&) = delete;
 
     /**
      * @brief Logs a message at the specified level.
@@ -610,19 +476,19 @@ private:
      * @param message The log message.
      * @param timestamp The timestamp of the log message.
      */
-    static void queueAsyncMessage(LogLevel level, const std::string& loggerName,
+    void queueAsyncMessage(LogLevel level, const std::string& loggerName,
                                  const std::string& message,
                                  const std::chrono::system_clock::time_point& timestamp);
 
     /**
      * @brief Initializes the worker thread for asynchronous logging.
      */
-    static void initWorkerThread();
+    void initWorkerThread();
 
     /**
      * @brief Registers a cleanup function with atexit to ensure proper shutdown.
      */
-    static void registerCleanupFunction();
+    void registerCleanupFunction();
 
     std::string m_name;
     LogLevel m_level = LogLevel::TRACE;

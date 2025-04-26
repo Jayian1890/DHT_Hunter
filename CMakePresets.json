@@ -1,0 +1,29 @@
+{
+      "version": 3,
+      "configurePresets": [
+        {
+          "name": "default",
+          "displayName": "Default Config",
+          "description": "Default build using Ninja generator",
+          "generator": "Ninja",
+          "binaryDir": "${sourceDir}/build"
+        },
+        {
+          "name": "debug",
+          "inherits": "default",
+          "displayName": "Debug Build",
+          "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "Debug",
+            "ENABLE_ASAN": "ON"
+          }
+        },
+        {
+          "name": "release",
+          "inherits": "default",
+          "displayName": "Release Build",
+          "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "Release"
+          }
+        }
+      ]
+    }

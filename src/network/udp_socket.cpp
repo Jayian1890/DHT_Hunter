@@ -1,5 +1,5 @@
 #include "dht_hunter/network/udp_socket.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
+#include "dht_hunter/event/logger.hpp"
 
 #include <thread>
 #include <atomic>
@@ -21,7 +21,8 @@
     #define SOCKET int
     #define INVALID_SOCKET -1
     #define SOCKET_ERROR -1
-    #define closesocket close
+    // Define a function instead of a macro for closesocket
+    inline int closesocket(int s) { return ::close(s); }
 #endif
 
 namespace dht_hunter::network {
@@ -36,7 +37,7 @@ public:
             throw std::runtime_error("Failed to initialize Winsock");
         }
     }
-    
+
     ~WSAInitializer() {
         WSACleanup();
     }
@@ -51,219 +52,219 @@ public:
         // Create the socket
         m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (m_socket == INVALID_SOCKET) {
-            auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-            logger->error("Failed to create socket");
+            auto logger = event::Logger::forComponent("Network.UDPSocket");
+            logger.error("Failed to create socket");
         }
     }
-    
+
     ~Impl() {
         close();
     }
-    
+
     bool bind(uint16_t port) {
-        auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-        
+        auto logger = event::Logger::forComponent("Network.UDPSocket");
+
         if (m_socket == INVALID_SOCKET) {
-            logger->error("Cannot bind: Socket is invalid");
+            logger.error("Cannot bind: Socket is invalid");
             return false;
         }
-        
+
         sockaddr_in addr;
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = INADDR_ANY;
         addr.sin_port = htons(port);
-        
+
         if (::bind(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
-            logger->error("Failed to bind socket to port {}", port);
+            logger.error("Failed to bind socket to port {}", port);
             return false;
         }
-        
-        logger->info("Socket bound to port {}", port);
+
+        logger.debug("Socket bound to port {}", port);
         return true;
     }
-    
-    int sendTo(const void* data, size_t size, const std::string& address, uint16_t port) {
-        auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-        
+
+    ssize_t sendTo(const void* data, size_t size, const std::string& address, uint16_t port) {
+        auto logger = event::Logger::forComponent("Network.UDPSocket");
+
         if (m_socket == INVALID_SOCKET) {
-            logger->error("Cannot send: Socket is invalid");
+            logger.error("Cannot send: Socket is invalid");
             return -1;
         }
-        
+
         sockaddr_in addr;
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
-        
+
         if (inet_pton(AF_INET, address.c_str(), &addr.sin_addr) != 1) {
-            logger->error("Invalid address: {}", address);
+            logger.error("Invalid address: {}", address);
             return -1;
         }
-        
-        int result = sendto(m_socket, static_cast<const char*>(data), static_cast<int>(size), 0,
+
+        auto result = sendto(m_socket, static_cast<const char*>(data), static_cast<socklen_t>(size), 0,
                            reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-        
+
         if (result == SOCKET_ERROR) {
-            logger->error("Failed to send data to {}:{}", address, port);
+            logger.error("Failed to send data to {}:{}", address, port);
             return -1;
         }
-        
-        logger->debug("Sent {} bytes to {}:{}", result, address, port);
+
+        logger.debug("Sent {} bytes to {}:{}", result, address, port);
         return result;
     }
-    
-    int receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port) {
-        auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-        
+
+    ssize_t receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port) {
+        auto logger = event::Logger::forComponent("Network.UDPSocket");
+
         if (m_socket == INVALID_SOCKET) {
-            logger->error("Cannot receive: Socket is invalid");
+            logger.error("Cannot receive: Socket is invalid");
             return -1;
         }
-        
+
         sockaddr_in addr;
         socklen_t addrLen = sizeof(addr);
-        
-        int result = recvfrom(m_socket, static_cast<char*>(buffer), static_cast<int>(size), 0,
+
+        auto result = recvfrom(m_socket, static_cast<char*>(buffer), static_cast<socklen_t>(size), 0,
                              reinterpret_cast<sockaddr*>(&addr), &addrLen);
-        
+
         if (result == SOCKET_ERROR) {
 #ifdef _WIN32
             int error = WSAGetLastError();
             if (error == WSAEWOULDBLOCK) {
                 return 0;  // No data available
             }
-            logger->error("Failed to receive data, error code: {}", error);
+            logger.error("Failed to receive data, error code: {}", error);
 #else
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return 0;  // No data available
             }
-            logger->error("Failed to receive data, error: {}", strerror(errno));
+            logger.error("Failed to receive data, error: {}", strerror(errno));
 #endif
             return -1;
         }
-        
+
         char addrStr[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &addr.sin_addr, addrStr, INET_ADDRSTRLEN);
         address = addrStr;
         port = ntohs(addr.sin_port);
-        
-        logger->debug("Received {} bytes from {}:{}", result, address, port);
+
+        logger.debug("Received {} bytes from {}:{}", result, address, port);
         return result;
     }
-    
+
     void setReceiveCallback(std::function<void(const std::vector<uint8_t>&, const std::string&, uint16_t)> callback) {
         std::lock_guard<std::mutex> lock(m_callbackMutex);
         m_receiveCallback = std::move(callback);
     }
-    
+
     bool startReceiveLoop() {
-        auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-        
+        auto logger = event::Logger::forComponent("Network.UDPSocket");
+
         if (m_socket == INVALID_SOCKET) {
-            logger->error("Cannot start receive loop: Socket is invalid");
+            logger.error("Cannot start receive loop: Socket is invalid");
             return false;
         }
-        
+
         if (m_running) {
-            logger->warning("Receive loop is already running");
+            logger.warning("Receive loop is already running");
             return true;
         }
-        
+
         // Set socket to non-blocking mode
 #ifdef _WIN32
         u_long mode = 1;
         if (ioctlsocket(m_socket, FIONBIO, &mode) != 0) {
-            logger->error("Failed to set socket to non-blocking mode");
+            logger.error("Failed to set socket to non-blocking mode");
             return false;
         }
 #else
         int flags = fcntl(m_socket, F_GETFL, 0);
         if (flags == -1) {
-            logger->error("Failed to get socket flags");
+            logger.error("Failed to get socket flags");
             return false;
         }
         if (fcntl(m_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-            logger->error("Failed to set socket to non-blocking mode");
+            logger.error("Failed to set socket to non-blocking mode");
             return false;
         }
 #endif
-        
+
         m_running = true;
         m_receiveThread = std::thread(&UDPSocket::Impl::receiveLoop, this);
-        
-        logger->info("Receive loop started");
+
+        logger.debug("Receive loop started");
         return true;
     }
-    
+
     void stopReceiveLoop() {
-        auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-        
+        auto logger = event::Logger::forComponent("Network.UDPSocket");
+
         if (!m_running) {
-            logger->warning("Receive loop is not running");
+            logger.warning("Receive loop is not running");
             return;
         }
-        
+
         m_running = false;
-        
+
         if (m_receiveThread.joinable()) {
             m_receiveThread.join();
         }
-        
-        logger->info("Receive loop stopped");
+
+        logger.debug("Receive loop stopped");
     }
-    
+
     bool isValid() const {
         return m_socket != INVALID_SOCKET;
     }
-    
+
     void close() {
-        auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-        
+        auto logger = event::Logger::forComponent("Network.UDPSocket");
+
         stopReceiveLoop();
-        
+
         if (m_socket != INVALID_SOCKET) {
             closesocket(m_socket);
             m_socket = INVALID_SOCKET;
-            logger->info("Socket closed");
+            logger.debug("Socket closed");
         }
     }
-    
+
 private:
     void receiveLoop() {
-        auto logger = logforge::LogForge::getInstance().getLogger("Network.UDPSocket");
-        logger->info("Receive loop thread started");
-        
+        auto logger = event::Logger::forComponent("Network.UDPSocket");
+        logger.debug("Receive loop thread started");
+
         std::array<uint8_t, 65536> buffer;
-        
+
         while (m_running) {
             std::string address;
             uint16_t port = 0;
-            
-            int bytesReceived = receiveFrom(buffer.data(), buffer.size(), address, port);
-            
+
+            ssize_t bytesReceived = receiveFrom(buffer.data(), buffer.size(), address, port);
+
             if (bytesReceived > 0) {
                 std::vector<uint8_t> data(buffer.data(), buffer.data() + bytesReceived);
-                
+
                 std::lock_guard<std::mutex> lock(m_callbackMutex);
                 if (m_receiveCallback) {
                     try {
                         m_receiveCallback(data, address, port);
                     } catch (const std::exception& e) {
-                        logger->error("Exception in receive callback: {}", e.what());
+                        logger.error("Exception in receive callback: {}", e.what());
                     }
                 }
             } else if (bytesReceived < 0) {
                 // Error occurred
-                logger->error("Error in receive loop");
+                logger.error("Error in receive loop");
                 break;
             }
-            
+
             // Sleep a bit to avoid busy waiting
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        
-        logger->info("Receive loop thread stopped");
+
+        logger.debug("Receive loop thread stopped");
     }
-    
+
     SOCKET m_socket;
     std::atomic<bool> m_running;
     std::thread m_receiveThread;
@@ -281,11 +282,11 @@ bool UDPSocket::bind(uint16_t port) {
     return m_impl->bind(port);
 }
 
-int UDPSocket::sendTo(const void* data, size_t size, const std::string& address, uint16_t port) {
+ssize_t UDPSocket::sendTo(const void* data, size_t size, const std::string& address, uint16_t port) {
     return m_impl->sendTo(data, size, address, port);
 }
 
-int UDPSocket::receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port) {
+ssize_t UDPSocket::receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port) {
     return m_impl->receiveFrom(buffer, size, address, port);
 }
 
