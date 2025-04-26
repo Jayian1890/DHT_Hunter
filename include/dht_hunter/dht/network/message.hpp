@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/types/dht_types.hpp"
 #include <string>
 #include <memory>
 #include <optional>
@@ -78,9 +78,22 @@ public:
      */
     static std::shared_ptr<Message> decode(const uint8_t* data, size_t size);
 
+    /**
+     * @brief Gets the client version
+     * @return The client version, or empty string if not available
+     */
+    const std::string& getClientVersion() const;
+
+    /**
+     * @brief Sets the client version
+     * @param clientVersion The client version
+     */
+    void setClientVersion(const std::string& clientVersion);
+
 protected:
     std::string m_transactionID;
     std::optional<NodeID> m_nodeID;
+    std::string m_clientVersion; // Optional client version ("v" field)
 };
 
 } // namespace dht_hunter::dht

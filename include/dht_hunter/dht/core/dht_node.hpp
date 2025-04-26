@@ -1,9 +1,10 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/extensions/dht_extension.hpp"
+#include "dht_hunter/bittorrent/bt_message_handler.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <memory>
 #include <functional>
@@ -17,6 +18,7 @@ namespace dht_hunter::dht {
 class SocketManager;
 class MessageSender;
 class MessageHandler;
+class BTMessageHandler;
 class TokenManager;
 class PeerStorage;
 class TransactionManager;
@@ -78,6 +80,29 @@ public:
     uint16_t getPort() const;
 
     /**
+     * @brief Handles a BitTorrent PORT message
+     * @param peerAddress The peer's address
+     * @param data The message data
+     * @param length The message length
+     * @return True if the message was handled successfully, false otherwise
+     */
+    bool handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length);
+
+    /**
+     * @brief Handles a BitTorrent PORT message
+     * @param peerAddress The peer's address
+     * @param port The DHT port
+     * @return True if the message was handled successfully, false otherwise
+     */
+    bool handlePortMessage(const network::NetworkAddress& peerAddress, uint16_t port);
+
+    /**
+     * @brief Creates a BitTorrent PORT message
+     * @return The PORT message
+     */
+    std::vector<uint8_t> createPortMessage() const;
+
+    /**
      * @brief Gets the routing table
      * @return The routing table
      */
@@ -130,6 +155,7 @@ private:
     std::shared_ptr<SocketManager> m_socketManager;
     std::shared_ptr<MessageSender> m_messageSender;
     std::shared_ptr<MessageHandler> m_messageHandler;
+    std::shared_ptr<bittorrent::BTMessageHandler> m_btMessageHandler;
     std::shared_ptr<TokenManager> m_tokenManager;
     std::shared_ptr<PeerStorage> m_peerStorage;
     std::shared_ptr<TransactionManager> m_transactionManager;

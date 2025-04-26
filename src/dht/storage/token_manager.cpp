@@ -80,6 +80,8 @@ bool TokenManager::isRunning() const {
 std::string TokenManager::generateToken(const network::EndPoint& endpoint) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // Generate a token using the current secret
+    // As per BEP-5, tokens are generated using the SHA1 hash of the IP address concatenated with a secret
     return computeToken(endpoint, m_currentSecret);
 }
 
@@ -93,6 +95,8 @@ bool TokenManager::verifyToken(const std::string& token, const network::EndPoint
     }
 
     // Check if the token matches the previous secret
+    // As per BEP-5, tokens must be accepted for a reasonable amount of time after they have been distributed
+    // BEP-5 recommends accepting tokens up to 10 minutes old
     std::string previousToken = computeToken(endpoint, m_previousSecret);
     if (token == previousToken) {
         return true;
@@ -105,6 +109,8 @@ void TokenManager::rotateSecret() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // Rotate the secrets
+    // Keep the previous secret to verify tokens that were issued with it
+    // As per BEP-5, tokens up to 10 minutes old should be accepted
     m_previousSecret = m_currentSecret;
     m_currentSecret = generateRandomSecret();
     m_lastRotation = std::chrono::steady_clock::now();
@@ -145,6 +151,8 @@ std::string TokenManager::generateRandomSecret() {
 
 std::string TokenManager::computeToken(const network::EndPoint& endpoint, const std::string& secret) {
     // Compute a token based on the endpoint and the secret
+    // As per BEP-5, the token is the SHA1 hash of the IP address concatenated with a secret
+    // We include the port as well for additional security
     std::string data = endpoint.getAddress().toString() + ":" + std::to_string(endpoint.getPort()) + ":" + secret;
 
     // Compute the SHA-1 hash

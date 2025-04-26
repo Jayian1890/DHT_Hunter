@@ -39,12 +39,26 @@ public:
      */
     static std::shared_ptr<ResponseMessage> decode(const dht_hunter::bencode::BencodeValue& value);
 
+    /**
+     * @brief Gets the sender's IP address
+     * @return The sender's IP address, or empty string if not available
+     */
+    const std::string& getSenderIP() const;
+
+    /**
+     * @brief Sets the sender's IP address
+     * @param senderIP The sender's IP address
+     */
+    void setSenderIP(const std::string& senderIP);
+
 protected:
     /**
      * @brief Gets the response values
      * @return The response values
      */
     virtual std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const = 0;
+
+    std::string m_senderIP; // Optional sender IP address ("ip" field)
 };
 
 /**

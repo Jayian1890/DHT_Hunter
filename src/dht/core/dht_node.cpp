@@ -33,6 +33,7 @@ DHTNode::DHTNode(const DHTConfig& config)
     m_peerLookup = PeerLookup::getInstance(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender, m_tokenManager, m_peerStorage);
     m_bootstrapper = Bootstrapper::getInstance(config, m_nodeID, m_routingManager, m_nodeLookup);
     m_messageHandler = MessageHandler::getInstance(config, m_nodeID, m_messageSender, m_routingTable, m_tokenManager, m_peerStorage, m_transactionManager);
+    m_btMessageHandler = bittorrent::BTMessageHandler::getInstance(m_routingManager);
 
     // Create DHT extensions
     m_mainlineDHT = std::make_shared<extensions::MainlineDHT>(config, m_nodeID, m_routingTable);
@@ -176,6 +177,27 @@ const NodeID& DHTNode::getNodeID() const {
 
 uint16_t DHTNode::getPort() const {
     return m_config.getPort();
+}
+
+bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length) {
+    if (!m_running || !m_btMessageHandler) {
+        return false;
+    }
+
+    return m_btMessageHandler->handlePortMessage(peerAddress, data, length);
+}
+
+bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, uint16_t port) {
+    if (!m_running || !m_btMessageHandler) {
+        return false;
+    }
+
+    return m_btMessageHandler->handlePortMessage(peerAddress, port);
+}
+
+std::vector<uint8_t> DHTNode::createPortMessage() const {
+    uint16_t port = getPort();
+    return bittorrent::BTMessageHandler::createPortMessage(port);
 }
 
 std::shared_ptr<RoutingTable> DHTNode::getRoutingTable() const {

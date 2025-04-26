@@ -24,6 +24,7 @@ namespace {
     constexpr uint8_t BT_MESSAGE_REQUEST = 6;
     constexpr uint8_t BT_MESSAGE_PIECE = 7;
     constexpr uint8_t BT_MESSAGE_CANCEL = 8;
+    constexpr uint8_t BT_MESSAGE_PORT = 9;  // DHT port message
 
     // Maximum number of metadata pieces to request at once
     constexpr uint32_t MAX_METADATA_REQUESTS = 5;
@@ -253,6 +254,15 @@ void BTConnection::processMessage(const uint8_t* data, size_t length) {
 
         case BT_MESSAGE_CANCEL:
             getLogger()->debug("Received cancel message");
+            break;
+
+        case BT_MESSAGE_PORT:
+            getLogger()->debug("Received PORT message");
+            if (length >= 3) { // PORT message is 3 bytes: id (1 byte) + port (2 bytes)
+                handlePortMessage(data, length);
+            } else {
+                getLogger()->warning("Received invalid PORT message: too short");
+            }
             break;
 
         default:

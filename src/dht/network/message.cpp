@@ -32,6 +32,14 @@ void Message::setNodeID(const NodeID& nodeID) {
     m_nodeID = nodeID;
 }
 
+const std::string& Message::getClientVersion() const {
+    return m_clientVersion;
+}
+
+void Message::setClientVersion(const std::string& clientVersion) {
+    m_clientVersion = clientVersion;
+}
+
 std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
     if (!data || size == 0) {
         return nullptr;
@@ -76,20 +84,36 @@ std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
         // Get the message type
         std::string messageType = *yValue;
 
+        // Check for client version (optional)
+        std::string clientVersion;
+        auto vValue = bencodeData->getString("v");
+        if (vValue) {
+            clientVersion = *vValue;
+            logger.debug("Client version: " + clientVersion);
+        }
+
         // Decode the message based on its type
+        std::shared_ptr<Message> message;
         if (messageType == "q") {
             // Query message
-            return QueryMessage::decode(*bencodeData);
+            message = QueryMessage::decode(*bencodeData);
         } else if (messageType == "r") {
             // Response message
-            return ResponseMessage::decode(*bencodeData);
+            message = ResponseMessage::decode(*bencodeData);
         } else if (messageType == "e") {
             // Error message
-            return ErrorMessage::decode(*bencodeData);
+            message = ErrorMessage::decode(*bencodeData);
         } else {
             logger.error("Unknown message type: " + messageType);
             return nullptr;
         }
+
+        // Set the client version if available
+        if (message && !clientVersion.empty()) {
+            message->setClientVersion(clientVersion);
+        }
+
+        return message;
     } catch (const std::exception& e) {
         logger.error("Failed to decode message: " + std::string(e.what()));
         return nullptr;

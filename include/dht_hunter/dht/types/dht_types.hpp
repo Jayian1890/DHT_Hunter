@@ -7,7 +7,7 @@
 #include <memory>
 #include <optional>
 #include "dht_hunter/network/network_address.hpp"
-#include "dht_hunter/dht/core/node_id.hpp"
+#include "dht_hunter/dht/types/node_id.hpp"
 
 namespace dht_hunter::dht {
 
@@ -135,5 +135,3 @@ namespace std {
         }
     };
 }
-
-

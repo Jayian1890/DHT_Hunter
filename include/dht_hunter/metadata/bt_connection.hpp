@@ -7,6 +7,11 @@
 #include "dht_hunter/metadata/extension_protocol.hpp"
 #include "dht_hunter/metadata/ut_metadata.hpp"
 
+// Forward declarations
+namespace dht_hunter::dht {
+    class RoutingManager;
+}
+
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -197,6 +202,13 @@ private:
      * @return True if the metadata is valid, false otherwise
      */
     bool validateMetadata(const std::vector<uint8_t>& metadata) const;
+
+    /**
+     * @brief Handles a PORT message from the peer
+     * @param data The message data
+     * @param length The message length
+     */
+    void handlePortMessage(const uint8_t* data, size_t length);
 
     /**
      * @brief Sets the connection state

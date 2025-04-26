@@ -1,11 +1,13 @@
 # Define the DHT library
 add_library(dht_hunter_dht
+    # Types components
+    types/dht_types.cpp
+    types/node_id.cpp
+
     # Core components
     core/dht_node.cpp
     core/dht_config.cpp
     core/dht_constants.cpp
-    core/dht_types.cpp
-    core/node_id.cpp
     core/routing_table.cpp
 
     # Network components

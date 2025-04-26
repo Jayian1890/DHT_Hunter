@@ -37,6 +37,7 @@ RoutingManager::RoutingManager(const DHTConfig& config,
       m_transactionManager(transactionManager),
       m_messageSender(messageSender),
       m_running(false),
+      m_bucketRefreshThreadRunning(false),
       m_logger(event::Logger::forComponent("DHT.RoutingManager")) {
 
     // Create the node verifier
@@ -81,6 +82,9 @@ bool RoutingManager::start() {
     // Start the save thread
     m_saveThread = std::thread(&RoutingManager::saveRoutingTablePeriodically, this);
 
+    // Start the bucket refresh thread
+    startBucketRefreshThread();
+
     return true;
 }
 
@@ -104,6 +108,9 @@ void RoutingManager::stop() {
     if (m_saveThread.joinable()) {
         m_saveThread.join();
     }
+
+    // Stop the bucket refresh thread
+    stopBucketRefreshThread();
 
     // Save the routing table - do this outside the lock
     if (!m_config.getRoutingTablePath().empty()) {
@@ -294,6 +301,90 @@ void RoutingManager::saveRoutingTablePeriodically() {
     }
 
     m_logger.info("Routing table save thread stopped");
+}
+
+void RoutingManager::startBucketRefreshThread() {
+    std::lock_guard<std::mutex> lock(m_bucketRefreshMutex);
+
+    if (m_bucketRefreshThreadRunning) {
+        m_logger.warning("Bucket refresh thread already running");
+        return;
+    }
+
+    m_bucketRefreshThreadRunning = true;
+    m_bucketRefreshThread = std::thread(&RoutingManager::checkAndRefreshBuckets, this);
+
+    m_logger.debug("Started bucket refresh thread");
+}
+
+void RoutingManager::stopBucketRefreshThread() {
+    {
+        std::lock_guard<std::mutex> lock(m_bucketRefreshMutex);
+
+        if (!m_bucketRefreshThreadRunning) {
+            return;
+        }
+
+        m_bucketRefreshThreadRunning = false;
+        m_bucketRefreshCondition.notify_all();
+    } // Release the lock before joining the thread
+
+    // Wait for the thread to finish
+    if (m_bucketRefreshThread.joinable()) {
+        m_bucketRefreshThread.join();
+    }
+
+    m_logger.debug("Stopped bucket refresh thread");
+}
+
+void RoutingManager::checkAndRefreshBuckets() {
+    try {
+        while (m_bucketRefreshThreadRunning) {
+            // Sleep for 1 minute
+            {
+                std::unique_lock<std::mutex> lock(m_bucketRefreshMutex);
+                m_bucketRefreshCondition.wait_for(lock, std::chrono::minutes(1),
+                    [this] { return !m_bucketRefreshThreadRunning; });
+
+                if (!m_bucketRefreshThreadRunning) {
+                    break;
+                }
+            }
+
+            // Check if we're still running
+            if (!m_running || !m_bucketRefreshThreadRunning) {
+                break;
+            }
+
+            // Check all buckets
+            if (m_routingTable) {
+                size_t bucketCount = m_routingTable->getBucketCount();
+
+                for (size_t i = 0; i < bucketCount; ++i) {
+                    // Check if the bucket needs refreshing
+                    if (m_routingTable->needsRefresh(i)) {
+                        m_logger.debug("Refreshing bucket {}", i);
+
+                        // Refresh the bucket
+                        m_routingTable->refreshBucket(i, [this, i](const std::vector<std::shared_ptr<Node>>& nodes) {
+                            m_logger.debug("Bucket {} refresh completed, found {} nodes", i, nodes.size());
+
+                            // Add the nodes to the routing table
+                            for (const auto& node : nodes) {
+                                addNode(node);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        m_logger.error("Exception in bucket refresh thread: {}", e.what());
+    } catch (...) {
+        m_logger.error("Unknown exception in bucket refresh thread");
+    }
+
+    m_logger.info("Bucket refresh thread stopped");
 }
 
 } // namespace dht_hunter::dht

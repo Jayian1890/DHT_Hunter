@@ -5,6 +5,7 @@ add_subdirectory(event)     # Event system
 add_subdirectory(util)      # Utility functions
 add_subdirectory(bencode)   # Bencode component
 add_subdirectory(dht)       # DHT component
+add_subdirectory(bittorrent) # BitTorrent component
 
 # Main executable
 add_executable(dht_hunter main.cpp)
@@ -17,6 +18,7 @@ target_link_libraries(dht_hunter
     dht_hunter_event
     dht_hunter_util
     dht_hunter_dht
+    dht_hunter_bittorrent
 )
 
 # Set include directories

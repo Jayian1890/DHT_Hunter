@@ -6,13 +6,14 @@
 namespace dht_hunter::dht {
 
 KBucket::KBucket(size_t prefix, size_t kSize)
-    : m_prefix(prefix), m_kSize(kSize) {
+    : m_prefix(prefix), m_kSize(kSize), m_lastChanged(std::chrono::steady_clock::now()) {
 }
 
 KBucket::KBucket(KBucket&& other) noexcept
     : m_prefix(other.m_prefix),
       m_kSize(other.m_kSize),
-      m_nodes(std::move(other.m_nodes)) {
+      m_nodes(std::move(other.m_nodes)),
+      m_lastChanged(other.m_lastChanged) {
 }
 
 KBucket& KBucket::operator=(KBucket&& other) noexcept {
@@ -24,6 +25,7 @@ KBucket& KBucket::operator=(KBucket&& other) noexcept {
         m_prefix = other.m_prefix;
         m_kSize = other.m_kSize;
         m_nodes = std::move(other.m_nodes);
+        m_lastChanged = other.m_lastChanged;
     }
     return *this;
 }
@@ -45,12 +47,16 @@ bool KBucket::addNode(std::shared_ptr<Node> node) {
         // Node already exists, move it to the end (most recently seen)
         (*it)->updateLastSeen();
         std::rotate(it, it + 1, m_nodes.end());
+        // Update the last changed time
+        updateLastChanged();
         return true;
     }
 
     // If the bucket is not full, add the node
     if (m_nodes.size() < m_kSize) {
         m_nodes.push_back(node);
+        // Update the last changed time
+        updateLastChanged();
         return true;
     }
 
@@ -68,6 +74,8 @@ bool KBucket::removeNode(const NodeID& nodeID) {
 
     if (it != m_nodes.end()) {
         m_nodes.erase(it);
+        // Update the last changed time
+        updateLastChanged();
         return true;
     }
 
@@ -123,6 +131,15 @@ bool KBucket::containsNodeID(const NodeID& nodeID, const NodeID& ownID) const {
 
 size_t KBucket::getPrefix() const {
     return m_prefix;
+}
+
+std::chrono::steady_clock::time_point KBucket::getLastChanged() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_lastChanged;
+}
+
+void KBucket::updateLastChanged() {
+    m_lastChanged = std::chrono::steady_clock::now();
 }
 
 // Initialize static members
@@ -399,6 +416,83 @@ void RoutingTable::splitBucket(size_t bucketIndex) {
     m_buckets.insert(m_buckets.begin() + static_cast<std::ptrdiff_t>(bucketIndex) + 1, std::move(newBucket2));
 
     m_logger.debug("Split bucket at index {} into two buckets with prefix {}", bucketIndex, newPrefix);
+}
+
+bool RoutingTable::needsRefresh(size_t bucketIndex) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (bucketIndex >= m_buckets.size()) {
+        return false;
+    }
+
+    // According to BEP-5, buckets that have not been changed in 15 minutes should be refreshed
+    auto now = std::chrono::steady_clock::now();
+    auto lastChanged = m_buckets[bucketIndex].getLastChanged();
+    auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(now - lastChanged).count();
+
+    return elapsed >= 15; // 15 minutes as specified in BEP-5
+}
+
+void RoutingTable::refreshBucket(size_t bucketIndex, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (bucketIndex >= m_buckets.size()) {
+        if (callback) {
+            callback({});
+        }
+        return;
+    }
+
+    // Generate a random ID in the range of the bucket
+    NodeID randomID = generateRandomIDInBucket(bucketIndex);
+    m_logger.debug("Refreshing bucket {} with random ID {}", bucketIndex, randomID.toString());
+
+    // Update the last changed time for the bucket
+    m_buckets[bucketIndex].updateLastChanged();
+
+    // Release the lock before calling the callback to avoid deadlocks
+    lock.~lock_guard();
+
+    // Perform a find_node lookup for the random ID
+    // This will be implemented by the RoutingManager
+    if (callback) {
+        // The callback will be called when the lookup is complete
+        // For now, we just call it with an empty list
+        callback({});
+    }
+}
+
+size_t RoutingTable::getBucketCount() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_buckets.size();
+}
+
+NodeID RoutingTable::generateRandomIDInBucket(size_t bucketIndex) const {
+    // Generate a random ID in the range of the bucket
+    // The bucket covers a specific prefix of the ID space
+    NodeID randomID = NodeID::random();
+
+    // Set the prefix bits to match the bucket's prefix
+    size_t prefix = m_buckets[bucketIndex].getPrefix();
+    size_t prefixBits = prefix;
+
+    // Set the prefix bits of the random ID to match the bucket's prefix
+    for (size_t i = 0; i < prefixBits; ++i) {
+        size_t byteIndex = i / 8;
+        size_t bitIndex = 7 - (i % 8);
+
+        // Get the bit from the node ID
+        bool bit = (m_ownID[byteIndex] & (1 << bitIndex)) != 0;
+
+        // Set the bit in the random ID
+        if (bit) {
+            randomID[byteIndex] |= (1 << bitIndex);
+        } else {
+            randomID[byteIndex] &= ~(1 << bitIndex);
+        }
+    }
+
+    return randomID;
 }
 
 } // namespace dht_hunter::dht

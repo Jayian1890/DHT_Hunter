@@ -39,6 +39,11 @@ std::vector<uint8_t> ErrorMessage::encode() const {
 
     dict->setList("e", error->getList());
 
+    // Add the client version if available
+    if (!m_clientVersion.empty()) {
+        dict->setString("v", m_clientVersion);
+    }
+
     // Encode the dictionary
     std::string encoded = dht_hunter::bencode::BencodeEncoder::encode(dict);
 
@@ -80,6 +85,75 @@ std::shared_ptr<ErrorMessage> ErrorMessage::decode(const dht_hunter::bencode::Be
     }
 
     return std::make_shared<ErrorMessage>(*transactionID, static_cast<ErrorCode>(code), message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createGenericError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::GenericError, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createServerError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::ServerError, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createProtocolError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::ProtocolError, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createMethodUnknownError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::MethodUnknown, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createInvalidTokenError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::InvalidToken, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createInvalidArgumentError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::InvalidArgument, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createInvalidNodeIDError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::InvalidNodeID, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createInvalidInfoHashError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::InvalidInfoHash, message);
+}
+
+std::shared_ptr<ErrorMessage> ErrorMessage::createInvalidPortError(const std::string& transactionID, const std::string& message) {
+    return std::make_shared<ErrorMessage>(transactionID, ErrorCode::InvalidPort, message);
+}
+
+std::string ErrorMessage::getErrorDescription(ErrorCode code) {
+    switch (code) {
+        case ErrorCode::GenericError:
+            return "Generic error";
+        case ErrorCode::ServerError:
+            return "Server error";
+        case ErrorCode::ProtocolError:
+            return "Protocol error";
+        case ErrorCode::MethodUnknown:
+            return "Method unknown";
+        case ErrorCode::InvalidToken:
+            return "Invalid token";
+        case ErrorCode::InvalidArgument:
+            return "Invalid argument";
+        case ErrorCode::InvalidNodeID:
+            return "Invalid node ID";
+        case ErrorCode::InvalidInfoHash:
+            return "Invalid info hash";
+        case ErrorCode::InvalidPort:
+            return "Invalid port";
+        case ErrorCode::InvalidIP:
+            return "Invalid IP address";
+        case ErrorCode::InvalidMessage:
+            return "Invalid message format";
+        case ErrorCode::InvalidSignature:
+            return "Invalid signature";
+        case ErrorCode::InvalidTransaction:
+            return "Invalid transaction ID";
+        default:
+            return "Unknown error";
+    }
 }
 
 } // namespace dht_hunter::dht

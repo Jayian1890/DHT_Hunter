@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/network/message.hpp"
 #include "dht_hunter/dht/network/query_message.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"

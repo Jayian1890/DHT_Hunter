@@ -86,8 +86,8 @@ constexpr size_t DEFAULT_BOOTSTRAP_NODES_COUNT = 4;
 constexpr int DEFAULT_BOOTSTRAP_TIMEOUT = 10;
 
 /**
- * @brief Default token rotation interval in seconds
+ * @brief Default token rotation interval in seconds (5 minutes as per BEP-5)
  */
-constexpr int DEFAULT_TOKEN_ROTATION_INTERVAL = 600;
+constexpr int DEFAULT_TOKEN_ROTATION_INTERVAL = 300;
 
 } // namespace dht_hunter::dht

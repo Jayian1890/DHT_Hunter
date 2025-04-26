@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/event/logger.hpp"
 #include <vector>
@@ -93,10 +93,22 @@ public:
      */
     size_t getPrefix() const;
 
+    /**
+     * @brief Gets the last time the bucket was changed
+     * @return The last time the bucket was changed
+     */
+    std::chrono::steady_clock::time_point getLastChanged() const;
+
+    /**
+     * @brief Updates the last changed time to now
+     */
+    void updateLastChanged();
+
 private:
     size_t m_prefix;
     size_t m_kSize;
     std::vector<std::shared_ptr<Node>> m_nodes;
+    std::chrono::steady_clock::time_point m_lastChanged; // Time when the bucket was last changed
     mutable std::mutex m_mutex;
 };
 
@@ -168,6 +180,12 @@ public:
     size_t getNodeCount() const;
 
     /**
+     * @brief Gets the number of buckets in the routing table
+     * @return The number of buckets
+     */
+    size_t getBucketCount() const;
+
+    /**
      * @brief Saves the routing table to a file
      * @param filePath The path to the file
      * @return True if the routing table was saved successfully, false otherwise
@@ -180,6 +198,20 @@ public:
      * @return True if the routing table was loaded successfully, false otherwise
      */
     bool loadFromFile(const std::string& filePath);
+
+    /**
+     * @brief Checks if a bucket needs refreshing
+     * @param bucketIndex The index of the bucket to check
+     * @return True if the bucket needs refreshing, false otherwise
+     */
+    bool needsRefresh(size_t bucketIndex) const;
+
+    /**
+     * @brief Refreshes a bucket by performing a find_node lookup for a random ID in the bucket
+     * @param bucketIndex The index of the bucket to refresh
+     * @param callback The callback to call when the refresh is complete
+     */
+    void refreshBucket(size_t bucketIndex, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback = nullptr);
 
 private:
     /**
@@ -210,6 +242,13 @@ private:
      * @param bucketIndex The index of the bucket to split
      */
     void splitBucket(size_t bucketIndex);
+
+    /**
+     * @brief Generates a random ID in the range of a bucket
+     * @param bucketIndex The index of the bucket
+     * @return A random ID in the range of the bucket
+     */
+    NodeID generateRandomIDInBucket(size_t bucketIndex) const;
 
     NodeID m_ownID;
     size_t m_kBucketSize;

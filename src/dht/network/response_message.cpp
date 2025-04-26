@@ -8,6 +8,14 @@ ResponseMessage::ResponseMessage(const std::string& transactionID, const NodeID&
     : Message(transactionID, nodeID) {
 }
 
+const std::string& ResponseMessage::getSenderIP() const {
+    return m_senderIP;
+}
+
+void ResponseMessage::setSenderIP(const std::string& senderIP) {
+    m_senderIP = senderIP;
+}
+
 MessageType ResponseMessage::getType() const {
     return MessageType::Response;
 }
@@ -35,6 +43,16 @@ std::vector<uint8_t> ResponseMessage::encode() const {
 
     // Add the response values to the dictionary
     dict->set("r", values);
+
+    // Add the client version if available
+    if (!m_clientVersion.empty()) {
+        dict->setString("v", m_clientVersion);
+    }
+
+    // Add the sender IP if available
+    if (!m_senderIP.empty()) {
+        dict->setString("ip", m_senderIP);
+    }
 
     // Encode the dictionary
     std::string encoded = dht_hunter::bencode::BencodeEncoder::encode(dict);
@@ -80,21 +98,37 @@ std::shared_ptr<ResponseMessage> ResponseMessage::decode(const dht_hunter::benco
         return nullptr;
     }
 
+    // Check for sender IP (optional)
+    std::string senderIP;
+    auto ipValue = value.getString("ip");
+    if (ipValue) {
+        senderIP = *ipValue;
+        logger.debug("Sender IP: " + senderIP);
+    }
+
     // Determine the response type based on the response values
+    std::shared_ptr<ResponseMessage> response;
     if (responseValuesObj.contains("nodes") && responseValuesObj.contains("token")) {
         // This is a get_peers response with nodes
-        return GetPeersResponse::create(*transactionID, nodeID, responseValuesObj);
+        response = GetPeersResponse::create(*transactionID, nodeID, responseValuesObj);
     } else if (responseValuesObj.contains("values") && responseValuesObj.contains("token")) {
         // This is a get_peers response with peers
-        return GetPeersResponse::create(*transactionID, nodeID, responseValuesObj);
+        response = GetPeersResponse::create(*transactionID, nodeID, responseValuesObj);
     } else if (responseValuesObj.contains("nodes")) {
         // This is a find_node response
-        return FindNodeResponse::create(*transactionID, nodeID, responseValuesObj);
+        response = FindNodeResponse::create(*transactionID, nodeID, responseValuesObj);
     } else {
         // This is either a ping response or an announce_peer response
         // Since they have the same format (just the node ID), we'll return a ping response
-        return PingResponse::create(*transactionID, nodeID, responseValuesObj);
+        response = PingResponse::create(*transactionID, nodeID, responseValuesObj);
     }
+
+    // Set the sender IP if available
+    if (response && !senderIP.empty()) {
+        response->setSenderIP(senderIP);
+    }
+
+    return response;
 }
 
 PingResponse::PingResponse(const std::string& transactionID, const NodeID& nodeID)

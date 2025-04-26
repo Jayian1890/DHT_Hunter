@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/logforge/logforge.hpp"
 #include "dht_hunter/util/mutex_utils.hpp"
 

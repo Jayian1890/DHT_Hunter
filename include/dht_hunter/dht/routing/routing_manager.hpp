@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/core/dht_types.hpp"
+#include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/routing/node_verifier.hpp"
 #include "dht_hunter/event/logger.hpp"
@@ -132,6 +132,21 @@ private:
     void saveRoutingTablePeriodically();
 
     /**
+     * @brief Checks and refreshes buckets that need refreshing
+     */
+    void checkAndRefreshBuckets();
+
+    /**
+     * @brief Starts the bucket refresh thread
+     */
+    void startBucketRefreshThread();
+
+    /**
+     * @brief Stops the bucket refresh thread
+     */
+    void stopBucketRefreshThread();
+
+    /**
      * @brief Private constructor for singleton pattern
      */
     RoutingManager(const DHTConfig& config,
@@ -153,6 +168,13 @@ private:
     std::atomic<bool> m_running;
     std::thread m_saveThread;
     mutable std::mutex m_mutex;
+
+    // Bucket refresh thread
+    std::thread m_bucketRefreshThread;
+    std::atomic<bool> m_bucketRefreshThreadRunning;
+    std::mutex m_bucketRefreshMutex;
+    std::condition_variable m_bucketRefreshCondition;
+
     event::Logger m_logger;
 };
 

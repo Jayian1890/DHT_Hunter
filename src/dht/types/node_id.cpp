@@ -1,4 +1,4 @@
-#include "dht_hunter/dht/core/node_id.hpp"
+#include "dht_hunter/dht/types/node_id.hpp"
 #include "dht_hunter/util/hash.hpp"
 #include <iomanip>
 #include <random>

@@ -68,6 +68,15 @@ void MessageHandler::handleRawMessage(const uint8_t* data, size_t size, const ne
         return;
     }
 
+    // Set the sender IP in responses
+    if (message->getType() == MessageType::Response) {
+        auto response = std::dynamic_pointer_cast<ResponseMessage>(message);
+        if (response && response->getSenderIP().empty()) {
+            // Only set the sender IP if it's not already set
+            response->setSenderIP(sender.getAddress().toString());
+        }
+    }
+
     // Handle the message
     handleMessage(message, sender);
 }
@@ -103,6 +112,19 @@ void MessageHandler::handleMessage(std::shared_ptr<Message> message, const netwo
 void MessageHandler::handleQuery(std::shared_ptr<QueryMessage> query, const network::EndPoint& sender) {
     if (!query) {
         m_logger.error("Invalid query");
+        return;
+    }
+
+    // Validate the query
+    if (!query->getNodeID()) {
+        m_logger.error("Query does not have a node ID");
+
+        // Send an error response
+        if (m_messageSender) {
+            auto error = ErrorMessage::createInvalidNodeIDError(query->getTransactionID(), "Query does not have a node ID");
+            m_messageSender->sendError(error, sender);
+        }
+
         return;
     }
 
@@ -192,6 +214,19 @@ void MessageHandler::handleFindNodeQuery(std::shared_ptr<FindNodeQuery> query, c
         return;
     }
 
+    // Validate the target node ID
+    if (!isValidNodeID(query->getTargetID())) {
+        m_logger.error("Invalid target node ID in find_node query");
+
+        // Send an error response
+        if (m_messageSender) {
+            auto error = ErrorMessage::createInvalidNodeIDError(query->getTransactionID(), "Invalid target node ID");
+            m_messageSender->sendError(error, sender);
+        }
+
+        return;
+    }
+
     // Get the closest nodes to the target ID
     std::vector<std::shared_ptr<Node>> closestNodes;
     if (m_routingTable) {
@@ -214,6 +249,19 @@ void MessageHandler::handleFindNodeQuery(std::shared_ptr<FindNodeQuery> query, c
 void MessageHandler::handleGetPeersQuery(std::shared_ptr<GetPeersQuery> query, const network::EndPoint& sender) {
     if (!query) {
         m_logger.error("Invalid get_peers query");
+        return;
+    }
+
+    // Validate the info hash
+    if (!isValidInfoHash(query->getInfoHash())) {
+        m_logger.error("Invalid info hash in get_peers query");
+
+        // Send an error response
+        if (m_messageSender) {
+            auto error = ErrorMessage::createInvalidInfoHashError(query->getTransactionID(), "Invalid info hash");
+            m_messageSender->sendError(error, sender);
+        }
+
         return;
     }
 
@@ -262,6 +310,45 @@ void MessageHandler::handleGetPeersQuery(std::shared_ptr<GetPeersQuery> query, c
 void MessageHandler::handleAnnouncePeerQuery(std::shared_ptr<AnnouncePeerQuery> query, const network::EndPoint& sender) {
     if (!query) {
         m_logger.error("Invalid announce_peer query");
+        return;
+    }
+
+    // Validate the info hash
+    if (!isValidInfoHash(query->getInfoHash())) {
+        m_logger.error("Invalid info hash in announce_peer query");
+
+        // Send an error response
+        if (m_messageSender) {
+            auto error = ErrorMessage::createInvalidInfoHashError(query->getTransactionID(), "Invalid info hash");
+            m_messageSender->sendError(error, sender);
+        }
+
+        return;
+    }
+
+    // Validate the port
+    if (!query->isImpliedPort() && (query->getPort() == 0 || query->getPort() > 65535)) {
+        m_logger.error("Invalid port in announce_peer query: {}", query->getPort());
+
+        // Send an error response
+        if (m_messageSender) {
+            auto error = ErrorMessage::createInvalidPortError(query->getTransactionID(), "Invalid port");
+            m_messageSender->sendError(error, sender);
+        }
+
+        return;
+    }
+
+    // Validate the token
+    if (!m_tokenManager || !m_tokenManager->verifyToken(query->getToken(), sender)) {
+        m_logger.error("Invalid token in announce_peer query");
+
+        // Send an error response
+        if (m_messageSender) {
+            auto error = ErrorMessage::createInvalidTokenError(query->getTransactionID(), "Invalid token");
+            m_messageSender->sendError(error, sender);
+        }
+
         return;
     }
 

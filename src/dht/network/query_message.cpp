@@ -43,6 +43,11 @@ std::vector<uint8_t> QueryMessage::encode() const {
     // Add the arguments to the dictionary
     dict->set("a", args);
 
+    // Add the client version if available
+    if (!m_clientVersion.empty()) {
+        dict->setString("v", m_clientVersion);
+    }
+
     // Encode the dictionary
     std::string encoded = dht_hunter::bencode::BencodeEncoder::encode(dict);
 
