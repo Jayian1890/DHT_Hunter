@@ -281,10 +281,11 @@ void Crawler::crawl() {
     updateStatistics();
 
     // Log the completion of a crawl iteration with statistics
-    unified_event::logDebug("DHT.Crawler", "Completed crawl iteration - " +
-                          "Nodes: " + std::to_string(m_statistics.nodesDiscovered) + ", " +
-                          "Info hashes: " + std::to_string(m_statistics.infoHashesDiscovered) + ", " +
-                          "Peers: " + std::to_string(m_statistics.peersDiscovered));
+    std::string statsMessage = "Completed crawl iteration - ";
+    statsMessage += "Nodes: " + std::to_string(m_statistics.nodesDiscovered) + ", ";
+    statsMessage += "Info hashes: " + std::to_string(m_statistics.infoHashesDiscovered) + ", ";
+    statsMessage += "Peers: " + std::to_string(m_statistics.peersDiscovered);
+    unified_event::logDebug("DHT.Crawler", statsMessage);
 }
 
 void Crawler::discoverNodes() {
@@ -316,14 +317,18 @@ void Crawler::discoverNodes() {
         nodesToCrawl.assign(allNodes.begin(), allNodes.begin() + static_cast<long>(nodesToTake));
     }
 
+    // Log node selection information
+    std::string selectionMessage = "Node selection - Selected for crawl: " + std::to_string(nodesToCrawl.size());
+    unified_event::logDebug("DHT.Crawler", selectionMessage);
+
     // Perform node lookups
     for (const auto& node : nodesToCrawl) {
         if (m_nodeLookup) {
             std::string nodeIDStr = nodeIDToString(node->getID());
             std::string endpoint = node->getEndpoint().toString();
 
-            unified_event::logDebug("DHT.Crawler", "Looking up nodes near " + nodeIDStr +
-                                  " at " + endpoint);
+            std::string lookupMessage = "Looking up nodes near " + nodeIDStr + " at " + endpoint;
+            unified_event::logDebug("DHT.Crawler", lookupMessage);
 
             m_nodeLookup->lookup(node->getID(), [this, nodeIDStr](const std::vector<std::shared_ptr<Node>>& nodes) {
                 std::lock_guard<std::mutex> lock(m_mutex);
@@ -345,9 +350,10 @@ void Crawler::discoverNodes() {
                 // Update statistics
                 m_statistics.nodesDiscovered = m_discoveredNodes.size();
 
-                unified_event::logDebug("DHT.Crawler", "Node lookup for " + nodeIDStr +
-                                      " completed - Found: " + std::to_string(nodes.size()) +
-                                      ", New: " + std::to_string(newNodes));
+                std::string completionMessage = "Node lookup for " + nodeIDStr + " completed";
+                completionMessage += " - Found: " + std::to_string(nodes.size());
+                completionMessage += ", New: " + std::to_string(newNodes);
+                unified_event::logDebug("DHT.Crawler", completionMessage);
             });
         }
     }
@@ -357,8 +363,8 @@ void Crawler::discoverNodes() {
     std::mt19937 g(rd());
     std::uniform_int_distribution<> dis(0, 255);
 
-    unified_event::logDebug("DHT.Crawler", "Generating " + std::to_string(m_crawlerConfig.parallelCrawls) +
-                          " random node IDs for lookup");
+    std::string generatingMessage = "Generating " + std::to_string(m_crawlerConfig.parallelCrawls) + " random node IDs for lookup";
+    unified_event::logDebug("DHT.Crawler", generatingMessage);
 
     for (size_t i = 0; i < m_crawlerConfig.parallelCrawls; ++i) {
         // Generate a random node ID
@@ -373,7 +379,8 @@ void Crawler::discoverNodes() {
         NodeID randomNodeID(randomNodeIDArray);
 
         std::string randomNodeIDStr = nodeIDToString(randomNodeID);
-        unified_event::logDebug("DHT.Crawler", "Looking up random node ID: " + randomNodeIDStr);
+        std::string randomLookupMessage = "Looking up random node ID: " + randomNodeIDStr;
+        unified_event::logDebug("DHT.Crawler", randomLookupMessage);
 
         // Perform a node lookup
         if (m_nodeLookup) {
@@ -397,9 +404,10 @@ void Crawler::discoverNodes() {
                 // Update statistics
                 m_statistics.nodesDiscovered = m_discoveredNodes.size();
 
-                unified_event::logDebug("DHT.Crawler", "Random node lookup for " + randomNodeIDStr +
-                                      " completed - Found: " + std::to_string(nodes.size()) +
-                                      ", New: " + std::to_string(newNodes));
+                std::string randomCompletionMessage = "Random node lookup for " + randomNodeIDStr + " completed";
+                randomCompletionMessage += " - Found: " + std::to_string(nodes.size());
+                randomCompletionMessage += ", New: " + std::to_string(newNodes);
+                unified_event::logDebug("DHT.Crawler", randomCompletionMessage);
             });
         }
     }
@@ -421,8 +429,8 @@ void Crawler::monitorInfoHashes() {
         }
     }
 
-    unified_event::logDebug("DHT.Crawler", "Monitoring " + std::to_string(infoHashesToMonitor.size()) +
-                          " info hashes");
+    std::string monitoringMessage = "Monitoring " + std::to_string(infoHashesToMonitor.size()) + " info hashes";
+    unified_event::logDebug("DHT.Crawler", monitoringMessage);
 
     // Perform peer lookups for each info hash
     for (const auto& infoHash : infoHashesToMonitor) {
@@ -456,6 +464,9 @@ void Crawler::monitorInfoHashes() {
     std::mt19937 g(rd());
     std::uniform_int_distribution<> dis(0, 255);
 
+    std::string randomHashMessage = "Generating " + std::to_string(m_crawlerConfig.parallelCrawls) + " random info hashes for lookup";
+    unified_event::logDebug("DHT.Crawler", randomHashMessage);
+
     for (size_t i = 0; i < m_crawlerConfig.parallelCrawls; ++i) {
         // Generate a random info hash
         std::vector<uint8_t> randomInfoHashVec(20);
@@ -468,9 +479,13 @@ void Crawler::monitorInfoHashes() {
         std::copy_n(randomInfoHashVec.begin(), 20, randomInfoHashArray.begin());
         InfoHash randomInfoHash(randomInfoHashArray);
 
+        std::string randomInfoHashStr = infoHashToString(randomInfoHash);
+        std::string randomHashLookupMessage = "Looking up random info hash: " + randomInfoHashStr;
+        unified_event::logDebug("DHT.Crawler", randomHashLookupMessage);
+
         // Perform a peer lookup
         if (m_peerLookup) {
-            m_peerLookup->lookup(randomInfoHash, [this, randomInfoHash](const std::vector<network::EndPoint>& peers) {
+            m_peerLookup->lookup(randomInfoHash, [this, randomInfoHash, randomInfoHashStr](const std::vector<network::EndPoint>& peers) {
                 std::lock_guard<std::mutex> lock(m_mutex);
 
                 // Only add the info hash if we found peers
@@ -492,6 +507,13 @@ void Crawler::monitorInfoHashes() {
                         const auto& peerSetCount = infoHashPeersPair.second;
                         m_statistics.peersDiscovered += peerSetCount.size();
                     }
+
+                    std::string activeTorrentMessage = "Found active torrent - Info hash: " + randomInfoHashStr;
+                    activeTorrentMessage += ", Peers: " + std::to_string(peers.size());
+                    unified_event::logInfo("DHT.Crawler", activeTorrentMessage);
+                } else {
+                    std::string noPeersMessage = "No peers found for random info hash: " + randomInfoHashStr;
+                    unified_event::logDebug("DHT.Crawler", noPeersMessage);
                 }
             });
         }
@@ -520,8 +542,9 @@ void Crawler::updateStatistics() {
             m_discoveredNodes.erase(nodeIDStr);
         }
 
-        unified_event::logDebug("DHT.Crawler", "Pruned " + std::to_string(nodeIDsToRemove.size()) +
-                              " nodes, remaining: " + std::to_string(m_discoveredNodes.size()));
+        std::string prunedNodesMessage = "Pruned " + std::to_string(nodeIDsToRemove.size()) + " nodes";
+        prunedNodesMessage += ", remaining: " + std::to_string(m_discoveredNodes.size());
+        unified_event::logDebug("DHT.Crawler", prunedNodesMessage);
     }
 
     if (m_discoveredInfoHashes.size() > m_crawlerConfig.maxInfoHashes) {
@@ -544,8 +567,9 @@ void Crawler::updateStatistics() {
             m_infoHashPeers.erase(infoHashStr);
         }
 
-        unified_event::logDebug("DHT.Crawler", "Pruned " + std::to_string(infoHashesToRemoveVec.size()) +
-                              " info hashes, remaining: " + std::to_string(m_discoveredInfoHashes.size()));
+        std::string prunedHashesMessage = "Pruned " + std::to_string(infoHashesToRemoveVec.size()) + " info hashes";
+        prunedHashesMessage += ", remaining: " + std::to_string(m_discoveredInfoHashes.size());
+        unified_event::logDebug("DHT.Crawler", prunedHashesMessage);
     }
 
     // Update statistics
@@ -592,8 +616,9 @@ void Crawler::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Eve
         auto methodOpt = nodeDiscoveredEvent->getProperty<std::string>("discoveryMethod");
         std::string methodInfo = methodOpt ? ", " + *methodOpt : "";
 
-        unified_event::logInfo("DHT.Crawler", "Node discovered - ID: " + nodeIDStr +
-                              ", endpoint: " + endpoint + bucketInfo + methodInfo);
+        std::string logMessage = "Node discovered - ID: " + nodeIDStr;
+        logMessage += ", endpoint: " + endpoint + bucketInfo + methodInfo;
+        unified_event::logInfo("DHT.Crawler", logMessage);
     }
 }
 
@@ -628,7 +653,8 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
 
     // Log the event with detailed information
     if (isNewInfoHash) {
-        unified_event::logInfo("DHT.Crawler", "New info hash discovered - Hash: " + infoHashStr);
+        std::string logMessage = "New info hash discovered - Hash: " + infoHashStr;
+        unified_event::logInfo("DHT.Crawler", logMessage);
     }
 
     if (isNewPeer) {
@@ -636,8 +662,9 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
         bool isMonitored = m_monitoredInfoHashes.find(infoHashStr) != m_monitoredInfoHashes.end();
         std::string monitoredStr = isMonitored ? " (monitored)" : "";
 
-        unified_event::logInfo("DHT.Crawler", "New peer discovered - Hash: " + infoHashStr +
-                              monitoredStr + ", peer: " + peerStr);
+        std::string logMessage = "New peer discovered - Hash: " + infoHashStr;
+        logMessage += monitoredStr + ", peer: " + peerStr;
+        unified_event::logInfo("DHT.Crawler", logMessage);
     }
 }
 
@@ -653,32 +680,36 @@ void Crawler::handleMessageReceivedEvent(const std::shared_ptr<unified_event::Ev
     m_statistics.responsesReceived++;
 
     // Log detailed information about the message
-    auto message = messageReceivedEvent->getProperty<std::shared_ptr<dht::Message>>("message");
-    auto sender = messageReceivedEvent->getProperty<network::NetworkAddress>("sender");
+    auto messageOpt = messageReceivedEvent->getProperty<std::shared_ptr<dht::Message>>("message");
+    auto senderOpt = messageReceivedEvent->getProperty<network::EndPoint>("sender");
 
-    if (message && sender) {
+    if (messageOpt && senderOpt) {
+        auto message = *messageOpt;
+        auto sender = *senderOpt;
+
         // Get message type
         std::string messageType;
-        if ((*message)->getType() == dht::MessageType::Response) {
+        if (message->getType() == dht::MessageType::Response) {
             messageType = "Response";
 
             // Check if it's an error response
-            auto errorCode = (*message)->getProperty<int>("errorCode");
-            if (errorCode) {
+            auto errorResponse = std::dynamic_pointer_cast<dht::ErrorMessage>(message);
+            if (errorResponse) {
                 m_statistics.errorsReceived++;
-                messageType = "Error (" + std::to_string(*errorCode) + ")";
+                messageType = "Error (" + std::to_string(static_cast<int>(errorResponse->getCode())) + ")";
             }
-        } else if ((*message)->getType() == dht::MessageType::Query) {
+        } else if (message->getType() == dht::MessageType::Query) {
             messageType = "Query";
         }
 
         // Get transaction ID
-        std::string transactionID = (*message)->getTransactionID();
+        std::string transactionID = message->getTransactionID();
 
         // Log at debug level since these can be very frequent
-        unified_event::logDebug("DHT.Crawler", "Message received - Type: " + messageType +
-                               ", from: " + (*sender).toString() +
-                               ", txID: " + transactionID);
+        std::string logMessage = "Message received - Type: " + messageType;
+        logMessage += ", from: " + sender.toString();
+        logMessage += ", txID: " + transactionID;
+        unified_event::logDebug("DHT.Crawler", logMessage);
     }
 }
 
@@ -694,14 +725,17 @@ void Crawler::handleMessageSentEvent(const std::shared_ptr<unified_event::Event>
     m_statistics.queriesSent++;
 
     // Log detailed information about the message
-    auto message = messageSentEvent->getProperty<std::shared_ptr<dht::Message>>("message");
-    auto recipient = messageSentEvent->getProperty<network::NetworkAddress>("recipient");
+    auto messageOpt = messageSentEvent->getProperty<std::shared_ptr<dht::Message>>("message");
+    auto recipientOpt = messageSentEvent->getProperty<network::EndPoint>("recipient");
 
-    if (message && recipient) {
+    if (messageOpt && recipientOpt) {
+        auto message = *messageOpt;
+        auto recipient = *recipientOpt;
+
         // Get message type and method
         std::string messageInfo;
-        if ((*message)->getType() == dht::MessageType::Query) {
-            auto query = std::dynamic_pointer_cast<dht::QueryMessage>(*message);
+        if (message->getType() == dht::MessageType::Query) {
+            auto query = std::dynamic_pointer_cast<dht::QueryMessage>(message);
             if (query) {
                 switch (query->getMethod()) {
                     case dht::QueryMethod::Ping:
@@ -720,17 +754,18 @@ void Crawler::handleMessageSentEvent(const std::shared_ptr<unified_event::Event>
                         messageInfo = "Unknown";
                 }
             }
-        } else if ((*message)->getType() == dht::MessageType::Response) {
+        } else if (message->getType() == dht::MessageType::Response) {
             messageInfo = "Response";
         }
 
         // Get transaction ID
-        std::string transactionID = (*message)->getTransactionID();
+        std::string transactionID = message->getTransactionID();
 
         // Log at debug level since these can be very frequent
-        unified_event::logDebug("DHT.Crawler", "Message sent - Type: " + messageInfo +
-                               ", to: " + (*recipient).toString() +
-                               ", txID: " + transactionID);
+        std::string logMessage = "Message sent - Type: " + messageInfo;
+        logMessage += ", to: " + recipient.toString();
+        logMessage += ", txID: " + transactionID;
+        unified_event::logDebug("DHT.Crawler", logMessage);
     }
 }
 
