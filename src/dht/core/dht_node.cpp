@@ -51,8 +51,7 @@ DHTNode::DHTNode(const DHTConfig& config) : m_nodeID(generateRandomNodeID()), m_
     m_azureusDHT = std::make_shared<extensions::AzureusDHT>(config, m_nodeID, m_routingTable);
 
     // Create the crawler
-    m_crawler = Crawler::getInstance(config, m_nodeID, m_routingManager, m_nodeLookup, m_peerLookup,
-                                    m_transactionManager, m_messageSender, m_peerStorage);
+    m_crawler = Crawler::getInstance(config, m_nodeID, m_routingManager, m_nodeLookup, m_peerLookup, m_transactionManager, m_messageSender, m_peerStorage);
 
     // Log DHT node creation
     unified_event::logInfo("DHT.Node", "Node initialized with ID: " + nodeIDToString(m_nodeID));
@@ -69,7 +68,6 @@ bool DHTNode::start() {
         return true;
     }
 
-    // Start the components
     // Start socket manager
     unified_event::logDebug("DHT.Node", "Starting Socket Manager");
 
