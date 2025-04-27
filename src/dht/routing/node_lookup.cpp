@@ -50,29 +50,37 @@ NodeLookup::~NodeLookup() {
 }
 
 void NodeLookup::lookup(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::string lookupID;
+    bool shouldSendQueries = false;
 
-    // Generate a lookup ID
-    std::string lookupID = nodeIDToString(targetID);
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    // Check if a lookup with this ID already exists
-    if (m_lookups.find(lookupID) != m_lookups.end()) {
-        return;
+        // Generate a lookup ID
+        lookupID = nodeIDToString(targetID);
+
+        // Check if a lookup with this ID already exists
+        if (m_lookups.find(lookupID) != m_lookups.end()) {
+            return;
+        }
+
+        // Create a new lookup
+        Lookup lookup(targetID, callback);
+
+        // Get the closest nodes from the routing table
+        if (m_routingTable) {
+            lookup.nodes = m_routingTable->getClosestNodes(targetID, m_config.getMaxResults());
+        }
+
+        // Add the lookup
+        m_lookups.emplace(lookupID, lookup);
+        shouldSendQueries = true;
     }
 
-    // Create a new lookup
-    Lookup lookup(targetID, callback);
-
-    // Get the closest nodes from the routing table
-    if (m_routingTable) {
-        lookup.nodes = m_routingTable->getClosestNodes(targetID, m_config.getMaxResults());
+    // Send queries without holding the lock
+    if (shouldSendQueries) {
+        sendQueries(lookupID);
     }
-
-    // Add the lookup
-    m_lookups.emplace(lookupID, lookup);
-
-    // Send queries
-    sendQueries(lookupID);
 }
 
 void NodeLookup::sendQueries(const std::string& lookupID) {
@@ -252,60 +260,74 @@ void NodeLookup::handleResponse(const std::string& lookupID, std::shared_ptr<Fin
         }
     }
 
-    // Send more queries if needed
+    // Send more queries if needed without holding the lock
     if (shouldSendQueries) {
         sendQueries(lookupID);
     }
 }
 
 void NodeLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorMessage> /*error*/, const network::EndPoint& sender) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    bool shouldSendQueries = false;
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        Lookup& lookup = it->second;
+
+        // Find the node
+        auto nodeIt = std::find_if(lookup.nodes.begin(), lookup.nodes.end(),
+            [&sender](const std::shared_ptr<Node>& node) {
+                return node->getEndpoint() == sender;
+            });
+
+        if (nodeIt == lookup.nodes.end()) {
+            return;
+        }
+
+        std::string nodeIDStr = nodeIDToString((*nodeIt)->getID());
+
+        // Remove the node from the active queries
+        lookup.activeQueries.erase(nodeIDStr);
+        shouldSendQueries = true;
     }
 
-    Lookup& lookup = it->second;
-
-    // Find the node
-    auto nodeIt = std::find_if(lookup.nodes.begin(), lookup.nodes.end(),
-        [&sender](const std::shared_ptr<Node>& node) {
-            return node->getEndpoint() == sender;
-        });
-
-    if (nodeIt == lookup.nodes.end()) {
-        return;
+    // Send more queries without holding the lock
+    if (shouldSendQueries) {
+        sendQueries(lookupID);
     }
-
-    std::string nodeIDStr = nodeIDToString((*nodeIt)->getID());
-
-    // Remove the node from the active queries
-    lookup.activeQueries.erase(nodeIDStr);
-
-    // Send more queries
-    sendQueries(lookupID);
 }
 
 void NodeLookup::handleTimeout(const std::string& lookupID, const NodeID& nodeID) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    bool shouldSendQueries = false;
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        Lookup& lookup = it->second;
+
+        std::string nodeIDStr = nodeIDToString(nodeID);
+
+        // Remove the node from the active queries
+        lookup.activeQueries.erase(nodeIDStr);
+        shouldSendQueries = true;
     }
 
-    Lookup& lookup = it->second;
-
-    std::string nodeIDStr = nodeIDToString(nodeID);
-
-    // Remove the node from the active queries
-    lookup.activeQueries.erase(nodeIDStr);
-
-    // Send more queries
-    sendQueries(lookupID);
+    // Send more queries without holding the lock
+    if (shouldSendQueries) {
+        sendQueries(lookupID);
+    }
 }
 
 bool NodeLookup::isLookupComplete(const std::string& lookupID) {

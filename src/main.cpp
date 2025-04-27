@@ -98,13 +98,10 @@ int main(int argc, char* argv[]) {
     );
 
     // Configure the logging processor
-    auto loggingProcessor = dht_hunter::unified_event::getLoggingProcessor();
-    if (loggingProcessor) {
+    if (auto loggingProcessor = dht_hunter::unified_event::getLoggingProcessor()) {
         loggingProcessor->setMinSeverity(dht_hunter::unified_event::EventSeverity::Debug);
         loggingProcessor->setFileOutput(true, logFilePath);
     }
-
-    // Create a logger for the main component    // Logger initialization removed
 
     // Register signal handlers for graceful shutdown
     std::signal(SIGINT, signalHandler);   // Ctrl+C

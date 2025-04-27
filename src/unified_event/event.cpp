@@ -74,7 +74,7 @@ std::string eventTypeToString(EventType type) {
         case EventType::PeerAnnounced:
             return "Peer Announced";
         case EventType::LogMessage:
-            return "Log Message";
+            return "";
         case EventType::Custom:
             return "Custom Event";
         default:

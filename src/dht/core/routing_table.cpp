@@ -189,7 +189,7 @@ bool RoutingTable::addNode(const std::shared_ptr<Node> &node) {
     // If the bucket is full, check if it needs to be split
     if (bucket.containsNodeID(m_ownID, m_ownID)) {
         // This bucket contains our own node ID, split it
-        size_t bucketIndex = static_cast<size_t>(&bucket - &m_buckets[0]);
+        auto bucketIndex = static_cast<size_t>(&bucket - &m_buckets[0]);
         splitBucket(bucketIndex);
 
         // Try to add the node again
@@ -297,7 +297,7 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
             uint16_t port = endpoint.getPort();
 
             // Write the address length and address
-            uint16_t addressLength = static_cast<uint16_t>(address.length());
+            auto addressLength = static_cast<uint16_t>(address.length());
             file.write(reinterpret_cast<const char*>(&addressLength), sizeof(addressLength));
             file.write(address.c_str(), addressLength);
 

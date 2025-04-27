@@ -165,19 +165,19 @@ private:
      * @brief Handles a node discovered event
      * @param event The event
      */
-    void handleNodeDiscoveredEvent(std::shared_ptr<unified_event::Event> event);
+    void handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Event>& event);
 
     /**
      * @brief Handles a peer discovered event
      * @param event The event
      */
-    void handlePeerDiscoveredEvent(std::shared_ptr<unified_event::Event> event);
+    void handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Event>& event);
 
     /**
      * @brief Handles a system error event
      * @param event The event
      */
-    void handleSystemErrorEvent(std::shared_ptr<unified_event::Event> event);
+    void handleSystemErrorEvent(const std::shared_ptr<unified_event::Event>& event);
 
     NodeID m_nodeID;
     DHTConfig m_config;

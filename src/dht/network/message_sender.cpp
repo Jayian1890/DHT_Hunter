@@ -110,6 +110,95 @@ bool MessageSender::sendMessage(std::shared_ptr<Message> message, const network:
     auto event = std::make_shared<unified_event::MessageSentEvent>("DHT.MessageSender", message, networkAddress);
     m_eventBus->publish(event);
 
+    // Log detailed message information
+    std::string messageTypeStr;
+    std::string messageDetailsStr;
+
+    switch (message->getType()) {
+        case MessageType::Query: {
+            auto query = std::dynamic_pointer_cast<QueryMessage>(message);
+            if (query) {
+                messageTypeStr = "Query";
+                switch (query->getMethod()) {
+                    case QueryMethod::Ping: messageDetailsStr = "ping"; break;
+                    case QueryMethod::FindNode: {
+                        messageDetailsStr = "find_node";
+                        auto findNodeQuery = std::dynamic_pointer_cast<FindNodeQuery>(query);
+                        if (findNodeQuery) {
+                            messageDetailsStr += ", target: " + nodeIDToString(findNodeQuery->getTargetID());
+                        }
+                        break;
+                    }
+                    case QueryMethod::GetPeers: {
+                        messageDetailsStr = "get_peers";
+                        auto getPeersQuery = std::dynamic_pointer_cast<GetPeersQuery>(query);
+                        if (getPeersQuery) {
+                            messageDetailsStr += ", info_hash: " + infoHashToString(getPeersQuery->getInfoHash());
+                        }
+                        break;
+                    }
+                    case QueryMethod::AnnouncePeer: {
+                        messageDetailsStr = "announce_peer";
+                        auto announceQuery = std::dynamic_pointer_cast<AnnouncePeerQuery>(query);
+                        if (announceQuery) {
+                            messageDetailsStr += ", info_hash: " + infoHashToString(announceQuery->getInfoHash());
+                            messageDetailsStr += ", port: " + std::to_string(announceQuery->getPort());
+                        }
+                        break;
+                    }
+                }
+                messageDetailsStr += ", transaction: " + query->getTransactionID();
+            }
+            break;
+        }
+        case MessageType::Response: {
+            messageTypeStr = "Response";
+            auto response = std::dynamic_pointer_cast<ResponseMessage>(message);
+            if (response) {
+                messageDetailsStr = "transaction: " + response->getTransactionID();
+
+                auto findNodeResponse = std::dynamic_pointer_cast<FindNodeResponse>(response);
+                if (findNodeResponse) {
+                    messageDetailsStr += ", find_node response";
+                    messageDetailsStr += ", nodes: " + std::to_string(findNodeResponse->getNodes().size());
+                }
+
+                auto getPeersResponse = std::dynamic_pointer_cast<GetPeersResponse>(response);
+                if (getPeersResponse) {
+                    messageDetailsStr += ", get_peers response";
+                    if (getPeersResponse->hasNodes()) {
+                        messageDetailsStr += ", nodes: " + std::to_string(getPeersResponse->getNodes().size());
+                    }
+                    if (getPeersResponse->hasPeers()) {
+                        messageDetailsStr += ", peers: " + std::to_string(getPeersResponse->getPeers().size());
+                    }
+                }
+            }
+            break;
+        }
+        case MessageType::Error: {
+            messageTypeStr = "Error";
+            auto error = std::dynamic_pointer_cast<ErrorMessage>(message);
+            if (error) {
+                messageDetailsStr = "transaction: " + error->getTransactionID();
+                messageDetailsStr += ", message: " + error->getMessage();
+            }
+            break;
+        }
+    }
+
+    // Log the message details
+    std::string nodeIDStr;
+    if (message->getNodeID()) {
+        nodeIDStr = nodeIDToString(message->getNodeID().value());
+    } else {
+        nodeIDStr = "unknown";
+    }
+
+    unified_event::logInfo("DHT.MessageSender",
+        "Sent " + messageTypeStr + " to " + endpoint.toString() +
+        " (nodeID: " + nodeIDStr + "), " + messageDetailsStr);
+
     return true;
 }
 
