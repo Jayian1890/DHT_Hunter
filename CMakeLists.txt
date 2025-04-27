@@ -46,6 +46,7 @@ target_include_directories(dht_hunter_core INTERFACE
 
 # Add subdirectories
 add_subdirectory(src)
+add_subdirectory(examples)
 
 # Tests have been removed from the project
 # TODO: Consider implementing a new testing framework in the future if needed
