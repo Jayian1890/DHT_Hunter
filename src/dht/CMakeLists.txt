@@ -36,8 +36,7 @@ add_library(dht_hunter_dht
     # Bootstrap components
     bootstrap/bootstrapper.cpp
 
-    # Event components
-    events/event_bus.cpp
+    # Event components have been moved to the unified event system
 
     # Service components
     services/statistics_service.cpp
@@ -65,8 +64,7 @@ target_link_libraries(dht_hunter_dht
     PUBLIC
     dht_hunter_logforge
     dht_hunter_network
-    # dht_hunter_event  # Old event system (removed)
-    dht_hunter_unified_event  # New unified event system
+    dht_hunter_unified_event
     dht_hunter_bencode
     dht_hunter_util
 )
