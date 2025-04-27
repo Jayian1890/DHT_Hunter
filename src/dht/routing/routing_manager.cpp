@@ -41,7 +41,7 @@ RoutingManager::RoutingManager(const DHTConfig& config,
       m_eventBus(unified_event::EventBus::getInstance()) {
 
     // Create the node verifier
-    m_nodeVerifier = std::make_shared<NodeVerifier>(config, nodeID, m_routingTable, transactionManager, messageSender);
+    m_nodeVerifier = std::make_shared<NodeVerifier>(config, nodeID, m_routingTable, transactionManager, messageSender, m_eventBus);
 }
 
 RoutingManager::~RoutingManager() {
@@ -142,31 +142,26 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
         return false;
     }
 
-    // Calculate node information for the event
+    // Calculate node information for later use
     NodeID nodeID = node->getID();
     size_t bucketIndex = m_routingTable ? m_routingTable->getBucketIndex(nodeID) : 0;
 
-    // Publish a node discovered event with detailed information
-    auto discoveredEvent = std::make_shared<unified_event::NodeDiscoveredEvent>("DHT.RoutingManager", node);
-    discoveredEvent->setProperty("bucket", bucketIndex);
-    m_eventBus->publish(discoveredEvent);
-
-    // Add the node to the verification queue
+    // Add the node to the verification queue with the bucket index
     return m_nodeVerifier->verifyNode(node, [this, node](bool success) {
         if (success) {
 
             // Get the bucket index where the node was added
-            size_t bucketIndex = 0;
+            size_t addedBucketIndex = 0;
             if (m_routingTable) {
-                bucketIndex = m_routingTable->getBucketIndex(node->getID());
+                addedBucketIndex = m_routingTable->getBucketIndex(node->getID());
             }
 
             // Publish a node added event
-            auto addedEvent = std::make_shared<unified_event::NodeAddedEvent>("DHT.RoutingManager", node, bucketIndex);
+            auto addedEvent = std::make_shared<unified_event::NodeAddedEvent>("DHT.RoutingManager", node, addedBucketIndex);
             m_eventBus->publish(addedEvent);
         } else {
         }
-    });
+    }, bucketIndex);
 }
 
 bool RoutingManager::removeNode(const NodeID& nodeID) {

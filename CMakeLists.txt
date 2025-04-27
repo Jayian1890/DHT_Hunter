@@ -21,6 +21,7 @@ else()
     -Wconversion -Wshadow -Wnon-virtual-dtor
     -Wold-style-cast -Wcast-align
     -Woverloaded-virtual -Wdouble-promotion -Wformat=2
+    -Wno-error=unused-lambda-capture
   )
 endif()
 

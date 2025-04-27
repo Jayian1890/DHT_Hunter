@@ -36,7 +36,8 @@ public:
                 const NodeID& nodeID,
                 std::shared_ptr<RoutingTable> routingTable,
                 std::shared_ptr<TransactionManager> transactionManager,
-                std::shared_ptr<MessageSender> messageSender);
+                std::shared_ptr<MessageSender> messageSender,
+                std::shared_ptr<unified_event::EventBus> eventBus);
 
     /**
      * @brief Destructor
@@ -64,9 +65,10 @@ public:
      * @brief Adds a node to the verification queue
      * @param node The node to verify
      * @param callback The callback to call when verification is complete
+     * @param bucketIndex The index of the bucket where the node would be placed
      * @return True if the node was added to the queue, false otherwise
      */
-    bool verifyNode(std::shared_ptr<Node> node, std::function<void(bool)> callback = nullptr);
+    bool verifyNode(std::shared_ptr<Node> node, std::function<void(bool)> callback = nullptr, size_t bucketIndex = 0);
 
     /**
      * @brief Gets the number of nodes in the verification queue
@@ -84,8 +86,9 @@ private:
      * @brief Pings a node to verify it
      * @param node The node to ping
      * @param callback The callback to call when verification is complete
+     * @param bucketIndex The index of the bucket where the node would be placed
      */
-    void pingNode(std::shared_ptr<Node> node, std::function<void(bool)> callback);
+    void pingNode(std::shared_ptr<Node> node, std::function<void(bool)> callback, size_t bucketIndex);
 
     /**
      * @brief Adds a verified node to the routing table
@@ -99,6 +102,7 @@ private:
         std::shared_ptr<Node> node;
         std::chrono::steady_clock::time_point queuedTime;
         std::function<void(bool)> callback;
+        size_t bucketIndex;
     };
 
     DHTConfig m_config;
@@ -106,6 +110,7 @@ private:
     std::shared_ptr<RoutingTable> m_routingTable;
     std::shared_ptr<TransactionManager> m_transactionManager;
     std::shared_ptr<MessageSender> m_messageSender;
+    std::shared_ptr<unified_event::EventBus> m_eventBus;
     std::atomic<bool> m_running;
     std::thread m_processingThread;
     std::queue<VerificationEntry> m_verificationQueue;

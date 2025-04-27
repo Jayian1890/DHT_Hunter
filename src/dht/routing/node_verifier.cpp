@@ -3,6 +3,7 @@
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
 #include "dht_hunter/dht/network/query_message.hpp"
+#include "dht_hunter/unified_event/events/node_events.hpp"
 #include <algorithm>
 
 namespace dht_hunter::dht {
@@ -11,12 +12,14 @@ NodeVerifier::NodeVerifier(const DHTConfig& config,
                          const NodeID& nodeID,
                          std::shared_ptr<RoutingTable> routingTable,
                          std::shared_ptr<TransactionManager> transactionManager,
-                         std::shared_ptr<MessageSender> messageSender)
+                         std::shared_ptr<MessageSender> messageSender,
+                         std::shared_ptr<unified_event::EventBus> eventBus)
     : m_config(config),
       m_nodeID(nodeID),
       m_routingTable(routingTable),
       m_transactionManager(transactionManager),
       m_messageSender(messageSender),
+      m_eventBus(eventBus),
       m_running(false) {
 }
 
@@ -60,7 +63,7 @@ bool NodeVerifier::isRunning() const {
     return m_running;
 }
 
-bool NodeVerifier::verifyNode(std::shared_ptr<Node> node, std::function<void(bool)> callback) {
+bool NodeVerifier::verifyNode(std::shared_ptr<Node> node, std::function<void(bool)> callback, size_t bucketIndex) {
     if (!node) {
         if (callback) {
             callback(false);
@@ -95,6 +98,7 @@ bool NodeVerifier::verifyNode(std::shared_ptr<Node> node, std::function<void(boo
     entry.node = node;
     entry.queuedTime = now;
     entry.callback = callback;
+    entry.bucketIndex = bucketIndex;
     m_verificationQueue.push(entry);
     return true;
 }
@@ -110,6 +114,7 @@ void NodeVerifier::processQueue() {
 
         std::shared_ptr<Node> nodeToVerify;
         std::function<void(bool)> callback;
+        size_t bucketIndex;
 
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -140,19 +145,20 @@ void NodeVerifier::processQueue() {
             // Remove the node from the queue
             m_verificationQueue.pop();
 
-            // Store the node and callback for use outside the lock
+            // Store the node, callback, and bucket index for use outside the lock
             nodeToVerify = entry.node;
             callback = entry.callback;
+            bucketIndex = entry.bucketIndex;
         }
 
         // Ping the node to verify it
         if (nodeToVerify) {
-            pingNode(nodeToVerify, callback);
+            pingNode(nodeToVerify, callback, bucketIndex);
         }
     }
 }
 
-void NodeVerifier::pingNode(std::shared_ptr<Node> node, std::function<void(bool)> callback) {
+void NodeVerifier::pingNode(std::shared_ptr<Node> node, std::function<void(bool)> callback, size_t bucketIndex) {
     if (!m_transactionManager || !m_messageSender) {
         if (callback) {
             callback(false);
@@ -167,8 +173,8 @@ void NodeVerifier::pingNode(std::shared_ptr<Node> node, std::function<void(bool)
     std::string transactionID = m_transactionManager->createTransaction(
         query,
         node->getEndpoint(),
-        [this, node, callback](std::shared_ptr<ResponseMessage> /*response*/, const network::EndPoint& /*sender*/) {
-            // Node responded, add it to the routing table
+        [this, node, callback, bucketIndex](std::shared_ptr<ResponseMessage> /*response*/, const network::EndPoint& /*sender*/) {
+            // Node responded, now we can consider it discovered
 
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
@@ -176,6 +182,18 @@ void NodeVerifier::pingNode(std::shared_ptr<Node> node, std::function<void(bool)
                 m_recentlyVerified[nodeIDToString(node->getID())] = std::chrono::steady_clock::now();
             }
 
+            // Publish a node discovered event with detailed information
+            auto discoveredEvent = std::make_shared<unified_event::NodeDiscoveredEvent>("DHT.RoutingManager", node);
+
+            // Add bucket information
+            discoveredEvent->setProperty("bucket", bucketIndex);
+
+            // Add discovery method information
+            discoveredEvent->setProperty("discoveryMethod", "via ping response");
+
+            m_eventBus->publish(discoveredEvent);
+
+            // Now add the node to the routing table
             bool result = addVerifiedNode(node);
             if (callback) {
                 callback(result);
