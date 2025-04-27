@@ -19,7 +19,7 @@ std::shared_ptr<StatisticsService> StatisticsService::getInstance() {
 }
 
 StatisticsService::StatisticsService()
-    : m_eventBus(events::EventBus::getInstance()),
+    : m_eventBus(unified_event::EventBus::getInstance()),
       m_nodesDiscovered(0),
       m_nodesAdded(0),
       m_peersDiscovered(0),
@@ -119,8 +119,8 @@ void StatisticsService::subscribeToEvents() {
 
     // Subscribe to node discovered events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::NodeDiscovered,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::NodeDiscovered,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handleNodeDiscoveredEvent(event);
             }
         )
@@ -128,8 +128,8 @@ void StatisticsService::subscribeToEvents() {
 
     // Subscribe to node added events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::NodeAdded,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::NodeAdded,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handleNodeAddedEvent(event);
             }
         )
@@ -137,8 +137,8 @@ void StatisticsService::subscribeToEvents() {
 
     // Subscribe to peer discovered events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::PeerDiscovered,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::PeerDiscovered,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handlePeerDiscoveredEvent(event);
             }
         )
@@ -146,8 +146,8 @@ void StatisticsService::subscribeToEvents() {
 
     // Subscribe to message received events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::MessageReceived,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::MessageReceived,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handleMessageReceivedEvent(event);
             }
         )
@@ -155,8 +155,8 @@ void StatisticsService::subscribeToEvents() {
 
     // Subscribe to message sent events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::MessageSent,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::MessageSent,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handleMessageSentEvent(event);
             }
         )
@@ -164,8 +164,8 @@ void StatisticsService::subscribeToEvents() {
 
     // Subscribe to system error events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::SystemError,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::SystemError,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handleSystemErrorEvent(event);
             }
         )
@@ -174,22 +174,22 @@ void StatisticsService::subscribeToEvents() {
     m_logger.debug("Subscribed to {} event types", m_eventSubscriptionIds.size());
 }
 
-void StatisticsService::handleNodeDiscoveredEvent(std::shared_ptr<events::DHTEvent> /*event*/) {
+void StatisticsService::handleNodeDiscoveredEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_nodesDiscovered++;
     m_logger.debug("Nodes discovered: {}", m_nodesDiscovered.load());
 }
 
-void StatisticsService::handleNodeAddedEvent(std::shared_ptr<events::DHTEvent> /*event*/) {
+void StatisticsService::handleNodeAddedEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_nodesAdded++;
     m_logger.debug("Nodes added: {}", m_nodesAdded.load());
 }
 
-void StatisticsService::handlePeerDiscoveredEvent(std::shared_ptr<events::DHTEvent> /*event*/) {
+void StatisticsService::handlePeerDiscoveredEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_peersDiscovered++;
     m_logger.debug("Peers discovered: {}", m_peersDiscovered.load());
 }
 
-void StatisticsService::handleMessageReceivedEvent(std::shared_ptr<events::DHTEvent> /*event*/) {
+void StatisticsService::handleMessageReceivedEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_messagesReceived++;
 
     // Only log every 100 messages to avoid spamming the log
@@ -198,7 +198,7 @@ void StatisticsService::handleMessageReceivedEvent(std::shared_ptr<events::DHTEv
     }
 }
 
-void StatisticsService::handleMessageSentEvent(std::shared_ptr<events::DHTEvent> /*event*/) {
+void StatisticsService::handleMessageSentEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_messagesSent++;
 
     // Only log every 100 messages to avoid spamming the log
@@ -207,7 +207,7 @@ void StatisticsService::handleMessageSentEvent(std::shared_ptr<events::DHTEvent>
     }
 }
 
-void StatisticsService::handleSystemErrorEvent(std::shared_ptr<events::DHTEvent> /*event*/) {
+void StatisticsService::handleSystemErrorEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_errors++;
     m_logger.debug("Errors: {}", m_errors.load());
 }

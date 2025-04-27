@@ -22,7 +22,7 @@ std::shared_ptr<MessageSender> MessageSender::getInstance(
 MessageSender::MessageSender(const DHTConfig& config, std::shared_ptr<SocketManager> socketManager)
     : m_config(config),
       m_socketManager(socketManager),
-      m_eventBus(events::EventBus::getInstance()),
+      m_eventBus(unified_event::EventBus::getInstance()),
       m_running(false),
       m_logger(event::Logger::forComponent("DHT.MessageSender")) {
 }
@@ -108,7 +108,7 @@ bool MessageSender::sendMessage(std::shared_ptr<Message> message, const network:
     // Publish a message sent event
     // Convert EndPoint to NetworkAddress
     network::NetworkAddress networkAddress = endpoint.getAddress();
-    auto event = std::make_shared<events::MessageSentEvent>(message, networkAddress);
+    auto event = std::make_shared<unified_event::MessageSentEvent>("DHT.MessageSender", message, networkAddress);
     m_eventBus->publish(event);
 
     return true;

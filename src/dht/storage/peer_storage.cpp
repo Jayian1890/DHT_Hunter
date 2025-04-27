@@ -20,7 +20,7 @@ std::shared_ptr<PeerStorage> PeerStorage::getInstance(const DHTConfig& config) {
 PeerStorage::PeerStorage(const DHTConfig& config)
     : m_config(config),
       m_running(false),
-      m_eventBus(events::EventBus::getInstance()),
+      m_eventBus(unified_event::EventBus::getInstance()),
       m_logger(event::Logger::forComponent("DHT.PeerStorage")) {
 }
 
@@ -117,7 +117,7 @@ void PeerStorage::addPeer(const InfoHash& infoHash, const network::EndPoint& end
     // Publish a peer discovered event
     // Convert EndPoint to NetworkAddress
     network::NetworkAddress networkAddress = endpoint.getAddress();
-    auto event = std::make_shared<events::PeerDiscoveredEvent>(infoHash, networkAddress);
+    auto event = std::make_shared<unified_event::PeerDiscoveredEvent>("DHT.PeerStorage", infoHash, networkAddress);
     m_eventBus->publish(event);
 }
 

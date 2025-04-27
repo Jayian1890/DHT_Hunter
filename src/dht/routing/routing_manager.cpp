@@ -38,7 +38,7 @@ RoutingManager::RoutingManager(const DHTConfig& config,
       m_messageSender(messageSender),
       m_running(false),
       m_bucketRefreshThreadRunning(false),
-      m_eventBus(events::EventBus::getInstance()),
+      m_eventBus(unified_event::EventBus::getInstance()),
       m_logger(event::Logger::forComponent("DHT.RoutingManager")) {
 
     // Create the node verifier
@@ -143,7 +143,7 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
     }
 
     // Publish a node discovered event
-    auto discoveredEvent = std::make_shared<events::NodeDiscoveredEvent>(node);
+    auto discoveredEvent = std::make_shared<unified_event::NodeDiscoveredEvent>("DHT.RoutingManager", node);
     m_eventBus->publish(discoveredEvent);
 
     // Add the node to the verification queue
@@ -158,7 +158,7 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
             }
 
             // Publish a node added event
-            auto addedEvent = std::make_shared<events::NodeAddedEvent>(node, bucketIndex);
+            auto addedEvent = std::make_shared<unified_event::NodeAddedEvent>("DHT.RoutingManager", node, bucketIndex);
             m_eventBus->publish(addedEvent);
         } else {
             m_logger.debug("Failed to verify node {}", nodeIDToString(node->getID()));
