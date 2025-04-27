@@ -99,7 +99,7 @@ public:
      * @param bucketIndex The bucket index where the node was added
      */
     NodeAddedEvent(const std::string& source, std::shared_ptr<dht_hunter::dht::Node> node, size_t bucketIndex)
-        : Event(EventType::NodeAdded, EventSeverity::Debug, source) {
+        : Event(EventType::NodeAdded, EventSeverity::Info, source) {
         setProperty("node", node);
         setProperty("bucketIndex", bucketIndex);
 
