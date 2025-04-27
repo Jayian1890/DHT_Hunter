@@ -30,7 +30,7 @@ bool LoggingProcessor::shouldProcess(std::shared_ptr<Event> event) const {
     if (!event) {
         return false;
     }
-    
+
     // Check if the event severity is at or above the minimum severity
     return event->getSeverity() >= m_config.minSeverity;
 }
@@ -39,13 +39,13 @@ void LoggingProcessor::process(std::shared_ptr<Event> event) {
     if (!event) {
         return;
     }
-    
+
     std::string message = formatEvent(event);
-    
+
     if (m_config.consoleOutput) {
         writeToConsole(message, event->getSeverity());
     }
-    
+
     if (m_config.fileOutput) {
         writeToFile(message);
     }
@@ -54,14 +54,14 @@ void LoggingProcessor::process(std::shared_ptr<Event> event) {
 bool LoggingProcessor::initialize() {
     if (m_config.fileOutput && !m_config.logFilePath.empty()) {
         std::lock_guard<std::mutex> lock(m_logFileMutex);
-        
+
         m_logFile.open(m_config.logFilePath, std::ios::app);
         if (!m_logFile.is_open()) {
             std::cerr << "Failed to open log file: " << m_config.logFilePath << std::endl;
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -86,18 +86,18 @@ void LoggingProcessor::setConsoleOutput(bool enable) {
 
 void LoggingProcessor::setFileOutput(bool enable, const std::string& filePath) {
     std::lock_guard<std::mutex> lock(m_logFileMutex);
-    
+
     // Close the current log file if open
     if (m_logFile.is_open()) {
         m_logFile.close();
     }
-    
+
     m_config.fileOutput = enable;
-    
+
     if (!filePath.empty()) {
         m_config.logFilePath = filePath;
     }
-    
+
     if (enable && !m_config.logFilePath.empty()) {
         m_logFile.open(m_config.logFilePath, std::ios::app);
         if (!m_logFile.is_open()) {
@@ -107,35 +107,106 @@ void LoggingProcessor::setFileOutput(bool enable, const std::string& filePath) {
     }
 }
 
+std::string LoggingProcessor::messageTypeToString(dht_hunter::dht::MessageType type) const {
+    switch (type) {
+        case dht_hunter::dht::MessageType::Query:
+            return "Query";
+        case dht_hunter::dht::MessageType::Response:
+            return "Response";
+        case dht_hunter::dht::MessageType::Error:
+            return "Error";
+        default:
+            return "Unknown";
+    }
+}
+
 std::string LoggingProcessor::formatEvent(std::shared_ptr<Event> event) const {
     std::stringstream ss;
-    
+
     // Add timestamp if configured
     if (m_config.includeTimestamp) {
         auto timeT = std::chrono::system_clock::to_time_t(event->getTimestamp());
         auto timeInfo = std::localtime(&timeT);
         ss << std::put_time(timeInfo, "%Y-%m-%d %H:%M:%S") << " ";
     }
-    
+
     // Add severity if configured
     if (m_config.includeSeverity) {
         ss << "[" << eventSeverityToString(event->getSeverity()) << "] ";
     }
-    
+
     // Add source if configured
     if (m_config.includeSource) {
         ss << "[" << event->getSource() << "] ";
     }
-    
-    // Add event name and message
+
+    // Add event name
     ss << event->getName();
-    
+
+    // Add detailed information based on event type
+    switch (event->getType()) {
+        case EventType::MessageReceived: {
+            auto message = event->getProperty<std::shared_ptr<dht_hunter::dht::Message>>("message");
+            auto sender = event->getProperty<dht_hunter::network::NetworkAddress>("sender");
+
+            if (message && sender) {
+                ss << " - Type: " << messageTypeToString((*message)->getType());
+                ss << ", from: " << (*sender).toString();
+
+                // Add node ID if available
+                if ((*message)->getNodeID()) {
+                    std::string nodeIDStr = dht_hunter::dht::nodeIDToString((*message)->getNodeID().value());
+                    std::string shortNodeID = nodeIDStr.substr(0, 6);
+                    ss << ", nodeID: " << shortNodeID;
+                }
+
+                // Add transaction ID
+                std::string transactionID = (*message)->getTransactionID();
+                if (!transactionID.empty()) {
+                    ss << ", txID: " << transactionID;
+                }
+            }
+            break;
+        }
+        case EventType::MessageSent: {
+            auto message = event->getProperty<std::shared_ptr<dht_hunter::dht::Message>>("message");
+            auto recipient = event->getProperty<dht_hunter::network::NetworkAddress>("recipient");
+
+            if (message && recipient) {
+                ss << " - Type: " << messageTypeToString((*message)->getType());
+                ss << ", to: " << (*recipient).toString();
+
+                // Add node ID if available
+                if ((*message)->getNodeID()) {
+                    std::string nodeIDStr = dht_hunter::dht::nodeIDToString((*message)->getNodeID().value());
+                    std::string shortNodeID = nodeIDStr.substr(0, 6);
+                    ss << ", nodeID: " << shortNodeID;
+                }
+
+                // Add transaction ID
+                std::string transactionID = (*message)->getTransactionID();
+                if (!transactionID.empty()) {
+                    ss << ", txID: " << transactionID;
+                }
+            }
+            break;
+        }
+        default: {
+            // Use the details method for other event types
+            std::string details = event->getDetails();
+            if (!details.empty()) {
+                ss << " - " << details;
+            }
+            break;
+        }
+    }
+
     // Add custom message if available
     auto message = event->getProperty<std::string>("message");
     if (message && !message->empty()) {
         ss << ": " << *message;
     }
-    
+
     return ss.str();
 }
 
@@ -143,10 +214,10 @@ void LoggingProcessor::writeToConsole(const std::string& message, EventSeverity 
     // Get the color for this severity
     auto colorIt = SEVERITY_COLORS.find(severity);
     std::string colorCode = colorIt != SEVERITY_COLORS.end() ? colorIt->second : "";
-    
+
     // Reset color code
     const std::string resetCode = "\033[0m";
-    
+
     // Write to the appropriate stream based on severity
     if (severity >= EventSeverity::Error) {
         std::cerr << colorCode << message << resetCode << std::endl;
@@ -157,7 +228,7 @@ void LoggingProcessor::writeToConsole(const std::string& message, EventSeverity 
 
 void LoggingProcessor::writeToFile(const std::string& message) {
     std::lock_guard<std::mutex> lock(m_logFileMutex);
-    
+
     if (m_logFile.is_open()) {
         m_logFile << message << std::endl;
         m_logFile.flush();

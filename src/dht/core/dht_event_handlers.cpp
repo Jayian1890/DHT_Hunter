@@ -48,8 +48,21 @@ void DHTNode::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Eve
         return;
     }
 
-    // Log the node discovery
-    unified_event::logDebug("DHT.Node", "Node Discovered - ID: " + nodeIDToString(node->getID()) + ", endpoint: " + node->getEndpoint().toString());
+    // Distance calculation removed as per user request
+
+    // Add discovery method information to the event
+    std::string discoverySource = event->getSource();
+    std::string discoveryMethod;
+    if (discoverySource.find("RoutingManager") != std::string::npos) {
+        discoveryMethod = "via routing table update";
+    } else if (discoverySource.find("MessageHandler") != std::string::npos) {
+        discoveryMethod = "from incoming message";
+    } else if (discoverySource.find("Bootstrap") != std::string::npos) {
+        discoveryMethod = "from bootstrap process";
+    } else {
+        discoveryMethod = "from " + discoverySource;
+    }
+    event->setProperty("discoveryMethod", discoveryMethod);
 
     // Add the node to the routing table
     if (m_routingManager) {
@@ -69,8 +82,7 @@ void DHTNode::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
     // Create an endpoint from the network address
     network::EndPoint endpoint(peer, 0); // Use port 0 as it's not available in the event
 
-    // Log the peer discovery
-    unified_event::logDebug("DHT.Node", "Peer Discovered - Info Hash: " + infoHashToString(infoHash) + ", endpoint: " + endpoint.toString());
+    // Peer discovery is logged through the event system
 
     // Add the peer to the peer storage
     if (m_peerStorage) {
@@ -84,11 +96,7 @@ void DHTNode::handleSystemErrorEvent(const std::shared_ptr<unified_event::Event>
         return;
     }
 
-    // Log the error
-    auto message = systemErrorEvent->getProperty<std::string>("message");
-    if (message) {
-        unified_event::logDebug("DHT.Node", "System Error from " + systemErrorEvent->getSource() + ": " + *message);
-    }
+    // System errors are logged through the event system
 }
 
 } // namespace dht_hunter::dht

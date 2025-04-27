@@ -34,7 +34,6 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        unified_event::logDebug("DHT.SocketManager", "Socket manager already running");
         return true;
     }
 
@@ -43,7 +42,6 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
 
     // Bind the socket to the port
     if (!m_socket->bind(m_port)) {
-        unified_event::logError("DHT.SocketManager", "Failed to bind socket to port " + std::to_string(m_port));
         return false;
     }
 
@@ -59,14 +57,12 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
 
     // Start the receive loop
     if (!m_socket->startReceiveLoop()) {
-        unified_event::logError("DHT.SocketManager", "Failed to start receive loop");
         return false;
     }
 
     m_running = true;
 
-    // Log that the socket manager has started
-    unified_event::logInfo("DHT.SocketManager", "Socket manager started on port " + std::to_string(m_port));
+    // Socket manager started event is published through the event system
 
     return true;
 }
@@ -75,7 +71,6 @@ void SocketManager::stop() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (!m_running) {
-        unified_event::logDebug("DHT.SocketManager", "Socket manager not running");
         return;
     }
 
@@ -87,8 +82,7 @@ void SocketManager::stop() {
 
     m_running = false;
 
-    // Log that the socket manager has stopped
-    unified_event::logInfo("DHT.SocketManager", "Socket manager stopped");
+    // Socket manager stopped event is published through the event system
 }
 
 bool SocketManager::isRunning() const {
@@ -101,7 +95,6 @@ uint16_t SocketManager::getPort() const {
 
 ssize_t SocketManager::sendTo(const void* data, size_t size, const network::EndPoint& endpoint) {
     if (!m_running || !m_socket) {
-        unified_event::logError("DHT.SocketManager", "Cannot send data: Socket manager not running or socket not available");
         return -1;
     }
 

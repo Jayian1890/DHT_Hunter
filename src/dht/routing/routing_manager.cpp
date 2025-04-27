@@ -142,8 +142,13 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
         return false;
     }
 
-    // Publish a node discovered event
+    // Calculate node information for the event
+    NodeID nodeID = node->getID();
+    size_t bucketIndex = m_routingTable ? m_routingTable->getBucketIndex(nodeID) : 0;
+
+    // Publish a node discovered event with detailed information
     auto discoveredEvent = std::make_shared<unified_event::NodeDiscoveredEvent>("DHT.RoutingManager", node);
+    discoveredEvent->setProperty("bucket", bucketIndex);
     m_eventBus->publish(discoveredEvent);
 
     // Add the node to the verification queue

@@ -113,7 +113,7 @@ private:
     mutable std::mutex m_mutex;    // Logger removed
 
     // Constants
-    static constexpr std::chrono::minutes VERIFICATION_WAIT_TIME{15}; // Wait 15 minutes before pinging
+    static constexpr std::chrono::seconds VERIFICATION_WAIT_TIME{5}; // Wait 5 seconds before pinging
     static constexpr std::chrono::hours RECENTLY_VERIFIED_EXPIRY{1}; // Remember verified nodes for 1 hour
 };
 

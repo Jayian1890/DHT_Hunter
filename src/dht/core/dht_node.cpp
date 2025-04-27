@@ -478,16 +478,27 @@ void DHTNode::subscribeToEvents() {
         });
     m_eventSubscriptionIds.push_back(systemErrorId);
 
+    // Subscribe to message sent events
+    int messageSentId = m_eventBus->subscribe(
+        unified_event::EventType::MessageSent,
+        [](const std::shared_ptr<unified_event::Event>&) {
+            // No special handling needed, just let the logging processor handle it
+        });
+    m_eventSubscriptionIds.push_back(messageSentId);
+
+    // Subscribe to message received events
+    int messageReceivedId = m_eventBus->subscribe(
+        unified_event::EventType::MessageReceived,
+        [](const std::shared_ptr<unified_event::Event>&) {
+            // No special handling needed, just let the logging processor handle it
+        });
+    m_eventSubscriptionIds.push_back(messageReceivedId);
+
     unified_event::logDebug("DHT.Node", "Subscribed to " + std::to_string(m_eventSubscriptionIds.size()) + " event types");
 }
 
-void DHTNode::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Event>& event) {
-    const auto nodeIdOpt = event->getProperty<std::string>("nodeID");
-    const auto endpointOpt = event->getProperty<std::string>("endpoint");
-
-    if (nodeIdOpt && endpointOpt) {
-        unified_event::logDebug("DHT.Node", "Node Discovered - ID: " + *nodeIdOpt + ", endpoint: " + *endpointOpt);
-    }
+void DHTNode::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Event>& /*event*/) {
+    //TODO: Handle node discovered event
 }
 
 void DHTNode::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Event>& event) {

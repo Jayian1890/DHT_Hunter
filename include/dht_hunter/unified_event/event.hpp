@@ -111,6 +111,14 @@ public:
     virtual std::string getName() const;
 
     /**
+     * @brief Gets detailed information about the event
+     * @return A string with detailed information about the event
+     */
+    virtual std::string getDetails() const {
+        return "";
+    }
+
+    /**
      * @brief Gets a string representation of the event
      * @return A string representation of the event
      */

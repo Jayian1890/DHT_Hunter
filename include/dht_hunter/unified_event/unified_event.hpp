@@ -37,25 +37,25 @@ inline bool initializeEventSystem(
     EventBusConfig eventBusConfig;
     eventBusConfig.asyncProcessing = asyncProcessing;
     auto eventBus = EventBus::getInstance(eventBusConfig);
-    
+
     // Start the event bus
     if (!eventBus->start()) {
         return false;
     }
-    
+
     // Add processors
     if (enableLogging) {
         LoggingProcessorConfig loggingConfig;
         loggingConfig.consoleOutput = true;
         loggingConfig.fileOutput = false;
-        loggingConfig.minSeverity = EventSeverity::Info;
-        
+        loggingConfig.minSeverity = EventSeverity::Debug;
+
         auto loggingProcessor = std::make_shared<LoggingProcessor>(loggingConfig);
         if (!eventBus->addProcessor(loggingProcessor)) {
             return false;
         }
     }
-    
+
     if (enableComponent) {
         ComponentProcessorConfig componentConfig;
         auto componentProcessor = std::make_shared<ComponentProcessor>(componentConfig);
@@ -63,7 +63,7 @@ inline bool initializeEventSystem(
             return false;
         }
     }
-    
+
     if (enableStatistics) {
         StatisticsProcessorConfig statisticsConfig;
         statisticsConfig.logInterval = 0; // Don't log automatically
@@ -72,7 +72,7 @@ inline bool initializeEventSystem(
             return false;
         }
     }
-    
+
     return true;
 }
 
