@@ -363,30 +363,34 @@ void Crawler::crawl() {
 void Crawler::discoverNodes() {
     // Get a random subset of nodes to crawl
     std::vector<std::shared_ptr<Node>> nodesToCrawl;
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        nodesToCrawl = utils::withLock(m_mutex, [this]() {
+            // Get all nodes
+            std::vector<std::shared_ptr<Node>> allNodes;
+            allNodes.reserve(m_discoveredNodes.size());
+            for (const auto& [_, node] : m_discoveredNodes) {
+                allNodes.push_back(node);
+            }
 
-        // Get all nodes
-        std::vector<std::shared_ptr<Node>> allNodes;
-        allNodes.reserve(m_discoveredNodes.size());
-        for (const auto& [_, node] : m_discoveredNodes) {
-            allNodes.push_back(node);
-        }
+            // If we don't have enough nodes, use the routing table
+            if (allNodes.size() < m_crawlerConfig.parallelCrawls && m_routingManager) {
+                auto routingTableNodes = m_routingManager->getRoutingTable()->getAllNodes();
+                allNodes.insert(allNodes.end(), routingTableNodes.begin(), routingTableNodes.end());
+            }
 
-        // If we don't have enough nodes, use the routing table
-        if (allNodes.size() < m_crawlerConfig.parallelCrawls && m_routingManager) {
-            auto routingTableNodes = m_routingManager->getRoutingTable()->getAllNodes();
-            allNodes.insert(allNodes.end(), routingTableNodes.begin(), routingTableNodes.end());
-        }
+            // Shuffle the nodes
+            std::random_device rd;
+            std::mt19937 g(rd());
+            std::ranges::shuffle(allNodes, g);
 
-        // Shuffle the nodes
-        std::random_device rd;
-        std::mt19937 g(rd());
-        std::ranges::shuffle(allNodes, g);
-
-        // Take the first N nodes
-        const size_t nodesToTake = std::min(m_crawlerConfig.parallelCrawls, allNodes.size());
-        nodesToCrawl.assign(allNodes.begin(), allNodes.begin() + static_cast<long>(nodesToTake));
+            // Take the first N nodes
+            const size_t nodesToTake = std::min(m_crawlerConfig.parallelCrawls, allNodes.size());
+            std::vector<std::shared_ptr<Node>> result;
+            result.assign(allNodes.begin(), allNodes.begin() + static_cast<long>(nodesToTake));
+            return result;
+        }, "Crawler::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.Crawler", e.what());
     }
 
     // Log node selection information
@@ -403,29 +407,35 @@ void Crawler::discoverNodes() {
             unified_event::logDebug("DHT.Crawler", lookupMessage);
 
             m_nodeLookup->lookup(node->getID(), [this, nodeIDStr](const std::vector<std::shared_ptr<Node>>& nodes) {
-                std::lock_guard<std::mutex> lock(m_mutex);
+                try {
+                    size_t newNodes = utils::withLock(m_mutex, [this, &nodes]() {
+                        size_t newNodesCount = 0;
 
-                size_t newNodes = 0;
+                        // Add the nodes to our discovered nodes
+                        for (const auto& node : nodes) {
+                            std::string discoveredNodeIDStr = nodeIDToString(node->getID());
+                            bool isNew = m_discoveredNodes.find(discoveredNodeIDStr) == m_discoveredNodes.end();
 
-                // Add the nodes to our discovered nodes
-                for (const auto& node : nodes) {
-                    std::string discoveredNodeIDStr = nodeIDToString(node->getID());
-                    bool isNew = m_discoveredNodes.find(discoveredNodeIDStr) == m_discoveredNodes.end();
+                            m_discoveredNodes[discoveredNodeIDStr] = node;
 
-                    m_discoveredNodes[discoveredNodeIDStr] = node;
+                            if (isNew) {
+                                newNodesCount++;
+                            }
+                        }
 
-                    if (isNew) {
-                        newNodes++;
-                    }
+                        // Update statistics
+                        m_statistics.nodesDiscovered = m_discoveredNodes.size();
+
+                        return newNodesCount;
+                    }, "Crawler::m_mutex");
+
+                    std::string completionMessage = "Node lookup for " + nodeIDStr + " completed";
+                    completionMessage += " - Found: " + std::to_string(nodes.size());
+                    completionMessage += ", New: " + std::to_string(newNodes);
+                    unified_event::logDebug("DHT.Crawler", completionMessage);
+                } catch (const utils::LockTimeoutException& e) {
+                    unified_event::logError("DHT.Crawler", e.what());
                 }
-
-                // Update statistics
-                m_statistics.nodesDiscovered = m_discoveredNodes.size();
-
-                std::string completionMessage = "Node lookup for " + nodeIDStr + " completed";
-                completionMessage += " - Found: " + std::to_string(nodes.size());
-                completionMessage += ", New: " + std::to_string(newNodes);
-                unified_event::logDebug("DHT.Crawler", completionMessage);
             });
         }
     }
@@ -457,29 +467,35 @@ void Crawler::discoverNodes() {
         // Perform a node lookup
         if (m_nodeLookup) {
             m_nodeLookup->lookup(randomNodeID, [this, randomNodeIDStr](const std::vector<std::shared_ptr<Node>>& nodes) {
-                std::lock_guard<std::mutex> lock(m_mutex);
+                try {
+                    size_t newNodes = utils::withLock(m_mutex, [this, &nodes]() {
+                        size_t newNodesCount = 0;
 
-                size_t newNodes = 0;
+                        // Add the nodes to our discovered nodes
+                        for (const auto& node : nodes) {
+                            std::string discoveredNodeIDStr = nodeIDToString(node->getID());
+                            bool isNew = m_discoveredNodes.find(discoveredNodeIDStr) == m_discoveredNodes.end();
 
-                // Add the nodes to our discovered nodes
-                for (const auto& node : nodes) {
-                    std::string discoveredNodeIDStr = nodeIDToString(node->getID());
-                    bool isNew = m_discoveredNodes.find(discoveredNodeIDStr) == m_discoveredNodes.end();
+                            m_discoveredNodes[discoveredNodeIDStr] = node;
 
-                    m_discoveredNodes[discoveredNodeIDStr] = node;
+                            if (isNew) {
+                                newNodesCount++;
+                            }
+                        }
 
-                    if (isNew) {
-                        newNodes++;
-                    }
+                        // Update statistics
+                        m_statistics.nodesDiscovered = m_discoveredNodes.size();
+
+                        return newNodesCount;
+                    }, "Crawler::m_mutex");
+
+                    std::string randomCompletionMessage = "Random node lookup for " + randomNodeIDStr + " completed";
+                    randomCompletionMessage += " - Found: " + std::to_string(nodes.size());
+                    randomCompletionMessage += ", New: " + std::to_string(newNodes);
+                    unified_event::logDebug("DHT.Crawler", randomCompletionMessage);
+                } catch (const utils::LockTimeoutException& e) {
+                    unified_event::logError("DHT.Crawler", e.what());
                 }
-
-                // Update statistics
-                m_statistics.nodesDiscovered = m_discoveredNodes.size();
-
-                std::string randomCompletionMessage = "Random node lookup for " + randomNodeIDStr + " completed";
-                randomCompletionMessage += " - Found: " + std::to_string(nodes.size());
-                randomCompletionMessage += ", New: " + std::to_string(newNodes);
-                unified_event::logDebug("DHT.Crawler", randomCompletionMessage);
             });
         }
     }
@@ -492,16 +508,22 @@ void Crawler::monitorInfoHashes() {
     const size_t MAX_CONCURRENT_LOOKUPS = 3;
 
     std::vector<InfoHash> infoHashesToMonitor;
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        infoHashesToMonitor = utils::withLock(m_mutex, [this]() {
+            std::vector<InfoHash> result;
 
-        // Get all monitored info hashes
-        for (const auto& infoHashStr : m_monitoredInfoHashes) {
-            InfoHash infoHash;
-            if (infoHashFromString(infoHashStr, infoHash)) {
-                infoHashesToMonitor.push_back(infoHash);
+            // Get all monitored info hashes
+            for (const auto& infoHashStr : m_monitoredInfoHashes) {
+                InfoHash infoHash;
+                if (infoHashFromString(infoHashStr, infoHash)) {
+                    result.push_back(infoHash);
+                }
             }
-        }
+
+            return result;
+        }, "Crawler::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.Crawler", e.what());
     }
 
     unified_event::logDebug("DHT.Crawler", "Monitoring " + std::to_string(infoHashesToMonitor.size()) + " info hashes");
@@ -517,30 +539,36 @@ void Crawler::monitorInfoHashes() {
             unified_event::logDebug("DHT.Crawler", "Looking up peers for info hash: " + infoHashStr);
 
             m_peerLookup->lookup(infoHash, [this, infoHash](const std::vector<network::EndPoint>& peers) {
-                std::lock_guard<std::mutex> lock(m_mutex);
+                try {
+                    std::string infoHashStr = infoHashToString(infoHash);
+                    size_t totalPeers = utils::withLock(m_mutex, [this, &infoHash, &peers, &infoHashStr]() {
+                        // Add the info hash to our discovered info hashes
+                        m_discoveredInfoHashes[infoHashStr] = infoHash;
 
-                // Add the info hash to our discovered info hashes
-                std::string infoHashStr = infoHashToString(infoHash);
-                m_discoveredInfoHashes[infoHashStr] = infoHash;
+                        // Add the peers to our info hash peers
+                        auto& peerSet = m_infoHashPeers[infoHashStr];
+                        for (const auto& peer : peers) {
+                            peerSet.insert(peer.toString());
+                        }
 
-                // Add the peers to our info hash peers
-                auto& peerSet = m_infoHashPeers[infoHashStr];
-                for (const auto& peer : peers) {
-                    peerSet.insert(peer.toString());
+                        // Update statistics
+                        m_statistics.infoHashesDiscovered = m_discoveredInfoHashes.size();
+                        m_statistics.peersDiscovered = 0;
+                        for (const auto& infoHashPeersPair : m_infoHashPeers) {
+                            const auto& peerSetCount = infoHashPeersPair.second;
+                            m_statistics.peersDiscovered += peerSetCount.size();
+                        }
+
+                        return peerSet.size();
+                    }, "Crawler::m_mutex");
+
+                    std::string completionMessage = "Peer lookup for info hash " + infoHashStr + " completed";
+                    completionMessage += " - Found: " + std::to_string(peers.size());
+                    completionMessage += ", Total: " + std::to_string(totalPeers);
+                    unified_event::logDebug("DHT.Crawler", completionMessage);
+                } catch (const utils::LockTimeoutException& e) {
+                    unified_event::logError("DHT.Crawler", e.what());
                 }
-
-                // Update statistics
-                m_statistics.infoHashesDiscovered = m_discoveredInfoHashes.size();
-                m_statistics.peersDiscovered = 0;
-                for (const auto& infoHashPeersPair : m_infoHashPeers) {
-                    const auto& peerSetCount = infoHashPeersPair.second;
-                    m_statistics.peersDiscovered += peerSetCount.size();
-                }
-
-                std::string completionMessage = "Peer lookup for info hash " + infoHashStr + " completed";
-                completionMessage += " - Found: " + std::to_string(peers.size());
-                completionMessage += ", Total: " + std::to_string(peerSet.size());
-                unified_event::logDebug("DHT.Crawler", completionMessage);
             });
         }
     }
@@ -575,34 +603,39 @@ void Crawler::monitorInfoHashes() {
         // Perform a peer lookup
         if (m_peerLookup) {
             m_peerLookup->lookup(randomInfoHash, [this, randomInfoHash, randomInfoHashStr](const std::vector<network::EndPoint>& peers) {
-                std::lock_guard<std::mutex> lock(m_mutex);
+                try {
+                    utils::withLock(m_mutex, [this, &peers, &randomInfoHash, &randomInfoHashStr]() {
+                        // Only add the info hash if we found peers
+                        if (!peers.empty()) {
+                            // Add the info hash to our discovered info hashes
+                            m_discoveredInfoHashes[randomInfoHashStr] = randomInfoHash;
 
-                // Only add the info hash if we found peers
-                if (!peers.empty()) {
-                    // Add the info hash to our discovered info hashes
-                    std::string infoHashStr = infoHashToString(randomInfoHash);
-                    m_discoveredInfoHashes[infoHashStr] = randomInfoHash;
+                            // Add the peers to our info hash peers
+                            auto& peerSet = m_infoHashPeers[randomInfoHashStr];
+                            for (const auto& peer : peers) {
+                                peerSet.insert(peer.toString());
+                            }
 
-                    // Add the peers to our info hash peers
-                    auto& peerSet = m_infoHashPeers[infoHashStr];
-                    for (const auto& peer : peers) {
-                        peerSet.insert(peer.toString());
+                            // Update statistics
+                            m_statistics.infoHashesDiscovered = m_discoveredInfoHashes.size();
+                            m_statistics.peersDiscovered = 0;
+                            for (const auto& infoHashPeersPair : m_infoHashPeers) {
+                                const auto& peerSetCount = infoHashPeersPair.second;
+                                m_statistics.peersDiscovered += peerSetCount.size();
+                            }
+                        }
+                    }, "Crawler::m_mutex");
+
+                    if (!peers.empty()) {
+                        std::string activeTorrentMessage = "Found active torrent - Info hash: " + randomInfoHashStr;
+                        activeTorrentMessage += ", Peers: " + std::to_string(peers.size());
+                        unified_event::logInfo("DHT.Crawler", activeTorrentMessage);
+                    } else {
+                        std::string noPeersMessage = "No peers found for random info hash: " + randomInfoHashStr;
+                        unified_event::logDebug("DHT.Crawler", noPeersMessage);
                     }
-
-                    // Update statistics
-                    m_statistics.infoHashesDiscovered = m_discoveredInfoHashes.size();
-                    m_statistics.peersDiscovered = 0;
-                    for (const auto& infoHashPeersPair : m_infoHashPeers) {
-                        const auto& peerSetCount = infoHashPeersPair.second;
-                        m_statistics.peersDiscovered += peerSetCount.size();
-                    }
-
-                    std::string activeTorrentMessage = "Found active torrent - Info hash: " + randomInfoHashStr;
-                    activeTorrentMessage += ", Peers: " + std::to_string(peers.size());
-                    unified_event::logInfo("DHT.Crawler", activeTorrentMessage);
-                } else {
-                    std::string noPeersMessage = "No peers found for random info hash: " + randomInfoHashStr;
-                    unified_event::logDebug("DHT.Crawler", noPeersMessage);
+                } catch (const utils::LockTimeoutException& e) {
+                    unified_event::logError("DHT.Crawler", e.what());
                 }
             });
         }
@@ -612,53 +645,57 @@ void Crawler::monitorInfoHashes() {
 void Crawler::updateStatistics() {
     unified_event::logDebug("DHT.Crawler", "Updating statistics and pruning data");
 
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utils::withLock(m_mutex, [this]() {
+            // Limit the number of nodes and info hashes stored
+            if (m_discoveredNodes.size() > m_crawlerConfig.maxNodes) {
+                // Remove the oldest nodes
+                size_t nodesToRemove = m_discoveredNodes.size() - m_crawlerConfig.maxNodes;
+                std::vector<std::string> nodeIDsToRemove;
 
-    // Limit the number of nodes and info hashes stored
-    if (m_discoveredNodes.size() > m_crawlerConfig.maxNodes) {
-        // Remove the oldest nodes
-        size_t nodesToRemove = m_discoveredNodes.size() - m_crawlerConfig.maxNodes;
-        std::vector<std::string> nodeIDsToRemove;
-
-        for (const auto& [nodeIDStr, node] : m_discoveredNodes) {
-            nodeIDsToRemove.push_back(nodeIDStr);
-            if (nodeIDsToRemove.size() >= nodesToRemove) {
-                break;
-            }
-        }
-
-        for (const auto& nodeIDStr : nodeIDsToRemove) {
-            m_discoveredNodes.erase(nodeIDStr);
-        }
-
-        std::string prunedNodesMessage = "Pruned " + std::to_string(nodeIDsToRemove.size()) + " nodes";
-        prunedNodesMessage += ", remaining: " + std::to_string(m_discoveredNodes.size());
-        unified_event::logDebug("DHT.Crawler", prunedNodesMessage);
-    }
-
-    if (m_discoveredInfoHashes.size() > m_crawlerConfig.maxInfoHashes) {
-        // Remove the oldest info hashes
-        size_t infoHashesToRemove = m_discoveredInfoHashes.size() - m_crawlerConfig.maxInfoHashes;
-        std::vector<std::string> infoHashesToRemoveVec;
-
-        for (const auto& [infoHashStr, _] : m_discoveredInfoHashes) {
-            // Don't remove monitored info hashes
-            if (m_monitoredInfoHashes.find(infoHashStr) == m_monitoredInfoHashes.end()) {
-                infoHashesToRemoveVec.push_back(infoHashStr);
-                if (infoHashesToRemoveVec.size() >= infoHashesToRemove) {
-                    break;
+                for (const auto& [nodeIDStr, node] : m_discoveredNodes) {
+                    nodeIDsToRemove.push_back(nodeIDStr);
+                    if (nodeIDsToRemove.size() >= nodesToRemove) {
+                        break;
+                    }
                 }
+
+                for (const auto& nodeIDStr : nodeIDsToRemove) {
+                    m_discoveredNodes.erase(nodeIDStr);
+                }
+
+                std::string prunedNodesMessage = "Pruned " + std::to_string(nodeIDsToRemove.size()) + " nodes";
+                prunedNodesMessage += ", remaining: " + std::to_string(m_discoveredNodes.size());
+                unified_event::logDebug("DHT.Crawler", prunedNodesMessage);
             }
-        }
 
-        for (const auto& infoHashStr : infoHashesToRemoveVec) {
-            m_discoveredInfoHashes.erase(infoHashStr);
-            m_infoHashPeers.erase(infoHashStr);
-        }
+            if (m_discoveredInfoHashes.size() > m_crawlerConfig.maxInfoHashes) {
+                // Remove the oldest info hashes
+                size_t infoHashesToRemove = m_discoveredInfoHashes.size() - m_crawlerConfig.maxInfoHashes;
+                std::vector<std::string> infoHashesToRemoveVec;
 
-        std::string prunedHashesMessage = "Pruned " + std::to_string(infoHashesToRemoveVec.size()) + " info hashes";
-        prunedHashesMessage += ", remaining: " + std::to_string(m_discoveredInfoHashes.size());
-        unified_event::logDebug("DHT.Crawler", prunedHashesMessage);
+                for (const auto& [infoHashStr, _] : m_discoveredInfoHashes) {
+                    // Don't remove monitored info hashes
+                    if (m_monitoredInfoHashes.find(infoHashStr) == m_monitoredInfoHashes.end()) {
+                        infoHashesToRemoveVec.push_back(infoHashStr);
+                        if (infoHashesToRemoveVec.size() >= infoHashesToRemove) {
+                            break;
+                        }
+                    }
+                }
+
+                for (const auto& infoHashStr : infoHashesToRemoveVec) {
+                    m_discoveredInfoHashes.erase(infoHashStr);
+                    m_infoHashPeers.erase(infoHashStr);
+                }
+
+                std::string prunedHashesMessage = "Pruned " + std::to_string(infoHashesToRemoveVec.size()) + " info hashes";
+                prunedHashesMessage += ", remaining: " + std::to_string(m_discoveredInfoHashes.size());
+                unified_event::logDebug("DHT.Crawler", prunedHashesMessage);
+            }
+        }, "Crawler::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.Crawler", e.what());
     }
 
     // Update statistics
@@ -681,33 +718,37 @@ void Crawler::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Eve
         return;
     }
 
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utils::withLock(m_mutex, [this, node, nodeDiscoveredEvent]() {
+            // Add the node to our discovered nodes
+            std::string nodeIDStr = nodeIDToString(node->getID());
+            std::string endpoint = node->getEndpoint().toString();
 
-    // Add the node to our discovered nodes
-    std::string nodeIDStr = nodeIDToString(node->getID());
-    std::string endpoint = node->getEndpoint().toString();
+            // Check if this is a new node
+            bool isNewNode = m_discoveredNodes.find(nodeIDStr) == m_discoveredNodes.end();
+            m_discoveredNodes[nodeIDStr] = node;
 
-    // Check if this is a new node
-    bool isNewNode = m_discoveredNodes.find(nodeIDStr) == m_discoveredNodes.end();
-    m_discoveredNodes[nodeIDStr] = node;
+            // Update statistics
+            m_statistics.nodesDiscovered = m_discoveredNodes.size();
+            m_statistics.nodesResponded++;
 
-    // Update statistics
-    m_statistics.nodesDiscovered = m_discoveredNodes.size();
-    m_statistics.nodesResponded++;
+            // Log the event with detailed information
+            if (isNewNode) {
+                // Get bucket information if available
+                auto bucketOpt = nodeDiscoveredEvent->getProperty<size_t>("bucket");
+                std::string bucketInfo = bucketOpt ? ", bucket: " + std::to_string(*bucketOpt) : "";
 
-    // Log the event with detailed information
-    if (isNewNode) {
-        // Get bucket information if available
-        auto bucketOpt = nodeDiscoveredEvent->getProperty<size_t>("bucket");
-        std::string bucketInfo = bucketOpt ? ", bucket: " + std::to_string(*bucketOpt) : "";
+                // Get discovery method if available
+                auto methodOpt = nodeDiscoveredEvent->getProperty<std::string>("discoveryMethod");
+                std::string methodInfo = methodOpt ? ", " + *methodOpt : "";
 
-        // Get discovery method if available
-        auto methodOpt = nodeDiscoveredEvent->getProperty<std::string>("discoveryMethod");
-        std::string methodInfo = methodOpt ? ", " + *methodOpt : "";
-
-        std::string logMessage = "Node discovered - ID: " + nodeIDStr;
-        logMessage += ", endpoint: " + endpoint + bucketInfo + methodInfo;
-        unified_event::logInfo("DHT.Crawler", logMessage);
+                std::string logMessage = "Node discovered - ID: " + nodeIDStr;
+                logMessage += ", endpoint: " + endpoint + bucketInfo + methodInfo;
+                unified_event::logInfo("DHT.Crawler", logMessage);
+            }
+        }, "Crawler::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.Crawler", e.what());
     }
 }
 
@@ -720,40 +761,44 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
     auto infoHash = peerDiscoveredEvent->getInfoHash();
     auto peer = peerDiscoveredEvent->getPeer();
 
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utils::withLock(m_mutex, [this, infoHash, peer]() {
+            // Add the info hash to our discovered info hashes
+            std::string infoHashStr = infoHashToString(infoHash);
+            std::string peerStr = peer.toString();
 
-    // Add the info hash to our discovered info hashes
-    std::string infoHashStr = infoHashToString(infoHash);
-    std::string peerStr = peer.toString();
+            // Check if this is a new info hash or new peer
+            bool isNewInfoHash = m_discoveredInfoHashes.find(infoHashStr) == m_discoveredInfoHashes.end();
+            bool isNewPeer = m_infoHashPeers[infoHashStr].find(peerStr) == m_infoHashPeers[infoHashStr].end();
 
-    // Check if this is a new info hash or new peer
-    bool isNewInfoHash = m_discoveredInfoHashes.find(infoHashStr) == m_discoveredInfoHashes.end();
-    bool isNewPeer = m_infoHashPeers[infoHashStr].find(peerStr) == m_infoHashPeers[infoHashStr].end();
+            m_discoveredInfoHashes[infoHashStr] = infoHash;
+            m_infoHashPeers[infoHashStr].insert(peerStr);
 
-    m_discoveredInfoHashes[infoHashStr] = infoHash;
-    m_infoHashPeers[infoHashStr].insert(peerStr);
+            // Update statistics
+            m_statistics.infoHashesDiscovered = m_discoveredInfoHashes.size();
+            m_statistics.peersDiscovered = 0;
+            for (const auto& infoHashPeersPair : m_infoHashPeers) {
+                m_statistics.peersDiscovered += infoHashPeersPair.second.size();
+            }
 
-    // Update statistics
-    m_statistics.infoHashesDiscovered = m_discoveredInfoHashes.size();
-    m_statistics.peersDiscovered = 0;
-    for (const auto& infoHashPeersPair : m_infoHashPeers) {
-        m_statistics.peersDiscovered += infoHashPeersPair.second.size();
-    }
+            // Log the event with detailed information
+            if (isNewInfoHash) {
+                std::string logMessage = "New info hash discovered - Hash: " + infoHashStr;
+                unified_event::logInfo("DHT.Crawler", logMessage);
+            }
 
-    // Log the event with detailed information
-    if (isNewInfoHash) {
-        std::string logMessage = "New info hash discovered - Hash: " + infoHashStr;
-        unified_event::logInfo("DHT.Crawler", logMessage);
-    }
+            if (isNewPeer) {
+                // Check if this is a monitored info hash
+                bool isMonitored = m_monitoredInfoHashes.find(infoHashStr) != m_monitoredInfoHashes.end();
+                std::string monitoredStr = isMonitored ? " (monitored)" : "";
 
-    if (isNewPeer) {
-        // Check if this is a monitored info hash
-        bool isMonitored = m_monitoredInfoHashes.find(infoHashStr) != m_monitoredInfoHashes.end();
-        std::string monitoredStr = isMonitored ? " (monitored)" : "";
-
-        std::string logMessage = "New peer discovered - Hash: " + infoHashStr;
-        logMessage += monitoredStr + ", peer: " + peerStr;
-        unified_event::logInfo("DHT.Crawler", logMessage);
+                std::string logMessage = "New peer discovered - Hash: " + infoHashStr;
+                logMessage += monitoredStr + ", peer: " + peerStr;
+                unified_event::logInfo("DHT.Crawler", logMessage);
+            }
+        }, "Crawler::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.Crawler", e.what());
     }
 }
 
@@ -763,42 +808,46 @@ void Crawler::handleMessageReceivedEvent(const std::shared_ptr<unified_event::Ev
         return;
     }
 
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utils::withLock(m_mutex, [this, messageReceivedEvent]() {
+            // Update statistics
+            m_statistics.responsesReceived++;
 
-    // Update statistics
-    m_statistics.responsesReceived++;
+            // Log detailed information about the message
+            auto messageOpt = messageReceivedEvent->getProperty<std::shared_ptr<dht::Message>>("message");
+            auto senderOpt = messageReceivedEvent->getProperty<network::EndPoint>("sender");
 
-    // Log detailed information about the message
-    auto messageOpt = messageReceivedEvent->getProperty<std::shared_ptr<dht::Message>>("message");
-    auto senderOpt = messageReceivedEvent->getProperty<network::EndPoint>("sender");
+            if (messageOpt && senderOpt) {
+                auto message = *messageOpt;
+                auto sender = *senderOpt;
 
-    if (messageOpt && senderOpt) {
-        auto message = *messageOpt;
-        auto sender = *senderOpt;
+                // Get message type
+                std::string messageType;
+                if (message->getType() == dht::MessageType::Response) {
+                    messageType = "Response";
 
-        // Get message type
-        std::string messageType;
-        if (message->getType() == dht::MessageType::Response) {
-            messageType = "Response";
+                    // Check if it's an error response
+                    auto errorResponse = std::dynamic_pointer_cast<dht::ErrorMessage>(message);
+                    if (errorResponse) {
+                        m_statistics.errorsReceived++;
+                        messageType = "Error (" + std::to_string(static_cast<int>(errorResponse->getCode())) + ")";
+                    }
+                } else if (message->getType() == dht::MessageType::Query) {
+                    messageType = "Query";
+                }
 
-            // Check if it's an error response
-            auto errorResponse = std::dynamic_pointer_cast<dht::ErrorMessage>(message);
-            if (errorResponse) {
-                m_statistics.errorsReceived++;
-                messageType = "Error (" + std::to_string(static_cast<int>(errorResponse->getCode())) + ")";
+                // Get transaction ID
+                std::string transactionID = message->getTransactionID();
+
+                // Log at debug level since these can be very frequent
+                std::string logMessage = "Message received - Type: " + messageType;
+                logMessage += ", from: " + sender.toString();
+                logMessage += ", txID: " + transactionID;
+                unified_event::logDebug("DHT.Crawler", logMessage);
             }
-        } else if (message->getType() == dht::MessageType::Query) {
-            messageType = "Query";
-        }
-
-        // Get transaction ID
-        std::string transactionID = message->getTransactionID();
-
-        // Log at debug level since these can be very frequent
-        std::string logMessage = "Message received - Type: " + messageType;
-        logMessage += ", from: " + sender.toString();
-        logMessage += ", txID: " + transactionID;
-        unified_event::logDebug("DHT.Crawler", logMessage);
+        }, "Crawler::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.Crawler", e.what());
     }
 }
 
@@ -808,53 +857,57 @@ void Crawler::handleMessageSentEvent(const std::shared_ptr<unified_event::Event>
         return;
     }
 
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utils::withLock(m_mutex, [this, messageSentEvent]() {
+            // Update statistics
+            m_statistics.queriesSent++;
 
-    // Update statistics
-    m_statistics.queriesSent++;
+            // Log detailed information about the message
+            auto messageOpt = messageSentEvent->getProperty<std::shared_ptr<dht::Message>>("message");
+            auto recipientOpt = messageSentEvent->getProperty<network::EndPoint>("recipient");
 
-    // Log detailed information about the message
-    auto messageOpt = messageSentEvent->getProperty<std::shared_ptr<dht::Message>>("message");
-    auto recipientOpt = messageSentEvent->getProperty<network::EndPoint>("recipient");
+            if (messageOpt && recipientOpt) {
+                auto message = *messageOpt;
+                auto recipient = *recipientOpt;
 
-    if (messageOpt && recipientOpt) {
-        auto message = *messageOpt;
-        auto recipient = *recipientOpt;
-
-        // Get message type and method
-        std::string messageInfo;
-        if (message->getType() == dht::MessageType::Query) {
-            auto query = std::dynamic_pointer_cast<dht::QueryMessage>(message);
-            if (query) {
-                switch (query->getMethod()) {
-                    case dht::QueryMethod::Ping:
-                        messageInfo = "Ping";
-                        break;
-                    case dht::QueryMethod::FindNode:
-                        messageInfo = "FindNode";
-                        break;
-                    case dht::QueryMethod::GetPeers:
-                        messageInfo = "GetPeers";
-                        break;
-                    case dht::QueryMethod::AnnouncePeer:
-                        messageInfo = "AnnouncePeer";
-                        break;
-                    default:
-                        messageInfo = "Unknown";
+                // Get message type and method
+                std::string messageInfo;
+                if (message->getType() == dht::MessageType::Query) {
+                    auto query = std::dynamic_pointer_cast<dht::QueryMessage>(message);
+                    if (query) {
+                        switch (query->getMethod()) {
+                            case dht::QueryMethod::Ping:
+                                messageInfo = "Ping";
+                                break;
+                            case dht::QueryMethod::FindNode:
+                                messageInfo = "FindNode";
+                                break;
+                            case dht::QueryMethod::GetPeers:
+                                messageInfo = "GetPeers";
+                                break;
+                            case dht::QueryMethod::AnnouncePeer:
+                                messageInfo = "AnnouncePeer";
+                                break;
+                            default:
+                                messageInfo = "Unknown";
+                        }
+                    }
+                } else if (message->getType() == dht::MessageType::Response) {
+                    messageInfo = "Response";
                 }
+
+                // Get transaction ID
+                std::string transactionID = message->getTransactionID();
+
+                // Log at debug level since these can be very frequent
+                std::string logMessage = "Message sent - Type: " + messageInfo;
+                logMessage += ", to: " + recipient.toString();
+                logMessage += ", txID: " + transactionID;
+                unified_event::logDebug("DHT.Crawler", logMessage);
             }
-        } else if (message->getType() == dht::MessageType::Response) {
-            messageInfo = "Response";
-        }
-
-        // Get transaction ID
-        std::string transactionID = message->getTransactionID();
-
-        // Log at debug level since these can be very frequent
-        std::string logMessage = "Message sent - Type: " + messageInfo;
-        logMessage += ", to: " + recipient.toString();
-        logMessage += ", txID: " + transactionID;
-        unified_event::logDebug("DHT.Crawler", logMessage);
+        }, "Crawler::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.Crawler", e.what());
     }
 }
 
