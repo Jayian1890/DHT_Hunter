@@ -1,4 +1,5 @@
 #include "dht_hunter/network/udp_socket.hpp"
+#include "dht_hunter/utils/lock_utils.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 
 #include <thread>
@@ -134,8 +135,14 @@ public:
     }
 
     void setReceiveCallback(std::function<void(const std::vector<uint8_t>&, const std::string&, uint16_t)> callback) {
-        std::lock_guard<std::mutex> lock(m_callbackMutex);
-        m_receiveCallback = std::move(callback);
+        try {
+            utils::withLock(m_callbackMutex, [this, callback = std::move(callback)]() mutable {
+                m_receiveCallback = std::move(callback);
+            }, "UDPSocket::m_callbackMutex");
+        } catch (const utils::LockTimeoutException& e) {
+            // Log the error
+            unified_event::logError("Network.UDPSocket", e.what());
+        }
     }
 
     bool startReceiveLoop() {    // Logger initialization removed
@@ -211,12 +218,18 @@ private:
             if (bytesReceived > 0) {
                 std::vector<uint8_t> data(buffer.data(), buffer.data() + bytesReceived);
 
-                std::lock_guard<std::mutex> lock(m_callbackMutex);
-                if (m_receiveCallback) {
-                    try {
-                        m_receiveCallback(data, address, port);
-                    } catch (const std::exception& e) {
-                    }
+                try {
+                    utils::withLock(m_callbackMutex, [this, &data, &address, port]() {
+                        if (m_receiveCallback) {
+                            try {
+                                m_receiveCallback(data, address, port);
+                            } catch (const std::exception& e) {
+                                unified_event::logError("Network.UDPSocket", "Exception in receive callback: " + std::string(e.what()));
+                            }
+                        }
+                    }, "UDPSocket::m_callbackMutex");
+                } catch (const utils::LockTimeoutException& e) {
+                    unified_event::logError("Network.UDPSocket", "Failed to acquire lock in receive loop: " + std::string(e.what()));
                 }
             } else if (bytesReceived < 0) {
                 // Error occurred

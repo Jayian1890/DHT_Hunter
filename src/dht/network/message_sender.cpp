@@ -1,4 +1,5 @@
 #include "dht_hunter/dht/network/message_sender.hpp"
+#include "dht_hunter/utils/lock_utils.hpp"
 
 namespace dht_hunter::dht {
 
@@ -10,13 +11,17 @@ std::shared_ptr<MessageSender> MessageSender::getInstance(
     const DHTConfig& config,
     std::shared_ptr<SocketManager> socketManager) {
 
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-
-    if (!s_instance) {
-        s_instance = std::shared_ptr<MessageSender>(new MessageSender(config, socketManager));
+    try {
+        return utils::withLock(s_instanceMutex, [&]() {
+            if (!s_instance) {
+                s_instance = std::shared_ptr<MessageSender>(new MessageSender(config, socketManager));
+            }
+            return s_instance;
+        }, "MessageSender::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.MessageSender", e.what());
+        return nullptr;
     }
-
-    return s_instance;
 }
 
 MessageSender::MessageSender(const DHTConfig& config, std::shared_ptr<SocketManager> socketManager)
@@ -30,43 +35,57 @@ MessageSender::~MessageSender() {
     stop();
 
     // Clear the singleton instance
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-    if (s_instance.get() == this) {
-        s_instance.reset();
+    try {
+        utils::withLock(s_instanceMutex, [this]() {
+            if (s_instance.get() == this) {
+                s_instance.reset();
+            }
+        }, "MessageSender::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.MessageSender", e.what());
     }
 }
 
 bool MessageSender::start() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        return utils::withLock(m_mutex, [this]() {
+            if (m_running) {
+                return true;
+            }
 
-    if (m_running) {
-        return true;
-    }
+            if (!m_socketManager || !m_socketManager->isRunning()) {
+                return false;
+            }
 
-    if (!m_socketManager || !m_socketManager->isRunning()) {
+            m_running = true;
+
+            // Publish a system started event
+            auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.MessageSender");
+            m_eventBus->publish(startedEvent);
+            return true;
+        }, "MessageSender::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.MessageSender", e.what());
         return false;
     }
-
-    m_running = true;
-
-    // Publish a system started event
-    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.MessageSender");
-    m_eventBus->publish(startedEvent);
-    return true;
 }
 
 void MessageSender::stop() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utils::withLock(m_mutex, [this]() {
+            if (!m_running) {
+                return;
+            }
 
-    if (!m_running) {
-        return;
+            m_running = false;
+
+            // Publish a system stopped event
+            auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.MessageSender");
+            m_eventBus->publish(stoppedEvent);
+        }, "MessageSender::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.MessageSender", e.what());
     }
-
-    m_running = false;
-
-    // Publish a system stopped event
-    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.MessageSender");
-    m_eventBus->publish(stoppedEvent);
 }
 
 bool MessageSender::isRunning() const {

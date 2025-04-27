@@ -1,4 +1,5 @@
 #include "dht_hunter/dht/network/socket_manager.hpp"
+#include "dht_hunter/utils/lock_utils.hpp"
 
 namespace dht_hunter::dht {
 
@@ -7,13 +8,17 @@ std::shared_ptr<SocketManager> SocketManager::s_instance = nullptr;
 std::mutex SocketManager::s_instanceMutex;
 
 std::shared_ptr<SocketManager> SocketManager::getInstance(const DHTConfig& config) {
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-
-    if (!s_instance) {
-        s_instance = std::shared_ptr<SocketManager>(new SocketManager(config));
+    try {
+        return utils::withLock(s_instanceMutex, [&]() {
+            if (!s_instance) {
+                s_instance = std::shared_ptr<SocketManager>(new SocketManager(config));
+            }
+            return s_instance;
+        }, "SocketManager::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.SocketManager", e.what());
+        return nullptr;
     }
-
-    return s_instance;
 }
 
 SocketManager::SocketManager(const DHTConfig& config)
@@ -24,65 +29,79 @@ SocketManager::~SocketManager() {
     stop();
 
     // Clear the singleton instance
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-    if (s_instance.get() == this) {
-        s_instance.reset();
+    try {
+        utils::withLock(s_instanceMutex, [this]() {
+            if (s_instance.get() == this) {
+                s_instance.reset();
+            }
+        }, "SocketManager::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.SocketManager", e.what());
     }
 }
 
 bool SocketManager::start(std::function<void(const uint8_t*, size_t, const network::EndPoint&)> receiveCallback) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        return utils::withLock(m_mutex, [this, receiveCallback]() {
+            if (m_running) {
+                return true;
+            }
 
-    if (m_running) {
-        return true;
-    }
+            // Create the socket
+            m_socket = std::make_unique<network::UDPSocket>();
 
-    // Create the socket
-    m_socket = std::make_unique<network::UDPSocket>();
+            // Bind the socket to the port
+            if (!m_socket->bind(m_port)) {
+                return false;
+            }
 
-    // Bind the socket to the port
-    if (!m_socket->bind(m_port)) {
+            // Set the receive callback
+            m_socket->setReceiveCallback([receiveCallback](const std::vector<uint8_t>& data, const std::string& address, uint16_t port) {
+                // Create an endpoint
+                network::NetworkAddress networkAddress(address);
+                network::EndPoint endpoint(networkAddress, port);
+
+                // Call the callback
+                receiveCallback(data.data(), data.size(), endpoint);
+            });
+
+            // Start the receive loop
+            if (!m_socket->startReceiveLoop()) {
+                return false;
+            }
+
+            m_running = true;
+
+            // Socket manager started event is published through the event system
+
+            return true;
+        }, "SocketManager::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.SocketManager", e.what());
         return false;
     }
-
-    // Set the receive callback
-    m_socket->setReceiveCallback([receiveCallback](const std::vector<uint8_t>& data, const std::string& address, uint16_t port) {
-        // Create an endpoint
-        network::NetworkAddress networkAddress(address);
-        network::EndPoint endpoint(networkAddress, port);
-
-        // Call the callback
-        receiveCallback(data.data(), data.size(), endpoint);
-    });
-
-    // Start the receive loop
-    if (!m_socket->startReceiveLoop()) {
-        return false;
-    }
-
-    m_running = true;
-
-    // Socket manager started event is published through the event system
-
-    return true;
 }
 
 void SocketManager::stop() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utils::withLock(m_mutex, [this]() {
+            if (!m_running) {
+                return;
+            }
 
-    if (!m_running) {
-        return;
+            // Stop the receive loop
+            if (m_socket) {
+                m_socket->stopReceiveLoop();
+                m_socket->close();
+            }
+
+            m_running = false;
+
+            // Socket manager stopped event is published through the event system
+        }, "SocketManager::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.SocketManager", e.what());
     }
-
-    // Stop the receive loop
-    if (m_socket) {
-        m_socket->stopReceiveLoop();
-        m_socket->close();
-    }
-
-    m_running = false;
-
-    // Socket manager stopped event is published through the event system
 }
 
 bool SocketManager::isRunning() const {
