@@ -28,6 +28,7 @@ class RoutingManager;
 class NodeLookup;
 class PeerLookup;
 class Bootstrapper;
+class Crawler;
 
 namespace extensions {
     class DHTExtension;
@@ -150,6 +151,12 @@ public:
      */
     void ping(const std::shared_ptr<Node>& node, const std::function<void(bool)>& callback);
 
+    /**
+     * @brief Gets the crawler
+     * @return The crawler
+     */
+    std::shared_ptr<Crawler> getCrawler() const;
+
 private:
     /**
      * @brief Saves the routing table periodically
@@ -194,6 +201,7 @@ private:
     std::shared_ptr<NodeLookup> m_nodeLookup;
     std::shared_ptr<PeerLookup> m_peerLookup;
     std::shared_ptr<Bootstrapper> m_bootstrapper;
+    std::shared_ptr<Crawler> m_crawler;
 
     // Event bus
     std::shared_ptr<unified_event::EventBus> m_eventBus;

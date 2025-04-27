@@ -44,6 +44,14 @@ std::string nodeIDToString(const NodeID& nodeID);
 std::string infoHashToString(const InfoHash& infoHash);
 
 /**
+ * @brief Converts a string to an info hash
+ * @param str The string representation of the info hash
+ * @param infoHash The info hash to populate
+ * @return True if the conversion was successful, false otherwise
+ */
+bool infoHashFromString(const std::string& str, InfoHash& infoHash);
+
+/**
  * @brief Generates a random node ID
  * @return A random node ID
  */

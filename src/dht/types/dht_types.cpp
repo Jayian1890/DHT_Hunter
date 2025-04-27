@@ -41,6 +41,25 @@ bool isValidInfoHash(const InfoHash& infoHash) {
     return !std::ranges::all_of(infoHash, [](const uint8_t byte) { return byte == 0; });
 }
 
+bool infoHashFromString(const std::string& str, InfoHash& infoHash) {
+    // Check if the string has the correct length (40 characters for 20 bytes in hex)
+    if (str.length() != 40) {
+        return false;
+    }
+
+    // Convert each pair of hex characters to a byte
+    for (size_t i = 0; i < 20; ++i) {
+        std::string byteStr = str.substr(i * 2, 2);
+        try {
+            infoHash[i] = static_cast<uint8_t>(std::stoi(byteStr, nullptr, 16));
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 NodeID calculateDistance(const NodeID& a, const NodeID& b) {
     return a.distanceTo(b);
 }

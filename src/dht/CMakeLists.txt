@@ -36,6 +36,9 @@ add_library(dht_hunter_dht
         # Bootstrap components
         bootstrap/bootstrapper.cpp
 
+        # Crawler components
+        crawler/crawler.cpp
+
         # Event components have been moved to the unified event system
 
         # Service components

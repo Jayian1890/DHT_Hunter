@@ -13,6 +13,7 @@
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
+#include "dht_hunter/dht/crawler/crawler.hpp"
 #include "dht_hunter/unified_event/events/custom_events.hpp"
 
 #include <iomanip>
@@ -48,6 +49,10 @@ DHTNode::DHTNode(const DHTConfig& config) : m_nodeID(generateRandomNodeID()), m_
     m_mainlineDHT = std::make_shared<extensions::MainlineDHT>(config, m_nodeID, m_routingTable);
     m_kademliaDHT = std::make_shared<extensions::KademliaDHT>(config, m_nodeID, m_routingTable);
     m_azureusDHT = std::make_shared<extensions::AzureusDHT>(config, m_nodeID, m_routingTable);
+
+    // Create the crawler
+    m_crawler = Crawler::getInstance(config, m_nodeID, m_routingManager, m_nodeLookup, m_peerLookup,
+                                    m_transactionManager, m_messageSender, m_peerStorage);
 
     // Log DHT node creation
     unified_event::logInfo("DHT.Node", "Node initialized with ID: " + nodeIDToString(m_nodeID));
@@ -546,6 +551,10 @@ void DHTNode::saveRoutingTablePeriodically() {
     }
 
     unified_event::logDebug("DHT.Node", "Routing Table Save Thread Ended");
+}
+
+std::shared_ptr<Crawler> DHTNode::getCrawler() const {
+    return m_crawler;
 }
 
 }  // namespace dht_hunter::dht
