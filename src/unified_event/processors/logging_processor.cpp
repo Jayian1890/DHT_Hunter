@@ -31,6 +31,11 @@ bool LoggingProcessor::shouldProcess(std::shared_ptr<Event> event) const {
         return false;
     }
 
+    // Filter out NodeDiscoveredEvent events as per user request
+    if (event->getType() == EventType::NodeDiscovered) {
+        return false;
+    }
+
     // Check if the event severity is at or above the minimum severity
     return event->getSeverity() >= m_config.minSeverity;
 }
