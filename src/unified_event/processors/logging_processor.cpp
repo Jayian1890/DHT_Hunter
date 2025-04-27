@@ -151,6 +151,79 @@ std::string LoggingProcessor::formatEvent(std::shared_ptr<Event> event) const {
 
             if (message && sender) {
                 ss << " - Type: " << messageTypeToString((*message)->getType());
+
+                // Add query method for responses
+                if ((*message)->getType() == dht_hunter::dht::MessageType::Response) {
+                    auto response = std::dynamic_pointer_cast<dht_hunter::dht::ResponseMessage>(*message);
+                    if (response) {
+                        // Try to determine what kind of response this is
+                        if (std::dynamic_pointer_cast<dht_hunter::dht::PingResponse>(response)) {
+                            ss << " ping";
+                        } else if (std::dynamic_pointer_cast<dht_hunter::dht::FindNodeResponse>(response)) {
+                            ss << " find_node";
+                            auto findNodeResponse = std::dynamic_pointer_cast<dht_hunter::dht::FindNodeResponse>(response);
+                            if (findNodeResponse) {
+                                ss << ", nodes: " << findNodeResponse->getNodes().size();
+                            }
+                        } else if (std::dynamic_pointer_cast<dht_hunter::dht::GetPeersResponse>(response)) {
+                            ss << " get_peers";
+                            auto getPeersResponse = std::dynamic_pointer_cast<dht_hunter::dht::GetPeersResponse>(response);
+                            if (getPeersResponse) {
+                                if (getPeersResponse->hasNodes()) {
+                                    ss << ", nodes: " << getPeersResponse->getNodes().size();
+                                }
+                                if (getPeersResponse->hasPeers()) {
+                                    ss << ", peers: " << getPeersResponse->getPeers().size();
+                                }
+                            }
+                        } else if (std::dynamic_pointer_cast<dht_hunter::dht::AnnouncePeerResponse>(response)) {
+                            ss << " announce_peer";
+                        }
+                    }
+                }
+                // Add query method for queries
+                else if ((*message)->getType() == dht_hunter::dht::MessageType::Query) {
+                    auto query = std::dynamic_pointer_cast<dht_hunter::dht::QueryMessage>(*message);
+                    if (query) {
+                        switch (query->getMethod()) {
+                            case dht_hunter::dht::QueryMethod::Ping:
+                                ss << " ping";
+                                break;
+                            case dht_hunter::dht::QueryMethod::FindNode: {
+                                ss << " find_node";
+                                auto findNodeQuery = std::dynamic_pointer_cast<dht_hunter::dht::FindNodeQuery>(query);
+                                if (findNodeQuery) {
+                                    std::string targetIDStr = dht_hunter::dht::nodeIDToString(findNodeQuery->getTargetID());
+                                    std::string shortTargetID = targetIDStr.substr(0, 6);
+                                    ss << ", target: " << shortTargetID;
+                                }
+                                break;
+                            }
+                            case dht_hunter::dht::QueryMethod::GetPeers: {
+                                ss << " get_peers";
+                                auto getPeersQuery = std::dynamic_pointer_cast<dht_hunter::dht::GetPeersQuery>(query);
+                                if (getPeersQuery) {
+                                    std::string infoHashStr = dht_hunter::dht::infoHashToString(getPeersQuery->getInfoHash());
+                                    std::string shortInfoHash = infoHashStr.substr(0, 6);
+                                    ss << ", info_hash: " << shortInfoHash;
+                                }
+                                break;
+                            }
+                            case dht_hunter::dht::QueryMethod::AnnouncePeer: {
+                                ss << " announce_peer";
+                                auto announceQuery = std::dynamic_pointer_cast<dht_hunter::dht::AnnouncePeerQuery>(query);
+                                if (announceQuery) {
+                                    std::string infoHashStr = dht_hunter::dht::infoHashToString(announceQuery->getInfoHash());
+                                    std::string shortInfoHash = infoHashStr.substr(0, 6);
+                                    ss << ", info_hash: " << shortInfoHash;
+                                    ss << ", port: " << announceQuery->getPort();
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 ss << ", from: " << (*sender).toString();
 
                 // Add node ID if available
@@ -174,6 +247,79 @@ std::string LoggingProcessor::formatEvent(std::shared_ptr<Event> event) const {
 
             if (message && recipient) {
                 ss << " - Type: " << messageTypeToString((*message)->getType());
+
+                // Add query method for responses
+                if ((*message)->getType() == dht_hunter::dht::MessageType::Response) {
+                    auto response = std::dynamic_pointer_cast<dht_hunter::dht::ResponseMessage>(*message);
+                    if (response) {
+                        // Try to determine what kind of response this is
+                        if (std::dynamic_pointer_cast<dht_hunter::dht::PingResponse>(response)) {
+                            ss << " ping";
+                        } else if (std::dynamic_pointer_cast<dht_hunter::dht::FindNodeResponse>(response)) {
+                            ss << " find_node";
+                            auto findNodeResponse = std::dynamic_pointer_cast<dht_hunter::dht::FindNodeResponse>(response);
+                            if (findNodeResponse) {
+                                ss << ", nodes: " << findNodeResponse->getNodes().size();
+                            }
+                        } else if (std::dynamic_pointer_cast<dht_hunter::dht::GetPeersResponse>(response)) {
+                            ss << " get_peers";
+                            auto getPeersResponse = std::dynamic_pointer_cast<dht_hunter::dht::GetPeersResponse>(response);
+                            if (getPeersResponse) {
+                                if (getPeersResponse->hasNodes()) {
+                                    ss << ", nodes: " << getPeersResponse->getNodes().size();
+                                }
+                                if (getPeersResponse->hasPeers()) {
+                                    ss << ", peers: " << getPeersResponse->getPeers().size();
+                                }
+                            }
+                        } else if (std::dynamic_pointer_cast<dht_hunter::dht::AnnouncePeerResponse>(response)) {
+                            ss << " announce_peer";
+                        }
+                    }
+                }
+                // Add query method for queries
+                else if ((*message)->getType() == dht_hunter::dht::MessageType::Query) {
+                    auto query = std::dynamic_pointer_cast<dht_hunter::dht::QueryMessage>(*message);
+                    if (query) {
+                        switch (query->getMethod()) {
+                            case dht_hunter::dht::QueryMethod::Ping:
+                                ss << " ping";
+                                break;
+                            case dht_hunter::dht::QueryMethod::FindNode: {
+                                ss << " find_node";
+                                auto findNodeQuery = std::dynamic_pointer_cast<dht_hunter::dht::FindNodeQuery>(query);
+                                if (findNodeQuery) {
+                                    std::string targetIDStr = dht_hunter::dht::nodeIDToString(findNodeQuery->getTargetID());
+                                    std::string shortTargetID = targetIDStr.substr(0, 6);
+                                    ss << ", target: " << shortTargetID;
+                                }
+                                break;
+                            }
+                            case dht_hunter::dht::QueryMethod::GetPeers: {
+                                ss << " get_peers";
+                                auto getPeersQuery = std::dynamic_pointer_cast<dht_hunter::dht::GetPeersQuery>(query);
+                                if (getPeersQuery) {
+                                    std::string infoHashStr = dht_hunter::dht::infoHashToString(getPeersQuery->getInfoHash());
+                                    std::string shortInfoHash = infoHashStr.substr(0, 6);
+                                    ss << ", info_hash: " << shortInfoHash;
+                                }
+                                break;
+                            }
+                            case dht_hunter::dht::QueryMethod::AnnouncePeer: {
+                                ss << " announce_peer";
+                                auto announceQuery = std::dynamic_pointer_cast<dht_hunter::dht::AnnouncePeerQuery>(query);
+                                if (announceQuery) {
+                                    std::string infoHashStr = dht_hunter::dht::infoHashToString(announceQuery->getInfoHash());
+                                    std::string shortInfoHash = infoHashStr.substr(0, 6);
+                                    ss << ", info_hash: " << shortInfoHash;
+                                    ss << ", port: " << announceQuery->getPort();
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 ss << ", to: " << (*recipient).toString();
 
                 // Add node ID if available

@@ -2,6 +2,9 @@
 
 #include "dht_hunter/unified_event/event_processor.hpp"
 #include "dht_hunter/dht/network/message.hpp"
+#include "dht_hunter/dht/network/query_message.hpp"
+#include "dht_hunter/dht/network/response_message.hpp"
+#include "dht_hunter/dht/network/error_message.hpp"
 #include <string>
 #include <fstream>
 #include <mutex>
