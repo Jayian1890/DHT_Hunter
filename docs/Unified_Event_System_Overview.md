@@ -133,7 +133,7 @@ if (statisticsProcessor) {
     size_t errorEvents = statisticsProcessor->getSeverityCount(
         dht_hunter::unified_event::EventSeverity::Error
     );
-    
+
     // Get all statistics as JSON
     std::string statsJson = statisticsProcessor->getStatisticsAsJson();
     std::cout << "Event Statistics: " << statsJson << std::endl;
@@ -180,6 +180,21 @@ The unified event system includes the following event types:
 
 - **PeerDiscoveredEvent**: Published when a peer is discovered
 - **PeerAnnouncedEvent**: Published when a peer is announced
+
+## Integration with Existing Code
+
+The unified event system has replaced the old event system, but maintains backward compatibility through adapter classes:
+
+1. **Logger Adapter**: Provides compatibility with the old Logger interface
+   - Located in `include/dht_hunter/unified_event/adapters/logger_adapter.hpp`
+   - Allows existing code to continue using the old Logger interface
+
+2. **DHT Event Adapter**: Provides compatibility with the old DHT-specific event system
+   - Located in `include/dht_hunter/unified_event/adapters/dht_event_adapter.hpp`
+   - Maintains the same API as the old DHT event system
+   - Maps DHT-specific events to unified events and vice versa
+
+These adapters allow existing code to continue using the old interfaces while actually using the new unified event system under the hood.
 
 ## Conclusion
 

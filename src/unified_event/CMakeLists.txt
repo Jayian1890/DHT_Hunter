@@ -3,11 +3,14 @@ add_library(dht_hunter_unified_event
     # Core components
     event.cpp
     event_bus.cpp
-    
+
     # Processors
     processors/logging_processor.cpp
     processors/component_processor.cpp
     processors/statistics_processor.cpp
+
+    # Adapters
+    adapters/dht_event_adapter.cpp
 )
 
 # Set include directories

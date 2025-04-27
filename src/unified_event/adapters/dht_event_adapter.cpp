@@ -1,57 +1,58 @@
 #include "dht_hunter/unified_event/adapters/dht_event_adapter.hpp"
 
-namespace dht_hunter::dht::events {
+namespace dht_hunter::dht {
+namespace events {
 
 int EventBus::subscribe(DHTEventType eventType, EventCallback callback) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     // Convert the DHT event type to a unified event type
     unified_event::EventType unifiedEventType = convertEventType(eventType);
-    
+
     // Subscribe to the unified event system
     int unifiedSubscriptionId = unified_event::EventBus::getInstance()->subscribe(
         unifiedEventType,
-        [callback](std::shared_ptr<unified_event::Event> event) {
+        [callback](std::shared_ptr<unified_event::Event> /*event*/) {
             // TODO: Convert the unified event to a DHT event
             // For now, just ignore the event
         }
     );
-    
+
     // Generate a new subscription ID for the DHT event system
     int subscriptionId = m_nextSubscriptionId++;
-    
+
     // Store the mapping between the DHT subscription ID and the unified subscription ID
     m_subscriptionMap[subscriptionId] = unifiedSubscriptionId;
-    
+
     return subscriptionId;
 }
 
 std::vector<int> EventBus::subscribe(const std::vector<DHTEventType>& eventTypes, EventCallback callback) {
     std::vector<int> subscriptionIds;
     subscriptionIds.reserve(eventTypes.size());
-    
+
     for (const auto& eventType : eventTypes) {
         subscriptionIds.push_back(subscribe(eventType, callback));
     }
-    
+
     return subscriptionIds;
 }
 
 bool EventBus::unsubscribe(int subscriptionId) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    
+
     // Find the unified subscription ID
     auto it = m_subscriptionMap.find(subscriptionId);
     if (it == m_subscriptionMap.end()) {
         return false;
     }
-    
+
     // Unsubscribe from the unified event system
     bool result = unified_event::EventBus::getInstance()->unsubscribe(it->second);
-    
+
     // Remove the mapping
     m_subscriptionMap.erase(it);
-    
+
     return result;
 }
 
@@ -59,10 +60,10 @@ void EventBus::publish(std::shared_ptr<DHTEvent> event) {
     if (!event) {
         return;
     }
-    
+
     // Convert the DHT event to a unified event
     std::shared_ptr<unified_event::Event> unifiedEvent = convertEvent(event);
-    
+
     // Publish the unified event
     if (unifiedEvent) {
         unified_event::EventBus::getInstance()->publish(unifiedEvent);
@@ -96,7 +97,7 @@ std::shared_ptr<unified_event::Event> EventBus::convertEvent(std::shared_ptr<DHT
     if (!event) {
         return nullptr;
     }
-    
+
     // Convert the DHT event to a unified event based on its type
     switch (event->getType()) {
         case DHTEventType::NodeDiscovered: {
@@ -173,8 +174,9 @@ std::shared_ptr<unified_event::Event> EventBus::convertEvent(std::shared_ptr<DHT
         default:
             break;
     }
-    
+
     return nullptr;
 }
 
-} // namespace dht_hunter::dht::events
+} // namespace events
+} // namespace dht_hunter::dht
