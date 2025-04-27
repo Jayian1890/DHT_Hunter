@@ -32,13 +32,13 @@ struct CrawlerConfig {
     size_t parallelCrawls = 10;
     
     // How often to refresh the crawler (in seconds)
-    uint32_t refreshInterval = 60;
+    uint32_t refreshInterval = 15;
     
     // Maximum number of nodes to store
-    size_t maxNodes = 10000;
+    size_t maxNodes = 1000000;
     
     // Maximum number of info hashes to track
-    size_t maxInfoHashes = 1000;
+    size_t maxInfoHashes = 1000000;
     
     // Whether to automatically start crawling on initialization
     bool autoStart = true;

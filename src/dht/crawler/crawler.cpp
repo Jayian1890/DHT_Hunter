@@ -271,21 +271,46 @@ void Crawler::crawl() {
     // Log the start of a crawl iteration
     unified_event::logDebug("DHT.Crawler", "Starting crawl iteration");
 
-    // Discover new nodes
-    discoverNodes();
+    try {
+        // Set a timeout for each operation to prevent hanging
+        const auto OPERATION_TIMEOUT = std::chrono::seconds(5);
 
-    // Monitor info hashes
-    monitorInfoHashes();
+        // Discover new nodes with timeout
+        auto startTime = std::chrono::steady_clock::now();
+        discoverNodes();
+        auto endTime = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime);
 
-    // Update statistics
-    updateStatistics();
+        if (duration > OPERATION_TIMEOUT) {
+            unified_event::logWarning("DHT.Crawler", "Node discovery took longer than expected: " +
+                                    std::to_string(duration.count()) + " seconds");
+        }
 
-    // Log the completion of a crawl iteration with statistics
-    std::string statsMessage = "Completed crawl iteration - ";
-    statsMessage += "Nodes: " + std::to_string(m_statistics.nodesDiscovered) + ", ";
-    statsMessage += "Info hashes: " + std::to_string(m_statistics.infoHashesDiscovered) + ", ";
-    statsMessage += "Peers: " + std::to_string(m_statistics.peersDiscovered);
-    unified_event::logDebug("DHT.Crawler", statsMessage);
+        // Monitor info hashes with timeout
+        startTime = std::chrono::steady_clock::now();
+        monitorInfoHashes();
+        endTime = std::chrono::steady_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime);
+
+        if (duration > OPERATION_TIMEOUT) {
+            unified_event::logWarning("DHT.Crawler", "Info hash monitoring took longer than expected: " +
+                                    std::to_string(duration.count()) + " seconds");
+        }
+
+        // Update statistics
+        updateStatistics();
+
+        // Log the completion of a crawl iteration with statistics
+        std::string statsMessage = "Completed crawl iteration - ";
+        statsMessage += "Nodes: " + std::to_string(m_statistics.nodesDiscovered) + ", ";
+        statsMessage += "Info hashes: " + std::to_string(m_statistics.infoHashesDiscovered) + ", ";
+        statsMessage += "Peers: " + std::to_string(m_statistics.peersDiscovered);
+        unified_event::logDebug("DHT.Crawler", statsMessage);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.Crawler", "Exception during crawl: " + std::string(e.what()));
+    } catch (...) {
+        unified_event::logError("DHT.Crawler", "Unknown exception during crawl");
+    }
 }
 
 void Crawler::discoverNodes() {
@@ -416,6 +441,9 @@ void Crawler::discoverNodes() {
 void Crawler::monitorInfoHashes() {
     unified_event::logDebug("DHT.Crawler", "Starting info hash monitoring");
 
+    // Limit the number of info hashes to monitor to avoid hanging
+    const size_t MAX_CONCURRENT_LOOKUPS = 3;
+
     std::vector<InfoHash> infoHashesToMonitor;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -432,9 +460,21 @@ void Crawler::monitorInfoHashes() {
     std::string monitoringMessage = "Monitoring " + std::to_string(infoHashesToMonitor.size()) + " info hashes";
     unified_event::logDebug("DHT.Crawler", monitoringMessage);
 
-    // Perform peer lookups for each info hash
-    for (const auto& infoHash : infoHashesToMonitor) {
+    // Limit the number of info hashes to monitor in each iteration
+    size_t numToMonitor = std::min(infoHashesToMonitor.size(), MAX_CONCURRENT_LOOKUPS);
+    if (numToMonitor > 0) {
+        std::string limitMessage = "Processing " + std::to_string(numToMonitor) + " info hashes in this iteration";
+        unified_event::logDebug("DHT.Crawler", limitMessage);
+    }
+
+    // Perform peer lookups for a limited number of info hashes
+    for (size_t i = 0; i < numToMonitor && i < infoHashesToMonitor.size(); ++i) {
+        const auto& infoHash = infoHashesToMonitor[i];
         if (m_peerLookup) {
+            std::string infoHashStr = infoHashToString(infoHash);
+            std::string peerLookupMessage = "Looking up peers for info hash: " + infoHashStr;
+            unified_event::logDebug("DHT.Crawler", peerLookupMessage);
+
             m_peerLookup->lookup(infoHash, [this, infoHash](const std::vector<network::EndPoint>& peers) {
                 std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -455,6 +495,11 @@ void Crawler::monitorInfoHashes() {
                     const auto& peerSetCount = infoHashPeersPair.second;
                     m_statistics.peersDiscovered += peerSetCount.size();
                 }
+
+                std::string completionMessage = "Peer lookup for info hash " + infoHashStr + " completed";
+                completionMessage += " - Found: " + std::to_string(peers.size());
+                completionMessage += ", Total: " + std::to_string(peerSet.size());
+                unified_event::logDebug("DHT.Crawler", completionMessage);
             });
         }
     }
@@ -464,10 +509,14 @@ void Crawler::monitorInfoHashes() {
     std::mt19937 g(rd());
     std::uniform_int_distribution<> dis(0, 255);
 
-    std::string randomHashMessage = "Generating " + std::to_string(m_crawlerConfig.parallelCrawls) + " random info hashes for lookup";
+    // Limit the number of random lookups to avoid hanging
+    const size_t MAX_RANDOM_LOOKUPS = 2;
+    size_t numRandomLookups = std::min(m_crawlerConfig.parallelCrawls, MAX_RANDOM_LOOKUPS);
+
+    std::string randomHashMessage = "Generating " + std::to_string(numRandomLookups) + " random info hashes for lookup";
     unified_event::logDebug("DHT.Crawler", randomHashMessage);
 
-    for (size_t i = 0; i < m_crawlerConfig.parallelCrawls; ++i) {
+    for (size_t i = 0; i < numRandomLookups; ++i) {
         // Generate a random info hash
         std::vector<uint8_t> randomInfoHashVec(20);
         for (size_t j = 0; j < 20; ++j) {
