@@ -50,6 +50,12 @@ std::string infoHashToString(const InfoHash& infoHash);
 NodeID generateRandomNodeID();
 
 /**
+ * @brief Creates an empty info hash (all zeros)
+ * @return An empty info hash
+ */
+InfoHash createEmptyInfoHash();
+
+/**
  * @brief Checks if a node ID is valid
  * @param nodeID The node ID to check
  * @return True if the node ID is valid, false otherwise

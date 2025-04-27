@@ -5,6 +5,10 @@
 
 namespace dht_hunter::network {
 
+NetworkAddress::NetworkAddress()
+    : m_address("0.0.0.0"), m_isIPv4(true), m_isValid(true) {
+}
+
 NetworkAddress::NetworkAddress(const std::string& address)
     : m_address(address), m_isIPv4(false), m_isValid(false) {
     // Check if the address is IPv4

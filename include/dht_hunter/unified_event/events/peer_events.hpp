@@ -23,16 +23,16 @@ public:
         setProperty("infoHash", infoHash);
         setProperty("peer", peer);
     }
-    
+
     /**
      * @brief Gets the info hash
      * @return The info hash
      */
     dht_hunter::dht::InfoHash getInfoHash() const {
         auto infoHash = getProperty<dht_hunter::dht::InfoHash>("infoHash");
-        return infoHash ? *infoHash : dht_hunter::dht::InfoHash();
+        return infoHash ? *infoHash : dht_hunter::dht::createEmptyInfoHash();
     }
-    
+
     /**
      * @brief Gets the discovered peer
      * @return The discovered peer
@@ -61,16 +61,16 @@ public:
         setProperty("peer", peer);
         setProperty("port", port);
     }
-    
+
     /**
      * @brief Gets the info hash
      * @return The info hash
      */
     dht_hunter::dht::InfoHash getInfoHash() const {
         auto infoHash = getProperty<dht_hunter::dht::InfoHash>("infoHash");
-        return infoHash ? *infoHash : dht_hunter::dht::InfoHash();
+        return infoHash ? *infoHash : dht_hunter::dht::createEmptyInfoHash();
     }
-    
+
     /**
      * @brief Gets the announced peer
      * @return The announced peer
@@ -79,7 +79,7 @@ public:
         auto peer = getProperty<dht_hunter::network::NetworkAddress>("peer");
         return peer ? *peer : dht_hunter::network::NetworkAddress();
     }
-    
+
     /**
      * @brief Gets the announced port
      * @return The announced port

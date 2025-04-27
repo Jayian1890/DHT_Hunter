@@ -27,6 +27,11 @@ NodeID generateRandomNodeID() {
     return NodeID::random();
 }
 
+InfoHash createEmptyInfoHash() {
+    InfoHash emptyHash{}; // Initialize with all zeros
+    return emptyHash;
+}
+
 bool isValidNodeID(const NodeID& nodeID) {
     return nodeID.isValid();
 }

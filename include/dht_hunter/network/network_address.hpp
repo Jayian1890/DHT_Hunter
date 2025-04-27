@@ -13,6 +13,12 @@ namespace dht_hunter::network {
 class NetworkAddress {
 public:
     /**
+     * @brief Default constructor
+     * Creates an empty network address (0.0.0.0)
+     */
+    NetworkAddress();
+
+    /**
      * @brief Constructs a network address from a string
      * @param address The address string (e.g., "192.168.1.1")
      */

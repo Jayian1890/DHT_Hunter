@@ -27,37 +27,37 @@ enum class EventType {
     SystemStarted,
     SystemStopped,
     SystemError,
-    
+
     // Node events
     NodeDiscovered,
     NodeAdded,
     NodeRemoved,
     NodeUpdated,
-    
+
     // Routing table events
     BucketRefreshed,
     BucketSplit,
     RoutingTableSaved,
     RoutingTableLoaded,
-    
+
     // Message events
     MessageSent,
     MessageReceived,
     MessageError,
-    
+
     // Lookup events
     LookupStarted,
     LookupProgress,
     LookupCompleted,
     LookupFailed,
-    
+
     // Peer events
     PeerDiscovered,
     PeerAnnounced,
-    
+
     // Log events
     LogMessage,
-    
+
     // Custom events (for extensions)
     Custom
 };
@@ -74,48 +74,48 @@ public:
      * @param source The source of the event (component name)
      */
     Event(EventType type, EventSeverity severity, const std::string& source);
-    
+
     /**
      * @brief Virtual destructor
      */
     virtual ~Event() = default;
-    
+
     /**
      * @brief Gets the event type
      * @return The event type
      */
     EventType getType() const { return m_type; }
-    
+
     /**
      * @brief Gets the event severity
      * @return The event severity
      */
     EventSeverity getSeverity() const { return m_severity; }
-    
+
     /**
      * @brief Gets the source of the event
      * @return The source of the event
      */
     const std::string& getSource() const { return m_source; }
-    
+
     /**
      * @brief Gets the timestamp of the event
      * @return The timestamp of the event
      */
     const std::chrono::system_clock::time_point& getTimestamp() const { return m_timestamp; }
-    
+
     /**
      * @brief Gets the event name
      * @return The event name
      */
     virtual std::string getName() const;
-    
+
     /**
      * @brief Gets a string representation of the event
      * @return A string representation of the event
      */
     virtual std::string toString() const;
-    
+
     /**
      * @brief Sets a property on the event
      * @param key The property key
@@ -125,7 +125,7 @@ public:
     void setProperty(const std::string& key, const T& value) {
         m_properties[key] = value;
     }
-    
+
     /**
      * @brief Gets a property from the event
      * @param key The property key
@@ -143,7 +143,25 @@ public:
         }
         return nullptr;
     }
-    
+
+    /**
+     * @brief Gets a property from the event (const version)
+     * @param key The property key
+     * @return The property value, or nullptr if not found
+     */
+    template<typename T>
+    const T* getProperty(const std::string& key) const {
+        auto it = m_properties.find(key);
+        if (it != m_properties.end()) {
+            try {
+                return std::any_cast<T>(&it->second);
+            } catch (const std::bad_any_cast&) {
+                return nullptr;
+            }
+        }
+        return nullptr;
+    }
+
 protected:
     EventType m_type;
     EventSeverity m_severity;
