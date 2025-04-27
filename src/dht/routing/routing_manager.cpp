@@ -38,8 +38,7 @@ RoutingManager::RoutingManager(const DHTConfig& config,
       m_messageSender(messageSender),
       m_running(false),
       m_bucketRefreshThreadRunning(false),
-      m_eventBus(unified_event::EventBus::getInstance()),
-      m_logger(event::Logger::forComponent("DHT.RoutingManager")) {
+      m_eventBus(unified_event::EventBus::getInstance()) {
 
     // Create the node verifier
     m_nodeVerifier = std::make_shared<NodeVerifier>(config, nodeID, m_routingTable, transactionManager, messageSender);
@@ -59,7 +58,6 @@ bool RoutingManager::start() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        m_logger.warning("Routing manager already running");
         return true;
     }
 
@@ -73,7 +71,6 @@ bool RoutingManager::start() {
     // Start the node verifier
     if (m_nodeVerifier) {
         if (!m_nodeVerifier->start()) {
-            m_logger.error("Failed to start node verifier");
             return false;
         }
     }
@@ -89,8 +86,6 @@ bool RoutingManager::start() {
     // Publish a system started event
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.RoutingManager");
     m_eventBus->publish(startedEvent);
-
-    m_logger.info("Routing manager started");
     return true;
 }
 
@@ -128,8 +123,6 @@ void RoutingManager::stop() {
     // Publish a system stopped event
     auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.RoutingManager");
     m_eventBus->publish(stoppedEvent);
-
-    m_logger.info("Routing manager stopped");
 }
 
 bool RoutingManager::isRunning() const {
@@ -142,12 +135,10 @@ std::shared_ptr<RoutingTable> RoutingManager::getRoutingTable() const {
 
 bool RoutingManager::addNode(std::shared_ptr<Node> node) {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return false;
     }
 
     if (!m_nodeVerifier) {
-        m_logger.error("No node verifier available");
         return false;
     }
 
@@ -158,7 +149,6 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
     // Add the node to the verification queue
     return m_nodeVerifier->verifyNode(node, [this, node](bool success) {
         if (success) {
-            m_logger.debug("Node {} verified and added to routing table", nodeIDToString(node->getID()));
 
             // Get the bucket index where the node was added
             size_t bucketIndex = 0;
@@ -170,21 +160,18 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
             auto addedEvent = std::make_shared<unified_event::NodeAddedEvent>("DHT.RoutingManager", node, bucketIndex);
             m_eventBus->publish(addedEvent);
         } else {
-            m_logger.debug("Failed to verify node {}", nodeIDToString(node->getID()));
         }
     });
 }
 
 bool RoutingManager::removeNode(const NodeID& nodeID) {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return false;
     }
 
     bool result = m_routingTable->removeNode(nodeID);
 
     if (result) {
-        m_logger.debug("Removed node {} from routing table", nodeIDToString(nodeID));
     }
 
     return result;
@@ -192,7 +179,6 @@ bool RoutingManager::removeNode(const NodeID& nodeID) {
 
 std::shared_ptr<Node> RoutingManager::getNode(const NodeID& nodeID) const {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return nullptr;
     }
 
@@ -201,7 +187,6 @@ std::shared_ptr<Node> RoutingManager::getNode(const NodeID& nodeID) const {
 
 std::vector<std::shared_ptr<Node>> RoutingManager::getClosestNodes(const NodeID& targetID, size_t k) const {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return {};
     }
 
@@ -209,15 +194,12 @@ std::vector<std::shared_ptr<Node>> RoutingManager::getClosestNodes(const NodeID&
     NodeID distance = m_nodeID.distanceTo(targetID);
     // Use the m_nodeID to avoid the unused private field warning
     std::string distanceStr = nodeIDToString(distance);
-    m_logger.info("Distance between our node ID {} and target ID {}: {}",
-                 nodeIDToString(m_nodeID), nodeIDToString(targetID), distanceStr);
 
     return m_routingTable->getClosestNodes(targetID, k);
 }
 
 std::vector<std::shared_ptr<Node>> RoutingManager::getAllNodes() const {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return {};
     }
 
@@ -226,7 +208,6 @@ std::vector<std::shared_ptr<Node>> RoutingManager::getAllNodes() const {
 
 size_t RoutingManager::getNodeCount() const {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return 0;
     }
 
@@ -235,12 +216,10 @@ size_t RoutingManager::getNodeCount() const {
 
 bool RoutingManager::saveRoutingTable(const std::string& filePath) const {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return false;
     }
 
     if (filePath.empty()) {
-        m_logger.error("Empty file path provided for saving routing table");
         return false;
     }
 
@@ -253,39 +232,31 @@ bool RoutingManager::saveRoutingTable(const std::string& filePath) const {
         bool result = m_routingTable->saveToFile(filePath);
 
         if (result) {
-            m_logger.info("Saved routing table to {}", filePath);
         } else {
-            m_logger.error("Failed to save routing table to {}", filePath);
         }
 
         return result;
     } catch (const std::exception& e) {
-        m_logger.error("Exception while saving routing table to {}: {}", filePath, e.what());
         return false;
     } catch (...) {
-        m_logger.error("Unknown exception while saving routing table to {}", filePath);
         return false;
     }
 }
 
 bool RoutingManager::loadRoutingTable(const std::string& filePath) {
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return false;
     }
 
     // Check if the file exists
     if (!std::filesystem::exists(filePath)) {
-        m_logger.info("Routing table file {} does not exist", filePath);
         return false;
     }
 
     bool result = m_routingTable->loadFromFile(filePath);
 
     if (result) {
-        m_logger.info("Loaded routing table from {}", filePath);
     } else {
-        m_logger.error("Failed to load routing table from {}", filePath);
     }
 
     return result;
@@ -311,34 +282,25 @@ void RoutingManager::saveRoutingTablePeriodically() {
                     saveRoutingTable(fullPath);
                 }
             } catch (const std::exception& e) {
-                m_logger.error("Exception in periodic routing table save: {}", e.what());
                 // Continue running despite the error
             } catch (...) {
-                m_logger.error("Unknown exception in periodic routing table save");
                 // Continue running despite the error
             }
         }
     } catch (const std::exception& e) {
-        m_logger.error("Exception in routing table save thread: {}", e.what());
     } catch (...) {
-        m_logger.error("Unknown exception in routing table save thread");
     }
-
-    m_logger.info("Routing table save thread stopped");
 }
 
 void RoutingManager::startBucketRefreshThread() {
     std::lock_guard<std::mutex> lock(m_bucketRefreshMutex);
 
     if (m_bucketRefreshThreadRunning) {
-        m_logger.warning("Bucket refresh thread already running");
         return;
     }
 
     m_bucketRefreshThreadRunning = true;
     m_bucketRefreshThread = std::thread(&RoutingManager::checkAndRefreshBuckets, this);
-
-    m_logger.debug("Started bucket refresh thread");
 }
 
 void RoutingManager::stopBucketRefreshThread() {
@@ -357,8 +319,6 @@ void RoutingManager::stopBucketRefreshThread() {
     if (m_bucketRefreshThread.joinable()) {
         m_bucketRefreshThread.join();
     }
-
-    m_logger.debug("Stopped bucket refresh thread");
 }
 
 void RoutingManager::checkAndRefreshBuckets() {
@@ -387,11 +347,9 @@ void RoutingManager::checkAndRefreshBuckets() {
                 for (size_t i = 0; i < bucketCount; ++i) {
                     // Check if the bucket needs refreshing
                     if (m_routingTable->needsRefresh(i)) {
-                        m_logger.debug("Refreshing bucket {}", i);
 
                         // Refresh the bucket
-                        m_routingTable->refreshBucket(i, [this, i](const std::vector<std::shared_ptr<Node>>& nodes) {
-                            m_logger.debug("Bucket {} refresh completed, found {} nodes", i, nodes.size());
+                        m_routingTable->refreshBucket(i, [this](const std::vector<std::shared_ptr<Node>>& nodes) {
 
                             // Add the nodes to the routing table
                             for (const auto& node : nodes) {
@@ -403,12 +361,8 @@ void RoutingManager::checkAndRefreshBuckets() {
             }
         }
     } catch (const std::exception& e) {
-        m_logger.error("Exception in bucket refresh thread: {}", e.what());
     } catch (...) {
-        m_logger.error("Unknown exception in bucket refresh thread");
     }
-
-    m_logger.info("Bucket refresh thread stopped");
 }
 
 } // namespace dht_hunter::dht

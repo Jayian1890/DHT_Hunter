@@ -177,9 +177,7 @@ private:
     std::condition_variable m_bucketRefreshCondition;
 
     // Event bus
-    std::shared_ptr<unified_event::EventBus> m_eventBus;
-
-    event::Logger m_logger;
+    std::shared_ptr<unified_event::EventBus> m_eventBus;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

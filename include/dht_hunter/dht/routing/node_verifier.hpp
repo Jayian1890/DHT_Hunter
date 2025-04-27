@@ -110,8 +110,7 @@ private:
     std::thread m_processingThread;
     std::queue<VerificationEntry> m_verificationQueue;
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_recentlyVerified;
-    mutable std::mutex m_mutex;
-    event::Logger m_logger;
+    mutable std::mutex m_mutex;    // Logger removed
 
     // Constants
     static constexpr std::chrono::minutes VERIFICATION_WAIT_TIME{15}; // Wait 15 minutes before pinging

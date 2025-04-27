@@ -26,8 +26,7 @@ StatisticsService::StatisticsService()
       m_messagesReceived(0),
       m_messagesSent(0),
       m_errors(0),
-      m_running(false),
-      m_logger(event::Logger::forComponent("DHT.StatisticsService")) {
+      m_running(false) {
 }
 
 StatisticsService::~StatisticsService() {
@@ -42,7 +41,6 @@ StatisticsService::~StatisticsService() {
 
 bool StatisticsService::start() {
     if (m_running) {
-        m_logger.warning("Statistics service already running");
         return true;
     }
 
@@ -54,8 +52,6 @@ bool StatisticsService::start() {
     // Publish a system started event
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.StatisticsService");
     m_eventBus->publish(startedEvent);
-
-    m_logger.info("Statistics service started");
     return true;
 }
 
@@ -75,8 +71,6 @@ void StatisticsService::stop() {
     // Publish a system stopped event
     auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.StatisticsService");
     m_eventBus->publish(stoppedEvent);
-
-    m_logger.info("Statistics service stopped");
 }
 
 bool StatisticsService::isRunning() const {
@@ -123,7 +117,6 @@ std::string StatisticsService::getStatisticsAsJson() const {
 }
 
 void StatisticsService::subscribeToEvents() {
-    m_logger.debug("Subscribing to DHT events");
 
     // Subscribe to node discovered events
     m_eventSubscriptionIds.push_back(
@@ -178,23 +171,18 @@ void StatisticsService::subscribeToEvents() {
             }
         )
     );
-
-    m_logger.debug("Subscribed to {} event types", m_eventSubscriptionIds.size());
 }
 
 void StatisticsService::handleNodeDiscoveredEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_nodesDiscovered++;
-    m_logger.debug("Nodes discovered: {}", m_nodesDiscovered.load());
 }
 
 void StatisticsService::handleNodeAddedEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_nodesAdded++;
-    m_logger.debug("Nodes added: {}", m_nodesAdded.load());
 }
 
 void StatisticsService::handlePeerDiscoveredEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_peersDiscovered++;
-    m_logger.debug("Peers discovered: {}", m_peersDiscovered.load());
 }
 
 void StatisticsService::handleMessageReceivedEvent(std::shared_ptr<unified_event::Event> /*event*/) {
@@ -202,7 +190,6 @@ void StatisticsService::handleMessageReceivedEvent(std::shared_ptr<unified_event
 
     // Only log every 100 messages to avoid spamming the log
     if (m_messagesReceived % 100 == 0) {
-        m_logger.debug("Messages received: {}", m_messagesReceived.load());
     }
 }
 
@@ -211,13 +198,11 @@ void StatisticsService::handleMessageSentEvent(std::shared_ptr<unified_event::Ev
 
     // Only log every 100 messages to avoid spamming the log
     if (m_messagesSent % 100 == 0) {
-        m_logger.debug("Messages sent: {}", m_messagesSent.load());
     }
 }
 
 void StatisticsService::handleSystemErrorEvent(std::shared_ptr<unified_event::Event> /*event*/) {
     m_errors++;
-    m_logger.debug("Errors: {}", m_errors.load());
 }
 
 } // namespace dht_hunter::dht::services

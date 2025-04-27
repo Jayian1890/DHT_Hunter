@@ -203,8 +203,7 @@ private:
     std::shared_ptr<TokenManager> m_tokenManager;
     std::shared_ptr<PeerStorage> m_peerStorage;
     std::unordered_map<std::string, Lookup> m_lookups;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

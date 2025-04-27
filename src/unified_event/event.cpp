@@ -17,66 +17,66 @@ std::string Event::getName() const {
 
 std::string Event::toString() const {
     std::stringstream ss;
-    
+
     // Format timestamp
     auto timeT = std::chrono::system_clock::to_time_t(m_timestamp);
     auto timeInfo = std::localtime(&timeT);
     ss << std::put_time(timeInfo, "%Y-%m-%d %H:%M:%S") << " ";
-    
+
     // Add severity, source, and type
     ss << "[" << eventSeverityToString(m_severity) << "] ";
     ss << "[" << m_source << "] ";
     ss << getName();
-    
+
     return ss.str();
 }
 
 std::string eventTypeToString(EventType type) {
     switch (type) {
         case EventType::SystemStarted:
-            return "SystemStarted";
+            return "Started";
         case EventType::SystemStopped:
-            return "SystemStopped";
+            return "Stopped";
         case EventType::SystemError:
-            return "SystemError";
+            return "Error";
         case EventType::NodeDiscovered:
-            return "NodeDiscovered";
+            return "Node Discovered";
         case EventType::NodeAdded:
-            return "NodeAdded";
+            return "Node Added";
         case EventType::NodeRemoved:
-            return "NodeRemoved";
+            return "Node Removed";
         case EventType::NodeUpdated:
-            return "NodeUpdated";
+            return "Node Updated";
         case EventType::BucketRefreshed:
-            return "BucketRefreshed";
+            return "Bucket Refreshed";
         case EventType::BucketSplit:
-            return "BucketSplit";
+            return "Bucket Split";
         case EventType::RoutingTableSaved:
-            return "RoutingTableSaved";
+            return "Routing Table Saved";
         case EventType::RoutingTableLoaded:
-            return "RoutingTableLoaded";
+            return "Routing Table Loaded";
         case EventType::MessageSent:
-            return "MessageSent";
+            return "Message Sent";
         case EventType::MessageReceived:
-            return "MessageReceived";
+            return "Message Received";
         case EventType::MessageError:
-            return "MessageError";
+            return "Message Error";
         case EventType::LookupStarted:
-            return "LookupStarted";
+            return "Lookup Started";
         case EventType::LookupProgress:
-            return "LookupProgress";
+            return "Lookup Progress";
         case EventType::LookupCompleted:
-            return "LookupCompleted";
+            return "Lookup Completed";
         case EventType::LookupFailed:
-            return "LookupFailed";
+            return "Lookup Failed";
         case EventType::PeerDiscovered:
-            return "PeerDiscovered";
+            return "Peer Discovered";
         case EventType::PeerAnnounced:
-            return "PeerAnnounced";
+            return "Peer Announced";
         case EventType::LogMessage:
-            return "LogMessage";
+            return "Log Message";
         case EventType::Custom:
-            return "Custom";
+            return "Custom Event";
         default:
             return "Unknown";
     }

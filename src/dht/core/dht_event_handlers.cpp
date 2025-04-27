@@ -5,7 +5,6 @@
 namespace dht_hunter::dht {
 
 void DHTNode::subscribeToEvents() {
-    m_logger.debug("Subscribing to DHT events");
 
     // Subscribe to node discovered events
     m_eventSubscriptionIds.push_back(
@@ -33,24 +32,18 @@ void DHTNode::subscribeToEvents() {
             }
         )
     );
-
-    m_logger.debug("Subscribed to {} event types", m_eventSubscriptionIds.size());
 }
 
 void DHTNode::handleNodeDiscoveredEvent(std::shared_ptr<unified_event::Event> event) {
     auto nodeDiscoveredEvent = std::dynamic_pointer_cast<unified_event::NodeDiscoveredEvent>(event);
     if (!nodeDiscoveredEvent) {
-        m_logger.error("Failed to cast event to NodeDiscoveredEvent");
         return;
     }
 
     auto node = nodeDiscoveredEvent->getNode();
     if (!node) {
-        m_logger.error("Node in NodeDiscoveredEvent is null");
         return;
     }
-
-    m_logger.debug("Node discovered: {}", node->getID().toString());
 
     // Add the node to the routing table
     if (m_routingManager) {
@@ -61,14 +54,11 @@ void DHTNode::handleNodeDiscoveredEvent(std::shared_ptr<unified_event::Event> ev
 void DHTNode::handlePeerDiscoveredEvent(std::shared_ptr<unified_event::Event> event) {
     auto peerDiscoveredEvent = std::dynamic_pointer_cast<unified_event::PeerDiscoveredEvent>(event);
     if (!peerDiscoveredEvent) {
-        m_logger.error("Failed to cast event to PeerDiscoveredEvent");
         return;
     }
 
     const auto& infoHash = peerDiscoveredEvent->getInfoHash();
     const auto& peer = peerDiscoveredEvent->getPeer();
-
-    m_logger.debug("Peer discovered for info hash {}: {}", infoHashToString(infoHash), peer.toString());
 
     // Add the peer to the peer storage
     if (m_peerStorage) {
@@ -81,13 +71,8 @@ void DHTNode::handlePeerDiscoveredEvent(std::shared_ptr<unified_event::Event> ev
 void DHTNode::handleSystemErrorEvent(std::shared_ptr<unified_event::Event> event) {
     auto systemErrorEvent = std::dynamic_pointer_cast<unified_event::SystemErrorEvent>(event);
     if (!systemErrorEvent) {
-        m_logger.error("Failed to cast event to SystemErrorEvent");
         return;
     }
-
-    m_logger.error("System error: {} (code: {})",
-                  systemErrorEvent->getErrorMessage(),
-                  systemErrorEvent->getErrorCode());
 
     // Handle the error based on its severity
     // For now, just log it

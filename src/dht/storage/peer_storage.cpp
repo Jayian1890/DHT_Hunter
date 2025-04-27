@@ -20,8 +20,7 @@ std::shared_ptr<PeerStorage> PeerStorage::getInstance(const DHTConfig& config) {
 PeerStorage::PeerStorage(const DHTConfig& config)
     : m_config(config),
       m_running(false),
-      m_eventBus(unified_event::EventBus::getInstance()),
-      m_logger(event::Logger::forComponent("DHT.PeerStorage")) {
+      m_eventBus(unified_event::EventBus::getInstance()) {
 }
 
 PeerStorage::~PeerStorage() {
@@ -38,7 +37,6 @@ bool PeerStorage::start() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        m_logger.warning("Peer storage already running");
         return true;
     }
 
@@ -50,8 +48,6 @@ bool PeerStorage::start() {
     // Publish a system started event
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.PeerStorage");
     m_eventBus->publish(startedEvent);
-
-    m_logger.info("Peer storage started");
     return true;
 }
 
@@ -72,8 +68,6 @@ void PeerStorage::stop() {
     // Publish a system stopped event
     auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.PeerStorage");
     m_eventBus->publish(stoppedEvent);
-
-    m_logger.info("Peer storage stopped");
 }
 
 bool PeerStorage::isRunning() const {
@@ -88,7 +82,6 @@ void PeerStorage::addPeer(const InfoHash& infoHash, const network::EndPoint& end
     if (it == m_peers.end()) {
         // Create a new entry for the info hash
         m_peers[infoHash] = std::vector<TimestampedPeer>{TimestampedPeer(endpoint)};
-        m_logger.debug("Added peer {} for info hash {}", endpoint.toString(), infoHashToString(infoHash));
         return;
     }
 
@@ -98,7 +91,6 @@ void PeerStorage::addPeer(const InfoHash& infoHash, const network::EndPoint& end
         if (peer.endpoint == endpoint) {
             // Update the timestamp
             peer.timestamp = std::chrono::steady_clock::now();
-            m_logger.debug("Updated peer {} for info hash {}", endpoint.toString(), infoHashToString(infoHash));
             return;
         }
     }
@@ -117,11 +109,8 @@ void PeerStorage::addPeer(const InfoHash& infoHash, const network::EndPoint& end
         }
 
         // Remove the oldest peer
-        m_logger.debug("Removed peer {} for info hash {} (too many peers)", oldest->endpoint.toString(), infoHashToString(infoHash));
         peers.erase(oldest);
     }
-
-    m_logger.debug("Added peer {} for info hash {}", endpoint.toString(), infoHashToString(infoHash));
 
     // Publish a peer discovered event
     // Convert EndPoint to NetworkAddress
@@ -201,8 +190,6 @@ void PeerStorage::cleanupExpiredPeers() {
             ++it;
         }
     }
-
-    m_logger.debug("Cleaned up expired peers, {} info hashes, {} total peers", m_peers.size(), getTotalPeerCount());
 }
 
 void PeerStorage::cleanupExpiredPeersPeriodically() {

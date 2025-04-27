@@ -94,7 +94,7 @@ public:
      * @param length The message length
      * @return True if the message was handled successfully, false otherwise
      */
-    bool handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length);
+    bool handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length) const;
 
     /**
      * @brief Handles a BitTorrent PORT message
@@ -102,7 +102,7 @@ public:
      * @param port The DHT port
      * @return True if the message was handled successfully, false otherwise
      */
-    bool handlePortMessage(const network::NetworkAddress& peerAddress, uint16_t port);
+    bool handlePortMessage(const network::NetworkAddress& peerAddress, uint16_t port) const;
 
     /**
      * @brief Creates a BitTorrent PORT message
@@ -207,8 +207,7 @@ private:
     std::shared_ptr<extensions::KademliaDHT> m_kademliaDHT;
     std::shared_ptr<extensions::AzureusDHT> m_azureusDHT;
     std::thread m_saveRoutingTableThread;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

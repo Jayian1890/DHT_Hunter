@@ -165,8 +165,7 @@ private:
     std::shared_ptr<PeerStorage> m_peerStorage;
     std::shared_ptr<TransactionManager> m_transactionManager;
     std::shared_ptr<unified_event::EventBus> m_eventBus;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

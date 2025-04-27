@@ -46,8 +46,7 @@ PeerLookup::PeerLookup(const DHTConfig& config,
       m_transactionManager(transactionManager),
       m_messageSender(messageSender),
       m_tokenManager(tokenManager),
-      m_peerStorage(peerStorage),
-      m_logger(event::Logger::forComponent("DHT.PeerLookup")) {
+      m_peerStorage(peerStorage) {
 }
 
 PeerLookup::~PeerLookup() {
@@ -66,7 +65,6 @@ void PeerLookup::lookup(const InfoHash& infoHash, std::function<void(const std::
 
     // Check if a lookup with this ID already exists
     if (m_lookups.find(lookupID) != m_lookups.end()) {
-        m_logger.warning("Lookup for {} already in progress", lookupID);
         return;
     }
 
@@ -81,8 +79,6 @@ void PeerLookup::lookup(const InfoHash& infoHash, std::function<void(const std::
     // Add the lookup
     m_lookups.emplace(lookupID, lookup);
 
-    m_logger.debug("Starting lookup for {}", lookupID);
-
     // Send queries
     sendQueries(lookupID);
 }
@@ -95,7 +91,6 @@ void PeerLookup::announce(const InfoHash& infoHash, uint16_t port, std::function
 
     // Check if a lookup with this ID already exists
     if (m_lookups.find(lookupID) != m_lookups.end()) {
-        m_logger.warning("Lookup for {} already in progress", lookupID);
         return;
     }
 
@@ -110,8 +105,6 @@ void PeerLookup::announce(const InfoHash& infoHash, uint16_t port, std::function
     // Add the lookup
     m_lookups.emplace(lookupID, lookup);
 
-    m_logger.debug("Starting announce for {}", lookupID);
-
     // Send queries
     sendQueries(lookupID);
 }
@@ -122,7 +115,6 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -130,7 +122,6 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
 
     // Check if we've reached the maximum number of iterations
     if (lookup.iteration >= LOOKUP_MAX_ITERATIONS) {
-        m_logger.debug("Lookup {} reached maximum iterations", lookupID);
         if (lookup.announcing) {
             announceToNodes(lookupID);
         } else {
@@ -175,7 +166,6 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
     // If there are no queries to send, check if the lookup is complete
     if (queriesToSend == 0) {
         if (isLookupComplete(lookupID)) {
-            m_logger.debug("Lookup {} complete", lookupID);
             if (lookup.announcing) {
                 announceToNodes(lookupID);
             } else {
@@ -230,8 +220,6 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
                 // Send the query
                 m_messageSender->sendQuery(query, node->getEndpoint());
 
-                m_logger.debug("Sent get_peers query to {} for lookup {}", node->getEndpoint().toString(), lookupID);
-
                 queriesSent++;
 
                 // Stop if we've sent enough queries
@@ -256,7 +244,6 @@ void PeerLookup::handleResponse(const std::string& lookupID, std::shared_ptr<Get
         // Find the lookup
         auto it = m_lookups.find(lookupID);
         if (it == m_lookups.end()) {
-            m_logger.error("Lookup {} not found", lookupID);
             return;
         }
 
@@ -265,7 +252,6 @@ void PeerLookup::handleResponse(const std::string& lookupID, std::shared_ptr<Get
 
         // Get the node ID from the response
         if (!response->getNodeID()) {
-            m_logger.error("Response has no node ID");
             return;
         }
 
@@ -350,7 +336,6 @@ void PeerLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorM
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -363,7 +348,6 @@ void PeerLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorM
         });
 
     if (nodeIt == lookup.nodes.end()) {
-        m_logger.error("Node not found for error");
         return;
     }
 
@@ -382,7 +366,6 @@ void PeerLookup::handleTimeout(const std::string& lookupID, const NodeID& nodeID
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -401,7 +384,6 @@ bool PeerLookup::isLookupComplete(const std::string& lookupID) {
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return true;
     }
 
@@ -453,7 +435,6 @@ void PeerLookup::completeLookup(const std::string& lookupID) {
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -466,8 +447,6 @@ void PeerLookup::completeLookup(const std::string& lookupID) {
 
     // Remove the lookup
     m_lookups.erase(it);
-
-    m_logger.debug("Completed lookup for {}", lookupID);
 }
 
 void PeerLookup::announceToNodes(const std::string& lookupID) {
@@ -476,7 +455,6 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -484,7 +462,6 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
 
     // Check if there are any nodes to announce to
     if (lookup.nodeTokens.empty()) {
-        m_logger.debug("No nodes to announce to for {}", lookupID);
         completeAnnouncement(lookupID, false);
         return;
     }
@@ -507,7 +484,6 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
 
     // If there are no announcements to send, complete the announcement
     if (announcementsToSend == 0) {
-        m_logger.debug("No more nodes to announce to for {}", lookupID);
         completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
         return;
     }
@@ -532,7 +508,6 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
             });
 
         if (nodeIt == lookup.nodes.end()) {
-            m_logger.error("Node {} not found for announcement", nodeIDStr);
             continue;
         }
 
@@ -560,7 +535,6 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
                         std::copy(nodeIDStr.begin(), nodeIDStr.end(), nodeID.begin());
                         handleAnnounceTimeout(lookupID, nodeID);
                     } else {
-                        m_logger.error("Invalid node ID string: {}", nodeIDStr);
                     }
                 });
 
@@ -571,8 +545,6 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
                 // Send the query
                 m_messageSender->sendQuery(query, (*nodeIt)->getEndpoint());
 
-                m_logger.debug("Sent announce_peer query to {} for lookup {}", (*nodeIt)->getEndpoint().toString(), lookupID);
-
                 announcementsSent++;
             }
         }
@@ -580,7 +552,6 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
 
     // If we didn't send any announcements, complete the announcement
     if (announcementsSent == 0) {
-        m_logger.debug("Failed to send any announcements for {}", lookupID);
         completeAnnouncement(lookupID, false);
     }
 }
@@ -595,7 +566,6 @@ void PeerLookup::handleAnnounceResponse(const std::string& lookupID, std::shared
         // Find the lookup
         auto it = m_lookups.find(lookupID);
         if (it == m_lookups.end()) {
-            m_logger.error("Lookup {} not found", lookupID);
             return;
         }
 
@@ -603,7 +573,6 @@ void PeerLookup::handleAnnounceResponse(const std::string& lookupID, std::shared
 
         // Get the node ID from the response
         if (!response->getNodeID()) {
-            m_logger.error("Response has no node ID");
             return;
         }
 
@@ -617,7 +586,6 @@ void PeerLookup::handleAnnounceResponse(const std::string& lookupID, std::shared
 
         // Check if we've announced to all nodes
         if (lookup.activeAnnouncements.empty() && lookup.announcedNodes.size() >= lookup.nodeTokens.size()) {
-            m_logger.debug("Announced to all nodes for {}", lookupID);
             shouldCompleteAnnouncement = true;
             success = true;
         }
@@ -639,7 +607,6 @@ void PeerLookup::handleAnnounceError(const std::string& lookupID, std::shared_pt
         // Find the lookup
         auto it = m_lookups.find(lookupID);
         if (it == m_lookups.end()) {
-            m_logger.error("Lookup {} not found", lookupID);
             return;
         }
 
@@ -652,7 +619,6 @@ void PeerLookup::handleAnnounceError(const std::string& lookupID, std::shared_pt
             });
 
         if (nodeIt == lookup.nodes.end()) {
-            m_logger.error("Node not found for error");
             return;
         }
 
@@ -663,7 +629,6 @@ void PeerLookup::handleAnnounceError(const std::string& lookupID, std::shared_pt
 
         // Check if we've announced to all nodes
         if (lookup.activeAnnouncements.empty()) {
-            m_logger.debug("No more active announcements for {}", lookupID);
             shouldCompleteAnnouncement = true;
             success = !lookup.announcedNodes.empty();
         }
@@ -687,7 +652,6 @@ void PeerLookup::handleAnnounceTimeout(const std::string& lookupID, const NodeID
         // Find the lookup
         auto it = m_lookups.find(lookupID);
         if (it == m_lookups.end()) {
-            m_logger.error("Lookup {} not found", lookupID);
             return;
         }
 
@@ -698,7 +662,6 @@ void PeerLookup::handleAnnounceTimeout(const std::string& lookupID, const NodeID
 
         // Check if we've announced to all nodes
         if (lookup.activeAnnouncements.empty()) {
-            m_logger.debug("No more active announcements for {}", lookupID);
             shouldCompleteAnnouncement = true;
             success = !lookup.announcedNodes.empty();
         }
@@ -720,7 +683,6 @@ void PeerLookup::completeAnnouncement(const std::string& lookupID, bool success)
         // Find the lookup
         auto it = m_lookups.find(lookupID);
         if (it == m_lookups.end()) {
-            m_logger.error("Lookup {} not found", lookupID);
             return;
         }
 
@@ -731,8 +693,6 @@ void PeerLookup::completeAnnouncement(const std::string& lookupID, bool success)
 
         // Remove the lookup
         m_lookups.erase(it);
-
-        m_logger.debug("Completed announcement for {} with success={}", lookupID, success);
     } // Release the lock
 
     // Call the callback outside the lock

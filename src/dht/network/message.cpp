@@ -43,9 +43,7 @@ void Message::setClientVersion(const std::string& clientVersion) {
 std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
     if (!data || size == 0) {
         return nullptr;
-    }
-
-    auto logger = event::Logger::forComponent("DHT.Message");
+    }    // Logger initialization removed
 
     try {
         // Decode the bencode data
@@ -55,19 +53,16 @@ std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
 
         // Check if we decoded the entire message
         if (pos != dataStr.size()) {
-            logger.error("Decoded only " + std::to_string(pos) + " of " + std::to_string(dataStr.size()) + " bytes");
         }
 
         // Check if the data is a dictionary
         if (!bencodeData->isDictionary()) {
-            logger.error("Decoded data is not a dictionary");
             return nullptr;
         }
 
         // Check if the dictionary has a transaction ID
         auto tValue = bencodeData->getString("t");
         if (!tValue) {
-            logger.error("Dictionary does not have a valid transaction ID");
             return nullptr;
         }
 
@@ -77,7 +72,6 @@ std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
         // Check if the dictionary has a message type
         auto yValue = bencodeData->getString("y");
         if (!yValue) {
-            logger.error("Dictionary does not have a valid message type");
             return nullptr;
         }
 
@@ -89,7 +83,6 @@ std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
         auto vValue = bencodeData->getString("v");
         if (vValue) {
             clientVersion = *vValue;
-            logger.debug("Client version: " + clientVersion);
         }
 
         // Decode the message based on its type
@@ -104,7 +97,6 @@ std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
             // Error message
             message = ErrorMessage::decode(*bencodeData);
         } else {
-            logger.error("Unknown message type: " + messageType);
             return nullptr;
         }
 
@@ -115,7 +107,6 @@ std::shared_ptr<Message> Message::decode(const uint8_t* data, size_t size) {
 
         return message;
     } catch (const std::exception& e) {
-        logger.error("Failed to decode message: " + std::string(e.what()));
         return nullptr;
     }
 }

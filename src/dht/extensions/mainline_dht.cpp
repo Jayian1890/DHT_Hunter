@@ -7,8 +7,7 @@ MainlineDHT::MainlineDHT(const DHTConfig& config,
                        std::shared_ptr<RoutingTable> routingTable)
     : DHTExtension(config, nodeID),
       m_routingTable(routingTable),
-      m_initialized(false) {
-    m_logger = event::Logger::forComponent("DHT.MainlineDHT");
+      m_initialized(false) {    // Logger initialization removed
 }
 
 MainlineDHT::~MainlineDHT() {
@@ -25,19 +24,16 @@ std::string MainlineDHT::getVersion() const {
 
 bool MainlineDHT::initialize() {
     if (m_initialized) {
-        m_logger.warning("Mainline DHT extension already initialized");
         return true;
     }
 
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return false;
     }
 
     // TODO: Implement Mainline-specific initialization
 
     m_initialized = true;
-    m_logger.debug("Mainline DHT extension initialized");
     return true;
 }
 
@@ -45,8 +41,6 @@ void MainlineDHT::shutdown() {
     if (!m_initialized) {
         return;
     }
-
-    m_logger.debug("Shutting down Mainline DHT extension");
     m_initialized = false;
 }
 

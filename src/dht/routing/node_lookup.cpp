@@ -38,8 +38,7 @@ NodeLookup::NodeLookup(const DHTConfig& config,
       m_nodeID(nodeID),
       m_routingTable(routingTable),
       m_transactionManager(transactionManager),
-      m_messageSender(messageSender),
-      m_logger(event::Logger::forComponent("DHT.NodeLookup")) {
+      m_messageSender(messageSender) {
 }
 
 NodeLookup::~NodeLookup() {
@@ -58,7 +57,6 @@ void NodeLookup::lookup(const NodeID& targetID, std::function<void(const std::ve
 
     // Check if a lookup with this ID already exists
     if (m_lookups.find(lookupID) != m_lookups.end()) {
-        m_logger.warning("Lookup for {} already in progress", lookupID);
         return;
     }
 
@@ -73,8 +71,6 @@ void NodeLookup::lookup(const NodeID& targetID, std::function<void(const std::ve
     // Add the lookup
     m_lookups.emplace(lookupID, lookup);
 
-    m_logger.debug("Starting lookup for {}", lookupID);
-
     // Send queries
     sendQueries(lookupID);
 }
@@ -85,7 +81,6 @@ void NodeLookup::sendQueries(const std::string& lookupID) {
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -93,7 +88,6 @@ void NodeLookup::sendQueries(const std::string& lookupID) {
 
     // Check if we've reached the maximum number of iterations
     if (lookup.iteration >= LOOKUP_MAX_ITERATIONS) {
-        m_logger.debug("Lookup {} reached maximum iterations", lookupID);
         completeLookup(lookupID);
         return;
     }
@@ -135,7 +129,6 @@ void NodeLookup::sendQueries(const std::string& lookupID) {
     // If there are no queries to send, check if the lookup is complete
     if (queriesToSend == 0) {
         if (isLookupComplete(lookupID)) {
-            m_logger.debug("Lookup {} complete", lookupID);
             completeLookup(lookupID);
         }
         return;
@@ -186,8 +179,6 @@ void NodeLookup::sendQueries(const std::string& lookupID) {
                 // Send the query
                 m_messageSender->sendQuery(query, node->getEndpoint());
 
-                m_logger.debug("Sent find_node query to {} for lookup {}", node->getEndpoint().toString(), lookupID);
-
                 queriesSent++;
 
                 // Stop if we've sent enough queries
@@ -210,7 +201,6 @@ void NodeLookup::handleResponse(const std::string& lookupID, std::shared_ptr<Fin
         // Find the lookup
         auto it = m_lookups.find(lookupID);
         if (it == m_lookups.end()) {
-            m_logger.error("Lookup {} not found", lookupID);
             return;
         }
 
@@ -218,7 +208,6 @@ void NodeLookup::handleResponse(const std::string& lookupID, std::shared_ptr<Fin
 
         // Get the node ID from the response
         if (!response->getNodeID()) {
-            m_logger.error("Response has no node ID");
             return;
         }
 
@@ -275,7 +264,6 @@ void NodeLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorM
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -288,7 +276,6 @@ void NodeLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorM
         });
 
     if (nodeIt == lookup.nodes.end()) {
-        m_logger.error("Node not found for error");
         return;
     }
 
@@ -307,7 +294,6 @@ void NodeLookup::handleTimeout(const std::string& lookupID, const NodeID& nodeID
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -326,7 +312,6 @@ bool NodeLookup::isLookupComplete(const std::string& lookupID) {
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return true;
     }
 
@@ -374,7 +359,6 @@ void NodeLookup::completeLookup(const std::string& lookupID) {
     // Find the lookup
     auto it = m_lookups.find(lookupID);
     if (it == m_lookups.end()) {
-        m_logger.error("Lookup {} not found", lookupID);
         return;
     }
 
@@ -402,8 +386,6 @@ void NodeLookup::completeLookup(const std::string& lookupID) {
 
     // Remove the lookup
     m_lookups.erase(it);
-
-    m_logger.debug("Completed lookup for {}", lookupID);
 }
 
 } // namespace dht_hunter::dht

@@ -20,8 +20,7 @@ std::shared_ptr<TransactionManager> TransactionManager::getInstance(const DHTCon
 }
 
 TransactionManager::TransactionManager(const DHTConfig& config)
-    : m_config(config), m_running(false), m_rng(std::random_device{}()),
-      m_logger(event::Logger::forComponent("DHT.TransactionManager")) {
+    : m_config(config), m_running(false), m_rng(std::random_device{}()) {
 }
 
 TransactionManager::~TransactionManager() {
@@ -38,7 +37,6 @@ bool TransactionManager::start() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        m_logger.warning("Transaction manager already running");
         return true;
     }
 
@@ -65,8 +63,6 @@ void TransactionManager::stop() {
     if (m_timeoutThread.joinable()) {
         m_timeoutThread.join();
     }
-
-    m_logger.info("Transaction manager stopped");
 }
 
 bool TransactionManager::isRunning() const {
@@ -82,7 +78,6 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
 
     // Check if we have too many transactions
     if (m_transactions.size() >= MAX_TRANSACTIONS) {
-        m_logger.error("Too many transactions");
         return "";
     }
 
@@ -98,8 +93,6 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
     // Add the transaction
     m_transactions.emplace(transactionID, transaction);
 
-    m_logger.debug("Created transaction {} for {}", transactionID, endpoint.toString());
-
     return transactionID;
 }
 
@@ -112,7 +105,6 @@ void TransactionManager::handleResponse(std::shared_ptr<ResponseMessage> respons
     // Find the transaction
     auto it = m_transactions.find(transactionID);
     if (it == m_transactions.end()) {
-        m_logger.debug("Received response for unknown transaction {}", transactionID);
         return;
     }
 
@@ -126,8 +118,6 @@ void TransactionManager::handleResponse(std::shared_ptr<ResponseMessage> respons
 
     // Remove the transaction
     m_transactions.erase(it);
-
-    m_logger.debug("Handled response for transaction {}", transactionID);
 }
 
 void TransactionManager::handleError(std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
@@ -139,7 +129,6 @@ void TransactionManager::handleError(std::shared_ptr<ErrorMessage> error, const 
     // Find the transaction
     auto it = m_transactions.find(transactionID);
     if (it == m_transactions.end()) {
-        m_logger.debug("Received error for unknown transaction {}", transactionID);
         return;
     }
 
@@ -153,8 +142,6 @@ void TransactionManager::handleError(std::shared_ptr<ErrorMessage> error, const 
 
     // Remove the transaction
     m_transactions.erase(it);
-
-    m_logger.debug("Handled error for transaction {}", transactionID);
 }
 
 size_t TransactionManager::getTransactionCount() const {
@@ -194,7 +181,6 @@ void TransactionManager::checkTimeouts() {
 
             // Check if the transaction has timed out
             if (elapsed >= TRANSACTION_TIMEOUT) {
-                m_logger.debug("Transaction {} timed out", transaction.id);
 
                 // Store the timeout callback for later execution
                 if (transaction.timeoutCallback) {

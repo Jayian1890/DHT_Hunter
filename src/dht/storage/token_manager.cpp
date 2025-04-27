@@ -21,7 +21,7 @@ std::shared_ptr<TokenManager> TokenManager::getInstance(const DHTConfig& config)
 }
 
 TokenManager::TokenManager(const DHTConfig& config)
-    : m_config(config), m_running(false), m_logger(event::Logger::forComponent("DHT.TokenManager")) {
+    : m_config(config), m_running(false) {
     // Generate initial secrets
     m_currentSecret = generateRandomSecret();
     m_previousSecret = generateRandomSecret();
@@ -42,7 +42,6 @@ bool TokenManager::start() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        m_logger.warning("Token manager already running");
         return true;
     }
 
@@ -69,8 +68,6 @@ void TokenManager::stop() {
     if (m_rotationThread.joinable()) {
         m_rotationThread.join();
     }
-
-    m_logger.info("Token manager stopped");
 }
 
 bool TokenManager::isRunning() const {
@@ -114,8 +111,6 @@ void TokenManager::rotateSecret() {
     m_previousSecret = m_currentSecret;
     m_currentSecret = generateRandomSecret();
     m_lastRotation = std::chrono::steady_clock::now();
-
-    m_logger.debug("Rotated token secret");
 }
 
 void TokenManager::rotateSecretPeriodically() {

@@ -125,8 +125,7 @@ private:
     std::atomic<bool> m_running;
     std::thread m_cleanupThread;
     mutable std::mutex m_mutex;
-    std::shared_ptr<unified_event::EventBus> m_eventBus;
-    event::Logger m_logger;
+    std::shared_ptr<unified_event::EventBus> m_eventBus;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

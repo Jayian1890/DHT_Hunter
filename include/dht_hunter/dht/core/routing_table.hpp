@@ -3,6 +3,7 @@
 #include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
+#include "dht_hunter/unified_event/event_bus.hpp"
 #include <vector>
 #include <memory>
 #include <mutex>
@@ -260,8 +261,8 @@ private:
     NodeID m_ownID;
     size_t m_kBucketSize;
     std::vector<KBucket> m_buckets;
-    mutable std::mutex m_mutex;
-    event::Logger m_logger;
+    mutable std::mutex m_mutex;    // Logger removed
+    std::shared_ptr<unified_event::EventBus> m_eventBus;
 };
 
 } // namespace dht_hunter::dht

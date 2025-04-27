@@ -34,8 +34,7 @@ Bootstrapper::Bootstrapper(const DHTConfig& config,
                          std::shared_ptr<NodeLookup> nodeLookup)
     : m_config(config),
       m_routingManager(routingManager),
-      m_nodeLookup(nodeLookup),
-      m_logger(event::Logger::forComponent("DHT.Bootstrapper")) {
+      m_nodeLookup(nodeLookup) {
 }
 
 Bootstrapper::~Bootstrapper() {
@@ -56,18 +55,14 @@ void Bootstrapper::bootstrap(std::function<void(bool)> callback) {
 
         // Check if we already have nodes in the routing table
         if (m_routingManager && m_routingManager->getNodeCount() > 0) {
-          m_logger.info("Routing table has {} nodes", m_routingManager->getNodeCount());
           return;
         }
-
-        m_logger.info("Routing table is empty, bootstrapping DHT node");
         performRandomLookup(m_bootstrapCallback);
 
         // Get the bootstrap nodes
         const auto& bootstrapNodes = m_config.getBootstrapNodes();
 
         if (bootstrapNodes.empty()) {
-            m_logger.error("No bootstrap nodes configured");
 
             if (m_bootstrapCallback) {
                 m_bootstrapCallback(false);
@@ -84,15 +79,12 @@ void Bootstrapper::bootstrap(std::function<void(bool)> callback) {
         }
 
         if (endpoints.empty()) {
-            m_logger.error("Failed to resolve any bootstrap nodes");
 
             if (m_bootstrapCallback) {
                 m_bootstrapCallback(false);
             }
             return;
         }
-
-        m_logger.info("Resolved {} bootstrap endpoints", endpoints.size());
 
 
         // Add the bootstrap nodes to the routing table
@@ -142,7 +134,6 @@ std::vector<network::EndPoint> Bootstrapper::resolveBootstrapNode(const std::str
 
     int status = getaddrinfo(host.c_str(), nullptr, &hints, &res);
     if (status != 0) {
-        m_logger.error("Failed to resolve host {}: {}", host, gai_strerror(status));
         return endpoints;
     }
 
@@ -168,7 +159,6 @@ std::vector<network::EndPoint> Bootstrapper::resolveBootstrapNode(const std::str
 void Bootstrapper::performRandomLookup(std::function<void(bool)> callback) {
     if (m_nodeLookup) {
         m_nodeLookup->lookup(generateRandomNodeID(), [this, callback](const std::vector<std::shared_ptr<Node>>& nodes) {
-            m_logger.info("Random lookup found {} nodes", nodes.size());
 
             // Add the nodes to the routing table
             for (const auto& node : nodes) {
@@ -183,7 +173,6 @@ void Bootstrapper::performRandomLookup(std::function<void(bool)> callback) {
             }
         });
     } else {
-        m_logger.error("No node lookup available");
         if (callback) {
             callback(false);
         }

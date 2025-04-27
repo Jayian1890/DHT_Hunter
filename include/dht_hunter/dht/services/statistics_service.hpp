@@ -161,8 +161,7 @@ private:
     // Running state
     std::atomic<bool> m_running;
 
-    // Logger
-    event::Logger m_logger;
+    // Logger    // Logger removed
 };
 
 } // namespace dht_hunter::dht::services

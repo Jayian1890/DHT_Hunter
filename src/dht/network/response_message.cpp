@@ -61,19 +61,16 @@ std::vector<uint8_t> ResponseMessage::encode() const {
     return std::vector<uint8_t>(encoded.begin(), encoded.end());
 }
 
-std::shared_ptr<ResponseMessage> ResponseMessage::decode(const dht_hunter::bencode::BencodeValue& value) {
-    auto logger = event::Logger::forComponent("DHT.ResponseMessage");
+std::shared_ptr<ResponseMessage> ResponseMessage::decode(const dht_hunter::bencode::BencodeValue& value) {    // Logger initialization removed
 
     // Check if the value is a dictionary
     if (!value.isDictionary()) {
-        logger.error("Value is not a dictionary");
         return nullptr;
     }
 
     // Check if the dictionary has response values
     auto responseValues = value.getDict("r");
     if (!responseValues) {
-        logger.error("Dictionary does not have valid response values");
         return nullptr;
     }
 
@@ -83,7 +80,6 @@ std::shared_ptr<ResponseMessage> ResponseMessage::decode(const dht_hunter::benco
     // Check if the response values have a node ID
     auto nodeIDStr = responseValuesObj.getString("id");
     if (!nodeIDStr || nodeIDStr->size() != 20) {
-        logger.error("Response values do not have a valid node ID");
         return nullptr;
     }
 
@@ -94,7 +90,6 @@ std::shared_ptr<ResponseMessage> ResponseMessage::decode(const dht_hunter::benco
     // Get the transaction ID
     auto transactionID = value.getString("t");
     if (!transactionID) {
-        logger.error("Dictionary does not have a valid transaction ID");
         return nullptr;
     }
 
@@ -103,7 +98,6 @@ std::shared_ptr<ResponseMessage> ResponseMessage::decode(const dht_hunter::benco
     auto ipValue = value.getString("ip");
     if (ipValue) {
         senderIP = *ipValue;
-        logger.debug("Sender IP: " + senderIP);
     }
 
     // Determine the response type based on the response values
@@ -154,13 +148,11 @@ const std::vector<std::shared_ptr<Node>>& FindNodeResponse::getNodes() const {
     return m_nodes;
 }
 
-std::shared_ptr<FindNodeResponse> FindNodeResponse::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues) {
-    auto logger = event::Logger::forComponent("DHT.FindNodeResponse");
+std::shared_ptr<FindNodeResponse> FindNodeResponse::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues) {    // Logger initialization removed
 
     // Check if the response values have nodes
     auto nodesStr = responseValues.getString("nodes");
     if (!nodesStr) {
-        logger.error("Response values do not have valid nodes");
         return nullptr;
     }
 
@@ -169,7 +161,6 @@ std::shared_ptr<FindNodeResponse> FindNodeResponse::create(const std::string& tr
 
     // Each node is 26 bytes: 20 bytes for the node ID, 4 bytes for the IP address, and 2 bytes for the port
     if (nodesStr->size() % 26 != 0) {
-        logger.error("Nodes string has invalid size: {}", nodesStr->size());
         return nullptr;
     }
 
@@ -257,13 +248,11 @@ bool GetPeersResponse::hasPeers() const {
     return m_hasPeers;
 }
 
-std::shared_ptr<GetPeersResponse> GetPeersResponse::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues) {
-    auto logger = event::Logger::forComponent("DHT.GetPeersResponse");
+std::shared_ptr<GetPeersResponse> GetPeersResponse::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& responseValues) {    // Logger initialization removed
 
     // Check if the response values have a token
     auto token = responseValues.getString("token");
     if (!token) {
-        logger.error("Response values do not have a valid token");
         return nullptr;
     }
 
@@ -277,7 +266,6 @@ std::shared_ptr<GetPeersResponse> GetPeersResponse::create(const std::string& tr
 
         // Each node is 26 bytes: 20 bytes for the node ID, 4 bytes for the IP address, and 2 bytes for the port
         if (nodesStr->size() % 26 != 0) {
-            logger.error("Nodes string has invalid size: " + std::to_string(nodesStr->size()));
             return nullptr;
         }
 
@@ -320,7 +308,6 @@ std::shared_ptr<GetPeersResponse> GetPeersResponse::create(const std::string& tr
         for (size_t i = 0; i < valuesList->size(); ++i) {
             auto value = valuesList->at(i);
             if (!value->isString()) {
-                logger.error("Peer value is not a string");
                 continue;
             }
 
@@ -328,7 +315,6 @@ std::shared_ptr<GetPeersResponse> GetPeersResponse::create(const std::string& tr
 
             // Each peer is 6 bytes: 4 bytes for the IP address and 2 bytes for the port
             if (peerStr.size() != 6) {
-                logger.error("Peer string has invalid size: {}", peerStr.size());
                 continue;
             }
 

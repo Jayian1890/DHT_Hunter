@@ -89,8 +89,7 @@ private:
     // Routing manager
     std::shared_ptr<dht::RoutingManager> m_routingManager;
 
-    // Logger
-    event::Logger m_logger;
+    // Logger    // Logger removed
 };
 
 } // namespace dht_hunter::bittorrent

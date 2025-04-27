@@ -1,4 +1,5 @@
 #include "dht_hunter/dht/core/routing_table.hpp"
+#include "dht_hunter/unified_event/events/node_events.hpp"
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -157,10 +158,9 @@ std::shared_ptr<RoutingTable> RoutingTable::getInstance(const NodeID& ownID, siz
 }
 
 RoutingTable::RoutingTable(const NodeID& ownID, size_t kBucketSize)
-    : m_ownID(ownID), m_kBucketSize(kBucketSize), m_logger(event::Logger::forComponent("DHT.RoutingTable")) {
+    : m_ownID(ownID), m_kBucketSize(kBucketSize), m_eventBus(unified_event::EventBus::getInstance()) {
     // Start with a single bucket with prefix 0
     m_buckets.emplace_back(0, kBucketSize);
-    m_logger.debug("Routing table created with node ID: {}", nodeIDToString(ownID));
 }
 
 RoutingTable::~RoutingTable() {
@@ -197,7 +197,6 @@ bool RoutingTable::addNode(const std::shared_ptr<Node> &node) {
     }
 
     // Bucket is full and doesn't contain our own node ID, can't add the node
-    m_logger.debug("Failed to add node {} to routing table (bucket full)", nodeIDToString(node->getID()));
     return false;
 }
 
@@ -209,7 +208,6 @@ bool RoutingTable::removeNode(const NodeID& nodeID) {
 
     // Try to remove the node from the bucket
     if (bucket.removeNode(nodeID)) {
-        m_logger.debug("Removed node {} from routing table", nodeIDToString(nodeID));
         return true;
     }
 
@@ -280,7 +278,6 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
 
     std::ofstream file(filePath, std::ios::binary);
     if (!file) {
-        m_logger.error("Failed to open file for writing: {}", filePath);
         return false;
     }
 
@@ -308,8 +305,6 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
             file.write(reinterpret_cast<const char*>(&port), sizeof(port));
         }
     }
-
-    m_logger.info("Saved routing table to file: {}", filePath);
     return true;
 }
 
@@ -318,7 +313,6 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
 
     std::ifstream file(filePath, std::ios::binary);
     if (!file) {
-        m_logger.error("Failed to open file for reading: {}", filePath);
         return false;
     }
 
@@ -331,7 +325,6 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
     file.read(reinterpret_cast<char*>(&nodeCount), sizeof(nodeCount));
 
     if (nodeCount == 0) {
-        m_logger.debug("No nodes found in routing table file: {}", filePath);
         return true;
     }
 
@@ -359,8 +352,6 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
         // Add the node to the routing table
         addNode(node);
     }
-
-    m_logger.info("Loaded routing table from file: {}", filePath);
     return true;
 }
 
@@ -414,8 +405,6 @@ void RoutingTable::splitBucket(size_t bucketIndex) {
     m_buckets.erase(m_buckets.begin() + static_cast<std::ptrdiff_t>(bucketIndex));
     m_buckets.insert(m_buckets.begin() + static_cast<std::ptrdiff_t>(bucketIndex), std::move(newBucket1));
     m_buckets.insert(m_buckets.begin() + static_cast<std::ptrdiff_t>(bucketIndex) + 1, std::move(newBucket2));
-
-    m_logger.debug("Split bucket at index {} into two buckets with prefix {}", bucketIndex, newPrefix);
 }
 
 bool RoutingTable::needsRefresh(size_t bucketIndex) const {
@@ -445,7 +434,6 @@ void RoutingTable::refreshBucket(size_t bucketIndex, std::function<void(const st
 
     // Generate a random ID in the range of the bucket
     NodeID randomID = generateRandomIDInBucket(bucketIndex);
-    m_logger.debug("Refreshing bucket {} with random ID {}", bucketIndex, randomID.toString());
 
     // Update the last changed time for the bucket
     m_buckets[bucketIndex].updateLastChanged();
@@ -453,12 +441,32 @@ void RoutingTable::refreshBucket(size_t bucketIndex, std::function<void(const st
     // Release the lock before calling the callback to avoid deadlocks
     lock.~lock_guard();
 
-    // Perform a find_node lookup for the random ID
-    // This will be implemented by the RoutingManager
+    // Publish a bucket refresh event
+    if (m_eventBus) {
+        auto event = std::make_shared<unified_event::BucketRefreshEvent>(bucketIndex, randomID.toString());
+        m_eventBus->publish(event);
+    }
+
+    // The actual lookup will be performed by the RoutingManager or NodeLookup
+    // We need to pass the callback to them so they can call it when the lookup is complete
+    // Since we don't have direct access to those components here, we'll rely on the caller
+    // to handle the actual lookup
     if (callback) {
-        // The callback will be called when the lookup is complete
-        // For now, we just call it with an empty list
-        callback({});
+        // For now, we'll just return the nodes currently in the bucket
+        // The caller should use a NodeLookup to find more nodes
+        std::vector<std::shared_ptr<Node>> nodesInBucket;
+
+        // Re-acquire the lock to access the bucket
+        std::lock_guard<std::mutex> newLock(m_mutex);
+
+        if (bucketIndex < m_buckets.size()) {
+            nodesInBucket = m_buckets[bucketIndex].getNodes();
+        }
+
+        // Release the lock before calling the callback
+        newLock.~lock_guard();
+
+        callback(nodesInBucket);
     }
 }
 

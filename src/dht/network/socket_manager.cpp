@@ -17,8 +17,7 @@ std::shared_ptr<SocketManager> SocketManager::getInstance(const DHTConfig& confi
 }
 
 SocketManager::SocketManager(const DHTConfig& config)
-    : m_config(config), m_port(config.getPort()), m_running(false),
-      m_logger(event::Logger::forComponent("DHT.SocketManager")) {
+    : m_config(config), m_port(config.getPort()), m_running(false) {
 }
 
 SocketManager::~SocketManager() {
@@ -35,7 +34,6 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        m_logger.warning("Socket manager already running");
         return true;
     }
 
@@ -44,7 +42,6 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
 
     // Bind the socket to the port
     if (!m_socket->bind(m_port)) {
-        m_logger.error("Failed to bind socket to port {}", m_port);
         return false;
     }
 
@@ -60,12 +57,10 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
 
     // Start the receive loop
     if (!m_socket->startReceiveLoop()) {
-        m_logger.error("Failed to start receive loop");
         return false;
     }
 
     m_running = true;
-    m_logger.info("Socket manager started on port {}", m_port);
     return true;
 }
 
@@ -83,7 +78,6 @@ void SocketManager::stop() {
     }
 
     m_running = false;
-    m_logger.info("Socket manager stopped");
 }
 
 bool SocketManager::isRunning() const {
@@ -96,7 +90,6 @@ uint16_t SocketManager::getPort() const {
 
 ssize_t SocketManager::sendTo(const void* data, size_t size, const network::EndPoint& endpoint) {
     if (!m_running || !m_socket) {
-        m_logger.error("Cannot send: Socket manager not running");
         return -1;
     }
 

@@ -84,8 +84,7 @@ private:
     uint16_t m_port;
     std::atomic<bool> m_running;
     std::unique_ptr<network::UDPSocket> m_socket;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

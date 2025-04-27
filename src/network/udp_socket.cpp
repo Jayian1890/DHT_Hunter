@@ -51,9 +51,7 @@ public:
     Impl() : m_socket(INVALID_SOCKET), m_running(false) {
         // Create the socket
         m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (m_socket == INVALID_SOCKET) {
-            auto logger = event::Logger::forComponent("Network.UDPSocket");
-            logger.error("Failed to create socket");
+        if (m_socket == INVALID_SOCKET) {    // Logger initialization removed
         }
     }
 
@@ -61,11 +59,9 @@ public:
         close();
     }
 
-    bool bind(uint16_t port) {
-        auto logger = event::Logger::forComponent("Network.UDPSocket");
+    bool bind(uint16_t port) {    // Logger initialization removed
 
         if (m_socket == INVALID_SOCKET) {
-            logger.error("Cannot bind: Socket is invalid");
             return false;
         }
 
@@ -75,18 +71,15 @@ public:
         addr.sin_port = htons(port);
 
         if (::bind(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
-            logger.error("Failed to bind socket to port {}", port);
             return false;
         }
 
         return true;
     }
 
-    ssize_t sendTo(const void* data, size_t size, const std::string& address, uint16_t port) {
-        auto logger = event::Logger::forComponent("Network.UDPSocket");
+    ssize_t sendTo(const void* data, size_t size, const std::string& address, uint16_t port) {    // Logger initialization removed
 
         if (m_socket == INVALID_SOCKET) {
-            logger.error("Cannot send: Socket is invalid");
             return -1;
         }
 
@@ -95,7 +88,6 @@ public:
         addr.sin_port = htons(port);
 
         if (inet_pton(AF_INET, address.c_str(), &addr.sin_addr) != 1) {
-            logger.error("Invalid address: {}", address);
             return -1;
         }
 
@@ -103,19 +95,14 @@ public:
                            reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
 
         if (result == SOCKET_ERROR) {
-            logger.error("Failed to send data to {}:{}", address, port);
             return -1;
         }
-
-        logger.debug("Sent {} bytes to {}:{}", result, address, port);
         return result;
     }
 
-    ssize_t receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port) {
-        auto logger = event::Logger::forComponent("Network.UDPSocket");
+    ssize_t receiveFrom(void* buffer, size_t size, std::string& address, uint16_t& port) {    // Logger initialization removed
 
         if (m_socket == INVALID_SOCKET) {
-            logger.error("Cannot receive: Socket is invalid");
             return -1;
         }
 
@@ -131,12 +118,10 @@ public:
             if (error == WSAEWOULDBLOCK) {
                 return 0;  // No data available
             }
-            logger.error("Failed to receive data, error code: {}", error);
 #else
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return 0;  // No data available
             }
-            logger.error("Failed to receive data, error: {}", strerror(errno));
 #endif
             return -1;
         }
@@ -145,8 +130,6 @@ public:
         inet_ntop(AF_INET, &addr.sin_addr, addrStr, INET_ADDRSTRLEN);
         address = addrStr;
         port = ntohs(addr.sin_port);
-
-        logger.debug("Received {} bytes from {}:{}", result, address, port);
         return result;
     }
 
@@ -155,16 +138,13 @@ public:
         m_receiveCallback = std::move(callback);
     }
 
-    bool startReceiveLoop() {
-        auto logger = event::Logger::forComponent("Network.UDPSocket");
+    bool startReceiveLoop() {    // Logger initialization removed
 
         if (m_socket == INVALID_SOCKET) {
-            logger.error("Cannot start receive loop: Socket is invalid");
             return false;
         }
 
         if (m_running) {
-            logger.warning("Receive loop is already running");
             return true;
         }
 
@@ -172,17 +152,14 @@ public:
 #ifdef _WIN32
         u_long mode = 1;
         if (ioctlsocket(m_socket, FIONBIO, &mode) != 0) {
-            logger.error("Failed to set socket to non-blocking mode");
             return false;
         }
 #else
         int flags = fcntl(m_socket, F_GETFL, 0);
         if (flags == -1) {
-            logger.error("Failed to get socket flags");
             return false;
         }
         if (fcntl(m_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-            logger.error("Failed to set socket to non-blocking mode");
             return false;
         }
 #endif
@@ -193,11 +170,9 @@ public:
         return true;
     }
 
-    void stopReceiveLoop() {
-        auto logger = event::Logger::forComponent("Network.UDPSocket");
+    void stopReceiveLoop() {    // Logger initialization removed
 
         if (!m_running) {
-            logger.warning("Receive loop is not running");
             return;
         }
 
@@ -206,29 +181,24 @@ public:
         if (m_receiveThread.joinable()) {
             m_receiveThread.join();
         }
-
-        logger.debug("Receive loop stopped");
     }
 
     bool isValid() const {
         return m_socket != INVALID_SOCKET;
     }
 
-    void close() {
-        auto logger = event::Logger::forComponent("Network.UDPSocket");
+    void close() {    // Logger initialization removed
 
         stopReceiveLoop();
 
         if (m_socket != INVALID_SOCKET) {
             closesocket(m_socket);
             m_socket = INVALID_SOCKET;
-            logger.debug("Socket closed");
         }
     }
 
 private:
-    void receiveLoop() {
-        auto logger = event::Logger::forComponent("Network.UDPSocket");
+    void receiveLoop() {    // Logger initialization removed
 
         std::array<uint8_t, 65536> buffer;
 
@@ -246,20 +216,16 @@ private:
                     try {
                         m_receiveCallback(data, address, port);
                     } catch (const std::exception& e) {
-                        logger.error("Exception in receive callback: {}", e.what());
                     }
                 }
             } else if (bytesReceived < 0) {
                 // Error occurred
-                logger.error("Error in receive loop");
                 break;
             }
 
             // Sleep a bit to avoid busy waiting
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-
-        logger.debug("Receive loop thread stopped");
     }
 
     SOCKET m_socket;

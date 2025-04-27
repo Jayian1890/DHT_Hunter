@@ -108,8 +108,7 @@ private:
     std::chrono::steady_clock::time_point m_lastRotation;
     std::atomic<bool> m_running;
     std::thread m_rotationThread;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

@@ -7,8 +7,7 @@ AzureusDHT::AzureusDHT(const DHTConfig& config,
                      std::shared_ptr<RoutingTable> routingTable)
     : DHTExtension(config, nodeID),
       m_routingTable(routingTable),
-      m_initialized(false) {
-    m_logger = event::Logger::forComponent("DHT.AzureusDHT");
+      m_initialized(false) {    // Logger initialization removed
 }
 
 AzureusDHT::~AzureusDHT() {
@@ -25,12 +24,10 @@ std::string AzureusDHT::getVersion() const {
 
 bool AzureusDHT::initialize() {
     if (m_initialized) {
-        m_logger.warning("Azureus DHT extension already initialized");
         return true;
     }
 
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return false;
     }
 
@@ -45,7 +42,6 @@ bool AzureusDHT::initialize() {
     // but in a real implementation, we would need to handle these differences
 
     m_initialized = true;
-    m_logger.debug("Azureus DHT extension initialized");
     return true;
 }
 
@@ -53,8 +49,6 @@ void AzureusDHT::shutdown() {
     if (!m_initialized) {
         return;
     }
-
-    m_logger.debug("Shutting down Azureus DHT extension");
     m_initialized = false;
 }
 

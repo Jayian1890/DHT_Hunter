@@ -55,26 +55,22 @@ std::vector<uint8_t> QueryMessage::encode() const {
     return std::vector<uint8_t>(encoded.begin(), encoded.end());
 }
 
-std::shared_ptr<QueryMessage> QueryMessage::decode(const dht_hunter::bencode::BencodeValue& value) {
-    auto logger = event::Logger::forComponent("DHT.QueryMessage");
+std::shared_ptr<QueryMessage> QueryMessage::decode(const dht_hunter::bencode::BencodeValue& value) {    // Logger initialization removed
 
     // Check if the value is a dictionary
     if (!value.isDictionary()) {
-        logger.error("Value is not a dictionary");
         return nullptr;
     }
 
     // Check if the dictionary has a query method
     auto methodName = value.getString("q");
     if (!methodName) {
-        logger.error("Dictionary does not have a valid query method");
         return nullptr;
     }
 
     // Check if the dictionary has arguments
     auto argsDict = value.getDict("a");
     if (!argsDict) {
-        logger.error("Dictionary does not have valid arguments");
         return nullptr;
     }
 
@@ -84,7 +80,6 @@ std::shared_ptr<QueryMessage> QueryMessage::decode(const dht_hunter::bencode::Be
     // Check if the arguments have a node ID
     auto nodeIDStr = args.getString("id");
     if (!nodeIDStr || nodeIDStr->size() != 20) {
-        logger.error("Arguments do not have a valid node ID");
         return nullptr;
     }
 
@@ -95,7 +90,6 @@ std::shared_ptr<QueryMessage> QueryMessage::decode(const dht_hunter::bencode::Be
     // Get the transaction ID
     auto transactionID = value.getString("t");
     if (!transactionID) {
-        logger.error("Dictionary does not have a valid transaction ID");
         return nullptr;
     }
 
@@ -109,7 +103,6 @@ std::shared_ptr<QueryMessage> QueryMessage::decode(const dht_hunter::bencode::Be
     } else if (*methodName == "announce_peer") {
         return AnnouncePeerQuery::create(*transactionID, nodeID, args);
     } else {
-        logger.error("Unknown query method: " + *methodName);
         return nullptr;
     }
 }
@@ -141,13 +134,11 @@ const NodeID& FindNodeQuery::getTargetID() const {
     return m_targetID;
 }
 
-std::shared_ptr<FindNodeQuery> FindNodeQuery::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments) {
-    auto logger = event::Logger::forComponent("DHT.FindNodeQuery");
+std::shared_ptr<FindNodeQuery> FindNodeQuery::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments) {    // Logger initialization removed
 
     // Check if the arguments have a target ID
     auto targetIDStr = arguments.getString("target");
     if (!targetIDStr || targetIDStr->size() != 20) {
-        logger.error("Arguments do not have a valid target ID");
         return nullptr;
     }
 
@@ -182,13 +173,11 @@ const InfoHash& GetPeersQuery::getInfoHash() const {
     return m_infoHash;
 }
 
-std::shared_ptr<GetPeersQuery> GetPeersQuery::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments) {
-    auto logger = event::Logger::forComponent("DHT.GetPeersQuery");
+std::shared_ptr<GetPeersQuery> GetPeersQuery::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments) {    // Logger initialization removed
 
     // Check if the arguments have an info hash
     auto infoHashStr = arguments.getString("info_hash");
     if (!infoHashStr || infoHashStr->size() != 20) {
-        logger.error("Arguments do not have a valid info hash");
         return nullptr;
     }
 
@@ -235,13 +224,11 @@ bool AnnouncePeerQuery::isImpliedPort() const {
     return m_impliedPort;
 }
 
-std::shared_ptr<AnnouncePeerQuery> AnnouncePeerQuery::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments) {
-    auto logger = event::Logger::forComponent("DHT.AnnouncePeerQuery");
+std::shared_ptr<AnnouncePeerQuery> AnnouncePeerQuery::create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments) {    // Logger initialization removed
 
     // Check if the arguments have an info hash
     auto infoHashStr = arguments.getString("info_hash");
     if (!infoHashStr || infoHashStr->size() != 20) {
-        logger.error("Arguments do not have a valid info hash");
         return nullptr;
     }
 
@@ -263,7 +250,6 @@ std::shared_ptr<AnnouncePeerQuery> AnnouncePeerQuery::create(const std::string& 
     if (!impliedPort) {
         auto portVal = arguments.getInteger("port");
         if (!portVal) {
-            logger.error("Arguments do not have a valid port");
             return nullptr;
         }
 
@@ -274,7 +260,6 @@ std::shared_ptr<AnnouncePeerQuery> AnnouncePeerQuery::create(const std::string& 
     // Check if the arguments have a token
     auto tokenVal = arguments.getString("token");
     if (!tokenVal) {
-        logger.error("Arguments do not have a valid token");
         return nullptr;
     }
 

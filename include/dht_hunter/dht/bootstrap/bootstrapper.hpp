@@ -83,8 +83,7 @@ private:
     DHTConfig m_config;
     std::shared_ptr<RoutingManager> m_routingManager;
     std::shared_ptr<NodeLookup> m_nodeLookup;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
     std::function<void(bool)> m_bootstrapCallback;  // Callback for bootstrap completion
 };
 

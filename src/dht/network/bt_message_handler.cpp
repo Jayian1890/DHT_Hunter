@@ -25,8 +25,7 @@ std::shared_ptr<BTMessageHandler> BTMessageHandler::getInstance(
 }
 
 BTMessageHandler::BTMessageHandler(std::shared_ptr<RoutingManager> routingManager)
-    : m_routingManager(routingManager),
-      m_logger(event::Logger::forComponent("DHT.BTMessageHandler")) {
+    : m_routingManager(routingManager) {
 }
 
 BTMessageHandler::~BTMessageHandler() {
@@ -39,12 +38,10 @@ BTMessageHandler::~BTMessageHandler() {
 
 bool BTMessageHandler::handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length) {
     if (!m_routingManager) {
-        m_logger.error("No routing manager available");
         return false;
     }
     
     if (length < 3) {
-        m_logger.error("Invalid PORT message: too short");
         return false;
     }
     
@@ -55,8 +52,6 @@ bool BTMessageHandler::handlePortMessage(const network::NetworkAddress& peerAddr
     // Extract the port from the message (big-endian)
     uint16_t port = (static_cast<uint16_t>(data[1]) << 8) | static_cast<uint16_t>(data[2]);
     
-    m_logger.debug("Received PORT message from {}, DHT port: {}", peerAddress.toString(), port);
-    
     // Create an endpoint for the peer's DHT node
     network::EndPoint endpoint(peerAddress, port);
     
@@ -66,10 +61,8 @@ bool BTMessageHandler::handlePortMessage(const network::NetworkAddress& peerAddr
     // Add the node to the routing table
     // The routing manager will verify the node before adding it
     if (m_routingManager->addNode(node)) {
-        m_logger.debug("Added DHT node from PORT message: {}:{}", peerAddress.toString(), port);
         return true;
     } else {
-        m_logger.warning("Failed to add DHT node from PORT message: {}:{}", peerAddress.toString(), port);
         return false;
     }
 }

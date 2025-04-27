@@ -105,8 +105,7 @@ private:
     std::shared_ptr<SocketManager> m_socketManager;
     std::shared_ptr<unified_event::EventBus> m_eventBus;
     std::atomic<bool> m_running;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

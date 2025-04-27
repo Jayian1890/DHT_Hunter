@@ -7,8 +7,7 @@ KademliaDHT::KademliaDHT(const DHTConfig& config,
                        std::shared_ptr<RoutingTable> routingTable)
     : DHTExtension(config, nodeID),
       m_routingTable(routingTable),
-      m_initialized(false) {
-    m_logger = event::Logger::forComponent("DHT.KademliaDHT");
+      m_initialized(false) {    // Logger initialization removed
 }
 
 KademliaDHT::~KademliaDHT() {
@@ -25,12 +24,10 @@ std::string KademliaDHT::getVersion() const {
 
 bool KademliaDHT::initialize() {
     if (m_initialized) {
-        m_logger.warning("Kademlia DHT extension already initialized");
         return true;
     }
 
     if (!m_routingTable) {
-        m_logger.error("No routing table available");
         return false;
     }
 
@@ -42,7 +39,6 @@ bool KademliaDHT::initialize() {
     // However, we're reusing the existing routing table for simplicity
 
     m_initialized = true;
-    m_logger.debug("Kademlia DHT extension initialized");
     return true;
 }
 
@@ -50,8 +46,6 @@ void KademliaDHT::shutdown() {
     if (!m_initialized) {
         return;
     }
-
-    m_logger.debug("Shutting down Kademlia DHT extension");
     m_initialized = false;
 }
 

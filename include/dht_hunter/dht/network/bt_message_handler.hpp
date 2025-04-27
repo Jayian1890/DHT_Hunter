@@ -73,8 +73,7 @@ private:
     // Routing manager
     std::shared_ptr<RoutingManager> m_routingManager;
 
-    // Logger
-    event::Logger m_logger;
+    // Logger    // Logger removed
 };
 
 } // namespace dht_hunter::dht

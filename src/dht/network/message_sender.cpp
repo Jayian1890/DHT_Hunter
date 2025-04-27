@@ -23,8 +23,7 @@ MessageSender::MessageSender(const DHTConfig& config, std::shared_ptr<SocketMana
     : m_config(config),
       m_socketManager(socketManager),
       m_eventBus(unified_event::EventBus::getInstance()),
-      m_running(false),
-      m_logger(event::Logger::forComponent("DHT.MessageSender")) {
+      m_running(false) {
 }
 
 MessageSender::~MessageSender() {
@@ -41,12 +40,10 @@ bool MessageSender::start() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        m_logger.warning("Message sender already running");
         return true;
     }
 
     if (!m_socketManager || !m_socketManager->isRunning()) {
-        m_logger.error("Socket manager not running");
         return false;
     }
 
@@ -55,8 +52,6 @@ bool MessageSender::start() {
     // Publish a system started event
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.MessageSender");
     m_eventBus->publish(startedEvent);
-
-    m_logger.info("Message sender started");
     return true;
 }
 
@@ -72,8 +67,6 @@ void MessageSender::stop() {
     // Publish a system stopped event
     auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.MessageSender");
     m_eventBus->publish(stoppedEvent);
-
-    m_logger.info("Message sender stopped");
 }
 
 bool MessageSender::isRunning() const {
@@ -94,12 +87,10 @@ bool MessageSender::sendError(std::shared_ptr<ErrorMessage> error, const network
 
 bool MessageSender::sendMessage(std::shared_ptr<Message> message, const network::EndPoint& endpoint) {
     if (!m_running) {
-        m_logger.error("Cannot send message: Message sender not running");
         return false;
     }
 
     if (!m_socketManager) {
-        m_logger.error("Cannot send message: Socket manager not available");
         return false;
     }
 
@@ -110,11 +101,8 @@ bool MessageSender::sendMessage(std::shared_ptr<Message> message, const network:
     ssize_t result = m_socketManager->sendTo(data.data(), data.size(), endpoint);
 
     if (result < 0) {
-        m_logger.error("Failed to send message to {}", endpoint.toString());
         return false;
     }
-
-    m_logger.debug("Sent message to {}", endpoint.toString());
 
     // Publish a message sent event
     // Convert EndPoint to NetworkAddress

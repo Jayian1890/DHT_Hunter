@@ -15,7 +15,7 @@ public:
      * @param source The source of the event
      */
     explicit SystemStartedEvent(const std::string& source)
-        : Event(EventType::SystemStarted, EventSeverity::Info, source) {
+        : Event(EventType::SystemStarted, EventSeverity::Debug, source) {
     }
 };
 
@@ -29,7 +29,7 @@ public:
      * @param source The source of the event
      */
     explicit SystemStoppedEvent(const std::string& source)
-        : Event(EventType::SystemStopped, EventSeverity::Info, source) {
+        : Event(EventType::SystemStopped, EventSeverity::Debug, source) {
     }
 };
 
@@ -49,7 +49,7 @@ public:
         setProperty("message", errorMessage);
         setProperty("errorCode", errorCode);
     }
-    
+
     /**
      * @brief Gets the error message
      * @return The error message
@@ -58,7 +58,7 @@ public:
         auto message = getProperty<std::string>("message");
         return message ? *message : "";
     }
-    
+
     /**
      * @brief Gets the error code
      * @return The error code
@@ -67,7 +67,7 @@ public:
         auto errorCode = getProperty<int>("errorCode");
         return errorCode ? *errorCode : 0;
     }
-    
+
     /**
      * @brief Gets a string representation of the event
      * @return A string representation of the event

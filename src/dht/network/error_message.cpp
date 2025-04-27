@@ -51,25 +51,21 @@ std::vector<uint8_t> ErrorMessage::encode() const {
     return std::vector<uint8_t>(encoded.begin(), encoded.end());
 }
 
-std::shared_ptr<ErrorMessage> ErrorMessage::decode(const dht_hunter::bencode::BencodeValue& value) {
-    auto logger = event::Logger::forComponent("DHT.ErrorMessage");
+std::shared_ptr<ErrorMessage> ErrorMessage::decode(const dht_hunter::bencode::BencodeValue& value) {    // Logger initialization removed
 
     // Check if the value is a dictionary
     if (!value.isDictionary()) {
-        logger.error("Value is not a dictionary");
         return nullptr;
     }
 
     // Check if the dictionary has an error
     auto error = value.getList("e");
     if (!error) {
-        logger.error("Dictionary does not have a valid error");
         return nullptr;
     }
 
     // Check if the error has the correct format
     if (error->size() != 2 || !error->at(0)->isInteger() || !error->at(1)->isString()) {
-        logger.error("Error does not have the correct format");
         return nullptr;
     }
 
@@ -80,7 +76,6 @@ std::shared_ptr<ErrorMessage> ErrorMessage::decode(const dht_hunter::bencode::Be
     // Get the transaction ID
     auto transactionID = value.getString("t");
     if (!transactionID) {
-        logger.error("Dictionary does not have a valid transaction ID");
         return nullptr;
     }
 

@@ -19,7 +19,7 @@ public:
      * @param nodeID The node ID
      */
     DHTExtension(const DHTConfig& config, const NodeID& nodeID)
-        : m_config(config), m_nodeID(nodeID), m_logger(event::Logger::forComponent("DHT.Extension")) {}
+        : m_config(config), m_nodeID(nodeID) {}
 
     /**
      * @brief Virtual destructor
@@ -57,8 +57,7 @@ public:
 
 protected:
     DHTConfig m_config;
-    NodeID m_nodeID;
-    event::Logger m_logger;
+    NodeID m_nodeID;    // Logger removed
 };
 
 } // namespace dht_hunter::dht::extensions

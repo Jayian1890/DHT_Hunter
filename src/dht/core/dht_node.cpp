@@ -1,4 +1,5 @@
 #include "dht_hunter/dht/core/dht_node.hpp"
+
 #include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
 #include "dht_hunter/dht/extensions/azureus_dht.hpp"
 #include "dht_hunter/dht/extensions/kademlia_dht.hpp"
@@ -13,16 +14,14 @@
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 
-#include <dht_hunter/unified_event/adapters/dht_event_adapter.hpp>
-
 namespace dht_hunter::dht {
 
-DHTNode::DHTNode(const DHTConfig& config)
-    : m_nodeID(generateRandomNodeID()),
-      m_config(config),
-      m_running(false),
-      m_logger(event::Logger::forComponent("DHT.Node")) {
-
+DHTNode::DHTNode(const DHTConfig& config) : m_nodeID(generateRandomNodeID()), m_config(config), m_running(false) {
+    // Create event for node initialization
+    auto initEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Initializing", unified_event::EventSeverity::Debug);
+    initEvent->setProperty("nodeID", nodeIDToString(m_nodeID));
+    initEvent->setProperty("port", config.getPort());
+    unified_event::EventBus::getInstance()->publish(initEvent);
     // Create the components
     m_routingTable = RoutingTable::getInstance(m_nodeID, config.getKBucketSize());
     m_socketManager = SocketManager::getInstance(config);
@@ -47,6 +46,12 @@ DHTNode::DHTNode(const DHTConfig& config)
     m_mainlineDHT = std::make_shared<extensions::MainlineDHT>(config, m_nodeID, m_routingTable);
     m_kademliaDHT = std::make_shared<extensions::KademliaDHT>(config, m_nodeID, m_routingTable);
     m_azureusDHT = std::make_shared<extensions::AzureusDHT>(config, m_nodeID, m_routingTable);
+
+    // Log DHT node creation
+    auto createdEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Created", unified_event::EventSeverity::Debug);
+    createdEvent->setProperty("nodeID", nodeIDToString(m_nodeID));
+    createdEvent->setProperty("port", config.getPort());
+    m_eventBus->publish(createdEvent);
 }
 
 DHTNode::~DHTNode() {
@@ -57,43 +62,67 @@ bool DHTNode::start() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_running) {
-        m_logger.warning("DHT node already running");
         return true;
     }
 
     // Start the components
+    // Start socket manager
+    auto socketStartEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Starting Socket Manager", unified_event::EventSeverity::Debug);
+    m_eventBus->publish(socketStartEvent);
+
     if (!m_socketManager->start([this](const uint8_t* data, size_t size, const network::EndPoint& sender) {
-        if (m_messageHandler) {
-            m_messageHandler->handleRawMessage(data, size, sender);
-        }
-    })) {
-        m_logger.error("Failed to start socket manager");
+            if (m_messageHandler) {
+                m_messageHandler->handleRawMessage(data, size, sender);
+            }
+        })) {
+        auto failEvent = std::make_shared<unified_event::SystemErrorEvent>("DHT.Node", "Failed to start socket manager");
+        m_eventBus->publish(failEvent);
         return false;
     }
 
+    // Start message sender
+    auto senderStartEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Starting Message Sender", unified_event::EventSeverity::Debug);
+    m_eventBus->publish(senderStartEvent);
+
     if (!m_messageSender->start()) {
-        m_logger.error("Failed to start message sender");
+        auto failEvent = std::make_shared<unified_event::SystemErrorEvent>("DHT.Node", "Failed to start message sender");
+        m_eventBus->publish(failEvent);
         m_socketManager->stop();
         return false;
     }
 
+    // Start token manager
+    auto tokenStartEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Starting Token Manager", unified_event::EventSeverity::Debug);
+    m_eventBus->publish(tokenStartEvent);
+
     if (!m_tokenManager->start()) {
-        m_logger.error("Failed to start token manager");
+        auto failEvent = std::make_shared<unified_event::SystemErrorEvent>("DHT.Node", "Failed to start token manager");
+        m_eventBus->publish(failEvent);
         m_messageSender->stop();
         m_socketManager->stop();
         return false;
     }
 
+    // Start peer storage
+    auto storageStartEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Starting Peer Storage", unified_event::EventSeverity::Debug);
+    m_eventBus->publish(storageStartEvent);
+
     if (!m_peerStorage->start()) {
-        m_logger.error("Failed to start peer storage");
+        auto failEvent = std::make_shared<unified_event::SystemErrorEvent>("DHT.Node", "Failed to start peer storage");
+        m_eventBus->publish(failEvent);
         m_tokenManager->stop();
         m_messageSender->stop();
         m_socketManager->stop();
         return false;
     }
 
+    // Start transaction manager
+    auto transStartEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Starting Transaction Manager", unified_event::EventSeverity::Debug);
+    m_eventBus->publish(transStartEvent);
+
     if (!m_transactionManager->start()) {
-        m_logger.error("Failed to start transaction manager");
+        auto failEvent = std::make_shared<unified_event::SystemErrorEvent>("DHT.Node", "Failed to start transaction manager");
+        m_eventBus->publish(failEvent);
         m_peerStorage->stop();
         m_tokenManager->stop();
         m_messageSender->stop();
@@ -101,8 +130,13 @@ bool DHTNode::start() {
         return false;
     }
 
+    // Start routing manager
+    auto routingStartEvent = std::make_shared<unified_event::CustomEvent>("DHT.Node", "Starting Routing Manager", unified_event::EventSeverity::Debug);
+    m_eventBus->publish(routingStartEvent);
+
     if (!m_routingManager->start()) {
-        m_logger.error("Failed to start routing manager");
+        auto failEvent = std::make_shared<unified_event::SystemErrorEvent>("DHT.Node", "Failed to start routing manager");
+        m_eventBus->publish(failEvent);
         m_transactionManager->stop();
         m_peerStorage->stop();
         m_tokenManager->stop();
@@ -113,17 +147,14 @@ bool DHTNode::start() {
 
     // Initialize DHT extensions
     if (m_mainlineDHT && !m_mainlineDHT->initialize()) {
-        m_logger.error("Failed to initialize Mainline DHT extension, continuing without it");
         m_mainlineDHT.reset();
     }
 
     if (m_kademliaDHT && !m_kademliaDHT->initialize()) {
-        m_logger.error("Failed to initialize Kademlia DHT extension, continuing without it");
         m_kademliaDHT.reset();
     }
 
     if (m_azureusDHT && !m_azureusDHT->initialize()) {
-        m_logger.error("Failed to initialize Azureus DHT extension, continuing without it");
         m_azureusDHT.reset();
     }
 
@@ -134,24 +165,19 @@ bool DHTNode::start() {
 
     // Start the statistics service
     if (m_statisticsService && !m_statisticsService->start()) {
-        m_logger.error("Failed to start statistics service");
         // Continue anyway, this is not critical
     }
 
     // Bootstrap the node
     m_bootstrapper->bootstrap([this](const bool success) {
         if (success) {
-            m_logger.info("DHT node bootstrapped successfully");
 
             // Publish a system started event
             auto bootstrapEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.Node.Bootstrap");
             m_eventBus->publish(bootstrapEvent);
         } else {
-            m_logger.warning("DHT node bootstrap failed");
         }
     });
-
-    m_logger.info("DHT node created with ID: {}", nodeIDToString(m_nodeID));
 
     // Publish a system started event
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.Node");
@@ -166,8 +192,6 @@ void DHTNode::stop() {
     if (!m_running) {
         return;
     }
-
-    m_logger.info("Stopping DHT node");
 
     // Stop the DHT extensions
     if (m_azureusDHT) {
@@ -204,8 +228,6 @@ void DHTNode::stop() {
     m_eventBus->publish(stoppedEvent);
 
     m_running = false;
-
-    m_logger.info("DHT node stopped");
 }
 
 bool DHTNode::isRunning() const {
@@ -227,7 +249,7 @@ std::string DHTNode::getStatistics() const {
     return "{}";
 }
 
-bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length) {
+bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length) const {
     if (!m_running || !m_btMessageHandler) {
         return false;
     }
@@ -235,7 +257,7 @@ bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, cons
     return m_btMessageHandler->handlePortMessage(peerAddress, data, length);
 }
 
-bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, uint16_t port) {
+bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, uint16_t port) const {
     if (!m_running || !m_btMessageHandler) {
         return false;
     }
@@ -252,12 +274,8 @@ std::shared_ptr<RoutingTable> DHTNode::getRoutingTable() const {
     return m_routingTable;
 }
 
-void DHTNode::findClosestNodes(const NodeID& targetID,
-    const std::function<void(const std::vector<std::shared_ptr<Node>> &)>
-        &callback)
-    const {
+void DHTNode::findClosestNodes(const NodeID& targetID, const std::function<void(const std::vector<std::shared_ptr<Node>>&)>& callback) const {
     if (!m_running) {
-        m_logger.error("DHT node not running");
         if (callback) {
             callback({});
         }
@@ -265,7 +283,6 @@ void DHTNode::findClosestNodes(const NodeID& targetID,
     }
 
     if (!m_nodeLookup) {
-        m_logger.error("No node lookup available");
         if (callback) {
             callback({});
         }
@@ -275,11 +292,8 @@ void DHTNode::findClosestNodes(const NodeID& targetID,
     m_nodeLookup->lookup(targetID, callback);
 }
 
-void DHTNode::getPeers(const InfoHash& infoHash,
-    const std::function<void(const std::vector<network::EndPoint> &)> &callback)
-    const {
+void DHTNode::getPeers(const InfoHash& infoHash, const std::function<void(const std::vector<network::EndPoint>&)>& callback) const {
     if (!m_running) {
-        m_logger.error("DHT node not running");
         if (callback) {
             callback({});
         }
@@ -287,7 +301,6 @@ void DHTNode::getPeers(const InfoHash& infoHash,
     }
 
     if (!m_peerLookup) {
-        m_logger.error("No peer lookup available");
         if (callback) {
             callback({});
         }
@@ -297,10 +310,8 @@ void DHTNode::getPeers(const InfoHash& infoHash,
     m_peerLookup->lookup(infoHash, callback);
 }
 
-void DHTNode::announcePeer(const InfoHash& infoHash, const uint16_t port,
-                           const std::function<void(bool)> &callback) const {
+void DHTNode::announcePeer(const InfoHash& infoHash, const uint16_t port, const std::function<void(bool)>& callback) const {
     if (!m_running) {
-        m_logger.error("DHT node not running");
         if (callback) {
             callback(false);
         }
@@ -308,7 +319,6 @@ void DHTNode::announcePeer(const InfoHash& infoHash, const uint16_t port,
     }
 
     if (!m_peerLookup) {
-        m_logger.error("No peer lookup available");
         if (callback) {
             callback(false);
         }
@@ -320,7 +330,6 @@ void DHTNode::announcePeer(const InfoHash& infoHash, const uint16_t port,
 
 void DHTNode::ping(const std::shared_ptr<Node>& node, const std::function<void(bool)>& callback) {
     if (!m_running) {
-        m_logger.error("DHT node not running");
         if (callback) {
             callback(false);
         }
@@ -328,7 +337,6 @@ void DHTNode::ping(const std::shared_ptr<Node>& node, const std::function<void(b
     }
 
     if (!m_messageSender || !m_transactionManager) {
-        m_logger.error("No message sender or transaction manager available");
         if (callback) {
             callback(false);
         }
@@ -340,8 +348,7 @@ void DHTNode::ping(const std::shared_ptr<Node>& node, const std::function<void(b
 
     // Send the query
     std::string transactionID = m_transactionManager->createTransaction(
-        query,
-        node->getEndpoint(),
+        query, node->getEndpoint(),
         [callback](const std::shared_ptr<ResponseMessage>& /*response*/, const network::EndPoint& /*sender*/) {
             if (callback) {
                 callback(true);
@@ -361,11 +368,10 @@ void DHTNode::ping(const std::shared_ptr<Node>& node, const std::function<void(b
     if (!transactionID.empty()) {
         m_messageSender->sendQuery(query, node->getEndpoint());
     } else {
-        m_logger.error("Failed to create transaction");
         if (callback) {
             callback(false);
         }
     }
 }
 
-} // namespace dht_hunter::dht
+}  // namespace dht_hunter::dht

@@ -19,22 +19,22 @@ add_executable(dht_hunter main.cpp)
 
 # Link with component libraries
 target_link_libraries(dht_hunter
-    PRIVATE
-    dht_hunter_logforge
-    dht_hunter_network
-    dht_hunter_util
-    dht_hunter_dht
-    dht_hunter_bittorrent
-    dht_hunter_unified_event
+        PRIVATE
+        dht_hunter_logforge
+        dht_hunter_network
+        dht_hunter_util
+        dht_hunter_dht
+        dht_hunter_bittorrent
+        dht_hunter_unified_event
 )
 
 # Set include directories
 target_include_directories(dht_hunter
-    PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
 )
 
 # Install the executable
 install(TARGETS dht_hunter
-    RUNTIME DESTINATION bin
+        RUNTIME DESTINATION bin
 )

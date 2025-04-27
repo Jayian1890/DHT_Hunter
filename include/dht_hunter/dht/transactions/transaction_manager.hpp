@@ -167,8 +167,7 @@ private:
     std::atomic<bool> m_running;
     std::thread m_timeoutThread;
     mutable std::mutex m_mutex;
-    std::mt19937 m_rng;
-    event::Logger m_logger;
+    std::mt19937 m_rng;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

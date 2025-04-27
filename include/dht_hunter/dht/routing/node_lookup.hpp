@@ -139,8 +139,7 @@ private:
     std::shared_ptr<TransactionManager> m_transactionManager;
     std::shared_ptr<MessageSender> m_messageSender;
     std::unordered_map<std::string, Lookup> m_lookups;
-    std::mutex m_mutex;
-    event::Logger m_logger;
+    std::mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

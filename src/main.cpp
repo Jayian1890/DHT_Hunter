@@ -1,4 +1,3 @@
-// Standard library includes
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -9,12 +8,10 @@
 // Project includes
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/dht_node.hpp"
-// #include "dht_hunter/event/event_bus.hpp"  // Old event system (removed)
-// #include "dht_hunter/event/log_event_handler.hpp"  // Old event system (removed)
-#include "dht_hunter/unified_event/unified_event.hpp"  // New unified event system
-#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"  // Adapter for old Logger interface
 #include "dht_hunter/logforge/logforge.hpp"
 #include "dht_hunter/network/udp_server.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"  // Adapter for old Logger interface
+#include "dht_hunter/unified_event/unified_event.hpp"            // New unified event system
 
 /**
  * Global variables for signal handling and application state
@@ -43,15 +40,15 @@ void signalHandler(int signal) {
  * @param argv Array of command-line arguments
  * @return Exit code (0 for success, non-zero for error)
  */
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     std::string configDir;
 
 #ifdef _WIN32
     // Windows
-    const char *homeDir = std::getenv("USERPROFILE");
+    const char* homeDir = std::getenv("USERPROFILE");
 #else
     // Unix/Linux/macOS
-    const char *homeDir = std::getenv("HOME");
+    const char* homeDir = std::getenv("HOME");
 #endif
 
     if (homeDir) {
@@ -84,22 +81,20 @@ int main(int argc, char *argv[]) {
     }
 
     // Initialize the LogForge singleton with default settings
-    auto &logForge = dht_hunter::logforge::LogForge::getInstance();
+    auto& logForge = dht_hunter::logforge::LogForge::getInstance();
     std::string logFilePath = (configPath / "dht_hunter.log").string();
-    logForge.init(
-        dht_hunter::logforge::LogLevel::INFO,  // Console level
-        dht_hunter::logforge::LogLevel::TRACE,  // File level
-        logFilePath,                           // Log file in config directory
-        true,                                  // Use colors
-        false                                  // Async logging disabled
+    logForge.init(dht_hunter::logforge::LogLevel::INFO,   // Console level
+                  dht_hunter::logforge::LogLevel::TRACE,  // File level
+                  logFilePath,                            // Log file in config directory
+                  true,                                   // Use colors
+                  false                                   // Async logging disabled
     );
 
     // Initialize the unified event system
-    dht_hunter::unified_event::initializeEventSystem(
-        true,  // Enable logging
-        true,  // Enable component communication
-        true,  // Enable statistics
-        false  // Synchronous processing
+    dht_hunter::unified_event::initializeEventSystem(true,  // Enable logging
+                                                     true,  // Enable component communication
+                                                     true,  // Enable statistics
+                                                     false  // Synchronous processing
     );
 
     // Configure the logging processor
@@ -109,9 +104,7 @@ int main(int argc, char *argv[]) {
         loggingProcessor->setFileOutput(true, logFilePath);
     }
 
-    // Create a logger for the main component
-    auto logger = dht_hunter::event::Logger::forComponent("Main");
-    logger.info("Using unified event system");
+    // Create a logger for the main component    // Logger initialization removed
 
     // Register signal handlers for graceful shutdown
     std::signal(SIGINT, signalHandler);   // Ctrl+C
@@ -129,7 +122,6 @@ int main(int argc, char *argv[]) {
     // Create and start a DHT node
     g_dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(dhtConfig);
     if (!g_dhtNode->start()) {
-        logger.error("Failed to start DHT node on port {}", DHT_PORT);
         return 1;
     }
 
@@ -143,13 +135,10 @@ int main(int argc, char *argv[]) {
     }
 
     // Clean up resources
-    logger.info("Shutting down DHT node");
     if (g_dhtNode) {
         g_dhtNode->stop();
         g_dhtNode.reset();
     }
-
-    logger.info("DHT node shutdown complete");
 
     // Shutdown the unified event system
     dht_hunter::unified_event::shutdownEventSystem();

@@ -21,7 +21,7 @@ public:
         : Event(EventType::NodeDiscovered, EventSeverity::Debug, source) {
         setProperty("node", node);
     }
-    
+
     /**
      * @brief Gets the discovered node
      * @return The discovered node
@@ -48,7 +48,7 @@ public:
         setProperty("node", node);
         setProperty("bucketIndex", bucketIndex);
     }
-    
+
     /**
      * @brief Gets the added node
      * @return The added node
@@ -57,7 +57,7 @@ public:
         auto node = getProperty<std::shared_ptr<dht_hunter::dht::Node>>("node");
         return node ? *node : nullptr;
     }
-    
+
     /**
      * @brief Gets the bucket index
      * @return The bucket index
@@ -84,7 +84,7 @@ public:
         setProperty("node", node);
         setProperty("bucketIndex", bucketIndex);
     }
-    
+
     /**
      * @brief Gets the removed node
      * @return The removed node
@@ -93,7 +93,7 @@ public:
         auto node = getProperty<std::shared_ptr<dht_hunter::dht::Node>>("node");
         return node ? *node : nullptr;
     }
-    
+
     /**
      * @brief Gets the bucket index
      * @return The bucket index
@@ -120,7 +120,7 @@ public:
         setProperty("node", node);
         setProperty("bucketIndex", bucketIndex);
     }
-    
+
     /**
      * @brief Gets the updated node
      * @return The updated node
@@ -129,7 +129,7 @@ public:
         auto node = getProperty<std::shared_ptr<dht_hunter::dht::Node>>("node");
         return node ? *node : nullptr;
     }
-    
+
     /**
      * @brief Gets the bucket index
      * @return The bucket index
@@ -137,6 +137,41 @@ public:
     size_t getBucketIndex() const {
         auto bucketIndex = getProperty<size_t>("bucketIndex");
         return bucketIndex ? *bucketIndex : 0;
+    }
+};
+
+/**
+ * @brief Event for bucket refresh
+ */
+class BucketRefreshEvent : public Event {
+public:
+    /**
+     * @brief Constructor
+     * @param bucketIndex The index of the bucket being refreshed
+     * @param targetID The target ID for the refresh lookup
+     */
+    BucketRefreshEvent(size_t bucketIndex, const std::string& targetID)
+        : Event(EventType::BucketRefreshed, EventSeverity::Debug, "DHT.RoutingTable") {
+        setProperty("bucketIndex", bucketIndex);
+        setProperty("targetID", targetID);
+    }
+
+    /**
+     * @brief Gets the bucket index
+     * @return The bucket index
+     */
+    size_t getBucketIndex() const {
+        auto bucketIndex = getProperty<size_t>("bucketIndex");
+        return bucketIndex ? *bucketIndex : 0;
+    }
+
+    /**
+     * @brief Gets the target ID
+     * @return The target ID
+     */
+    std::string getTargetID() const {
+        auto targetID = getProperty<std::string>("targetID");
+        return targetID ? *targetID : "";
     }
 };
 
