@@ -8,7 +8,7 @@
 #include "dht_hunter/dht/network/error_message.hpp"
 #include "dht_hunter/dht/events/event_bus.hpp"
 #include "dht_hunter/dht/events/dht_event.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include <memory>
 #include <atomic>
 #include <mutex>

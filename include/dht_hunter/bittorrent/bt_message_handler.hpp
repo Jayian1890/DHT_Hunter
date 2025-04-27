@@ -3,7 +3,7 @@
 #include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/network/network_address.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -31,7 +31,7 @@ enum class BTMessageID : uint8_t {
 /**
  * @class BTMessageHandler
  * @brief Handles BitTorrent protocol messages related to DHT
- * 
+ *
  * This class is responsible for handling BitTorrent protocol messages
  * that are related to the DHT, such as the PORT message which is used
  * for DHT node discovery.

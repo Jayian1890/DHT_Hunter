@@ -2,7 +2,7 @@
 #include "dht_hunter/dht/network/query_message.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include "dht_hunter/bencode/bencode.hpp"
 
 // Alias for convenience

@@ -8,7 +8,7 @@
 #include "dht_hunter/dht/events/dht_event.hpp"
 #include "dht_hunter/dht/services/statistics_service.hpp"
 #include "dht_hunter/bittorrent/bt_message_handler.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include <memory>
 #include <functional>
 #include <atomic>

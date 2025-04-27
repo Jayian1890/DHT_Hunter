@@ -9,9 +9,10 @@
 // Project includes
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/dht_node.hpp"
-#include "dht_hunter/event/event_bus.hpp"
-#include "dht_hunter/event/log_event_handler.hpp"
-#include "dht_hunter/event/logger.hpp"
+// #include "dht_hunter/event/event_bus.hpp"  // Old event system (removed)
+// #include "dht_hunter/event/log_event_handler.hpp"  // Old event system (removed)
+#include "dht_hunter/unified_event/unified_event.hpp"  // New unified event system
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"  // Adapter for old Logger interface
 #include "dht_hunter/logforge/logforge.hpp"
 #include "dht_hunter/network/udp_server.hpp"
 
@@ -93,13 +94,24 @@ int main(int argc, char *argv[]) {
         false                                  // Async logging disabled
     );
 
-    // Create and register the LogForge event handler
-    auto logEventHandler = dht_hunter::event::LogEventHandler::create();
-    dht_hunter::event::EventBus::getInstance().subscribe("LogEvent", logEventHandler);
+    // Initialize the unified event system
+    dht_hunter::unified_event::initializeEventSystem(
+        true,  // Enable logging
+        true,  // Enable component communication
+        true,  // Enable statistics
+        false  // Synchronous processing
+    );
+
+    // Configure the logging processor
+    auto loggingProcessor = dht_hunter::unified_event::getLoggingProcessor();
+    if (loggingProcessor) {
+        loggingProcessor->setMinSeverity(dht_hunter::unified_event::EventSeverity::Debug);
+        loggingProcessor->setFileOutput(true, logFilePath);
+    }
 
     // Create a logger for the main component
     auto logger = dht_hunter::event::Logger::forComponent("Main");
-    logger.info("Using event-based logging system");
+    logger.info("Using unified event system");
 
     // Register signal handlers for graceful shutdown
     std::signal(SIGINT, signalHandler);   // Ctrl+C
@@ -138,5 +150,9 @@ int main(int argc, char *argv[]) {
     }
 
     logger.info("DHT node shutdown complete");
+
+    // Shutdown the unified event system
+    dht_hunter::unified_event::shutdownEventSystem();
+
     return 0;
 }

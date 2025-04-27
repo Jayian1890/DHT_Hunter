@@ -1,5 +1,5 @@
 #include "dht_hunter/network/udp_socket.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 
 #include <thread>
 #include <atomic>

@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/network/query_message.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include <sstream>
 
 namespace dht_hunter::dht {

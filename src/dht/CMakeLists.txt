@@ -65,7 +65,8 @@ target_link_libraries(dht_hunter_dht
     PUBLIC
     dht_hunter_logforge
     dht_hunter_network
-    dht_hunter_event
+    # dht_hunter_event  # Old event system (removed)
+    dht_hunter_unified_event  # New unified event system
     dht_hunter_bencode
     dht_hunter_util
 )

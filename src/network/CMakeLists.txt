@@ -22,7 +22,8 @@ target_compile_features(dht_hunter_network
 target_link_libraries(dht_hunter_network
     PUBLIC
     dht_hunter_logforge
-    dht_hunter_event
+    # dht_hunter_event  # Old event system (removed)
+    dht_hunter_unified_event  # New unified event system
 )
 
 # Platform-specific libraries

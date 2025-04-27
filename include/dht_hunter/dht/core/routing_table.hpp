@@ -2,7 +2,7 @@
 
 #include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include <vector>
 #include <memory>
 #include <mutex>

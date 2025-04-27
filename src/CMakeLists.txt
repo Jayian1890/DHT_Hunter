@@ -1,7 +1,7 @@
 # Add only the necessary components
 add_subdirectory(logforge)  # Logging component
 add_subdirectory(network)   # Network component
-add_subdirectory(event)     # Event system
+# add_subdirectory(event)     # Old event system (removed)
 add_subdirectory(util)      # Utility functions
 add_subdirectory(bencode)   # Bencode component
 add_subdirectory(dht)       # DHT component
@@ -23,7 +23,6 @@ target_link_libraries(dht_hunter
     PRIVATE
     dht_hunter_logforge
     dht_hunter_network
-    dht_hunter_event
     dht_hunter_util
     dht_hunter_dht
     dht_hunter_bittorrent

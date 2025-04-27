@@ -5,7 +5,7 @@
 #include "dht_hunter/network/network_address.hpp"
 #include "dht_hunter/dht/events/event_bus.hpp"
 #include "dht_hunter/dht/events/dht_event.hpp"
-#include "dht_hunter/event/logger.hpp"
+#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include <unordered_map>
 #include <vector>
 #include <mutex>
