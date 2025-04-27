@@ -55,6 +55,24 @@ MessageHandler::~MessageHandler() {
     }
 }
 
+bool MessageHandler::start() {
+    m_logger.info("Starting message handler");
+
+    // Publish a system started event
+    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.MessageHandler");
+    m_eventBus->publish(startedEvent);
+
+    return true;
+}
+
+void MessageHandler::stop() {
+    m_logger.info("Stopping message handler");
+
+    // Publish a system stopped event
+    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.MessageHandler");
+    m_eventBus->publish(stoppedEvent);
+}
+
 void MessageHandler::handleRawMessage(const uint8_t* data, size_t size, const network::EndPoint& sender) {
     if (!data || size == 0) {
         m_logger.error("Invalid message data");

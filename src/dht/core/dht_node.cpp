@@ -1,17 +1,19 @@
 #include "dht_hunter/dht/core/dht_node.hpp"
-#include "dht_hunter/dht/network/socket_manager.hpp"
-#include "dht_hunter/dht/network/message_sender.hpp"
+#include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
+#include "dht_hunter/dht/extensions/azureus_dht.hpp"
+#include "dht_hunter/dht/extensions/kademlia_dht.hpp"
+#include "dht_hunter/dht/extensions/mainline_dht.hpp"
 #include "dht_hunter/dht/network/message_handler.hpp"
-#include "dht_hunter/dht/routing/routing_manager.hpp"
+#include "dht_hunter/dht/network/message_sender.hpp"
+#include "dht_hunter/dht/network/socket_manager.hpp"
 #include "dht_hunter/dht/routing/node_lookup.hpp"
 #include "dht_hunter/dht/routing/peer_lookup.hpp"
-#include "dht_hunter/dht/storage/token_manager.hpp"
+#include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
+#include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
-#include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
-#include "dht_hunter/dht/extensions/mainline_dht.hpp"
-#include "dht_hunter/dht/extensions/kademlia_dht.hpp"
-#include "dht_hunter/dht/extensions/azureus_dht.hpp"
+
+#include <dht_hunter/unified_event/adapters/dht_event_adapter.hpp>
 
 namespace dht_hunter::dht {
 
@@ -36,7 +38,7 @@ DHTNode::DHTNode(const DHTConfig& config)
     m_btMessageHandler = bittorrent::BTMessageHandler::getInstance(m_routingManager);
 
     // Get the event bus
-    m_eventBus = events::EventBus::getInstance();
+    m_eventBus = unified_event::EventBus::getInstance();
 
     // Get the statistics service
     m_statisticsService = services::StatisticsService::getInstance();
@@ -142,14 +144,19 @@ bool DHTNode::start() {
             m_logger.info("DHT node bootstrapped successfully");
 
             // Publish a system started event
-            auto event = std::make_shared<events::SystemStartedEvent>();
-            m_eventBus->publish(event);
+            auto bootstrapEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.Node.Bootstrap");
+            m_eventBus->publish(bootstrapEvent);
         } else {
             m_logger.warning("DHT node bootstrap failed");
         }
     });
 
     m_logger.info("DHT node created with ID: {}", nodeIDToString(m_nodeID));
+
+    // Publish a system started event
+    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.Node");
+    m_eventBus->publish(startedEvent);
+
     return true;
 }
 
@@ -193,8 +200,8 @@ void DHTNode::stop() {
     }
 
     // Publish a system stopped event
-    auto event = std::make_shared<events::SystemStoppedEvent>();
-    m_eventBus->publish(event);
+    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.Node");
+    m_eventBus->publish(stoppedEvent);
 
     m_running = false;
 

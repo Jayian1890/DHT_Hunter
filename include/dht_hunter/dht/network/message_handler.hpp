@@ -60,6 +60,17 @@ public:
     MessageHandler& operator=(MessageHandler&&) = delete;
 
     /**
+     * @brief Starts the message handler
+     * @return True if the message handler was started successfully, false otherwise
+     */
+    bool start();
+
+    /**
+     * @brief Stops the message handler
+     */
+    void stop();
+
+    /**
      * @brief Handles a raw message
      * @param data The message data
      * @param size The message size

@@ -47,6 +47,11 @@ bool PeerStorage::start() {
     // Start the cleanup thread
     m_cleanupThread = std::thread(&PeerStorage::cleanupExpiredPeersPeriodically, this);
 
+    // Publish a system started event
+    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.PeerStorage");
+    m_eventBus->publish(startedEvent);
+
+    m_logger.info("Peer storage started");
     return true;
 }
 
@@ -63,6 +68,10 @@ void PeerStorage::stop() {
     if (m_cleanupThread.joinable()) {
         m_cleanupThread.join();
     }
+
+    // Publish a system stopped event
+    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.PeerStorage");
+    m_eventBus->publish(stoppedEvent);
 
     m_logger.info("Peer storage stopped");
 }

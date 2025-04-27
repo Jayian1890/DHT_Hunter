@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/core/dht_node.hpp"
-#include "dht_hunter/dht/events/dht_event.hpp"
+#include "dht_hunter/unified_event/unified_event.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 
 namespace dht_hunter::dht {
@@ -9,8 +9,8 @@ void DHTNode::subscribeToEvents() {
 
     // Subscribe to node discovered events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::NodeDiscovered,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::NodeDiscovered,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handleNodeDiscoveredEvent(event);
             }
         )
@@ -18,8 +18,8 @@ void DHTNode::subscribeToEvents() {
 
     // Subscribe to peer discovered events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::PeerDiscovered,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::PeerDiscovered,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handlePeerDiscoveredEvent(event);
             }
         )
@@ -27,8 +27,8 @@ void DHTNode::subscribeToEvents() {
 
     // Subscribe to system error events
     m_eventSubscriptionIds.push_back(
-        m_eventBus->subscribe(events::DHTEventType::SystemError,
-            [this](std::shared_ptr<events::DHTEvent> event) {
+        m_eventBus->subscribe(unified_event::EventType::SystemError,
+            [this](std::shared_ptr<unified_event::Event> event) {
                 handleSystemErrorEvent(event);
             }
         )
@@ -37,8 +37,8 @@ void DHTNode::subscribeToEvents() {
     m_logger.debug("Subscribed to {} event types", m_eventSubscriptionIds.size());
 }
 
-void DHTNode::handleNodeDiscoveredEvent(std::shared_ptr<events::DHTEvent> event) {
-    auto nodeDiscoveredEvent = std::dynamic_pointer_cast<events::NodeDiscoveredEvent>(event);
+void DHTNode::handleNodeDiscoveredEvent(std::shared_ptr<unified_event::Event> event) {
+    auto nodeDiscoveredEvent = std::dynamic_pointer_cast<unified_event::NodeDiscoveredEvent>(event);
     if (!nodeDiscoveredEvent) {
         m_logger.error("Failed to cast event to NodeDiscoveredEvent");
         return;
@@ -58,8 +58,8 @@ void DHTNode::handleNodeDiscoveredEvent(std::shared_ptr<events::DHTEvent> event)
     }
 }
 
-void DHTNode::handlePeerDiscoveredEvent(std::shared_ptr<events::DHTEvent> event) {
-    auto peerDiscoveredEvent = std::dynamic_pointer_cast<events::PeerDiscoveredEvent>(event);
+void DHTNode::handlePeerDiscoveredEvent(std::shared_ptr<unified_event::Event> event) {
+    auto peerDiscoveredEvent = std::dynamic_pointer_cast<unified_event::PeerDiscoveredEvent>(event);
     if (!peerDiscoveredEvent) {
         m_logger.error("Failed to cast event to PeerDiscoveredEvent");
         return;
@@ -78,8 +78,8 @@ void DHTNode::handlePeerDiscoveredEvent(std::shared_ptr<events::DHTEvent> event)
     }
 }
 
-void DHTNode::handleSystemErrorEvent(std::shared_ptr<events::DHTEvent> event) {
-    auto systemErrorEvent = std::dynamic_pointer_cast<events::SystemErrorEvent>(event);
+void DHTNode::handleSystemErrorEvent(std::shared_ptr<unified_event::Event> event) {
+    auto systemErrorEvent = std::dynamic_pointer_cast<unified_event::SystemErrorEvent>(event);
     if (!systemErrorEvent) {
         m_logger.error("Failed to cast event to SystemErrorEvent");
         return;

@@ -86,6 +86,11 @@ bool RoutingManager::start() {
     // Start the bucket refresh thread
     startBucketRefreshThread();
 
+    // Publish a system started event
+    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.RoutingManager");
+    m_eventBus->publish(startedEvent);
+
+    m_logger.info("Routing manager started");
     return true;
 }
 
@@ -119,6 +124,10 @@ void RoutingManager::stop() {
         std::string fullPath = m_config.getFullPath(m_config.getRoutingTablePath());
         saveRoutingTable(fullPath);
     }
+
+    // Publish a system stopped event
+    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.RoutingManager");
+    m_eventBus->publish(stoppedEvent);
 
     m_logger.info("Routing manager stopped");
 }

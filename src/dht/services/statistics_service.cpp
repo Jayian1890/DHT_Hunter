@@ -51,6 +51,10 @@ bool StatisticsService::start() {
     // Subscribe to events
     subscribeToEvents();
 
+    // Publish a system started event
+    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.StatisticsService");
+    m_eventBus->publish(startedEvent);
+
     m_logger.info("Statistics service started");
     return true;
 }
@@ -67,6 +71,10 @@ void StatisticsService::stop() {
         m_eventBus->unsubscribe(subscriptionId);
     }
     m_eventSubscriptionIds.clear();
+
+    // Publish a system stopped event
+    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.StatisticsService");
+    m_eventBus->publish(stoppedEvent);
 
     m_logger.info("Statistics service stopped");
 }

@@ -51,6 +51,12 @@ bool MessageSender::start() {
     }
 
     m_running = true;
+
+    // Publish a system started event
+    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.MessageSender");
+    m_eventBus->publish(startedEvent);
+
+    m_logger.info("Message sender started");
     return true;
 }
 
@@ -62,6 +68,11 @@ void MessageSender::stop() {
     }
 
     m_running = false;
+
+    // Publish a system stopped event
+    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.MessageSender");
+    m_eventBus->publish(stoppedEvent);
+
     m_logger.info("Message sender stopped");
 }
 

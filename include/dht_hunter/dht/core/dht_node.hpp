@@ -4,8 +4,7 @@
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/extensions/dht_extension.hpp"
-#include "dht_hunter/dht/events/event_bus.hpp"
-#include "dht_hunter/dht/events/dht_event.hpp"
+#include "dht_hunter/unified_event/unified_event.hpp"
 #include "dht_hunter/dht/services/statistics_service.hpp"
 #include "dht_hunter/bittorrent/bt_message_handler.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
@@ -166,19 +165,19 @@ private:
      * @brief Handles a node discovered event
      * @param event The event
      */
-    void handleNodeDiscoveredEvent(std::shared_ptr<events::DHTEvent> event);
+    void handleNodeDiscoveredEvent(std::shared_ptr<unified_event::Event> event);
 
     /**
      * @brief Handles a peer discovered event
      * @param event The event
      */
-    void handlePeerDiscoveredEvent(std::shared_ptr<events::DHTEvent> event);
+    void handlePeerDiscoveredEvent(std::shared_ptr<unified_event::Event> event);
 
     /**
      * @brief Handles a system error event
      * @param event The event
      */
-    void handleSystemErrorEvent(std::shared_ptr<events::DHTEvent> event);
+    void handleSystemErrorEvent(std::shared_ptr<unified_event::Event> event);
 
     NodeID m_nodeID;
     DHTConfig m_config;
@@ -197,7 +196,7 @@ private:
     std::shared_ptr<Bootstrapper> m_bootstrapper;
 
     // Event bus
-    std::shared_ptr<events::EventBus> m_eventBus;
+    std::shared_ptr<unified_event::EventBus> m_eventBus;
     std::vector<int> m_eventSubscriptionIds;
 
     // Services
