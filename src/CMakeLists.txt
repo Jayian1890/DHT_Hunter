@@ -8,6 +8,13 @@ add_subdirectory(dht)       # DHT component
 add_subdirectory(bittorrent) # BitTorrent component
 add_subdirectory(unified_event) # Unified event system
 
+# Removed components:
+# - crawler (not used in the build)
+# - metadata (not used in the build)
+# - service (not used in the build)
+# - storage (not used in the build)
+# - ui (not used in the build)
+
 # Main executable
 add_executable(dht_hunter main.cpp)
 
