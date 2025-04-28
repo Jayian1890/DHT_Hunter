@@ -6,7 +6,7 @@
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 #include <algorithm>
 
 namespace dht_hunter::dht {
@@ -23,14 +23,14 @@ std::shared_ptr<NodeLookup> NodeLookup::getInstance(
     std::shared_ptr<MessageSender> messageSender) {
 
     try {
-        return utils::withLock(s_instanceMutex, [&]() {
+        return utility::thread::withLock(s_instanceMutex, [&]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<NodeLookup>(new NodeLookup(
                     config, nodeID, routingTable, transactionManager, messageSender));
             }
             return s_instance;
         }, "NodeLookup::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.NodeLookup", e.what());
         return nullptr;
     }
@@ -84,7 +84,7 @@ void NodeLookup::lookup(const NodeID& targetID, std::function<void(const std::ve
 
 void NodeLookup::sendQueries(const std::string& lookupID) {
     try {
-        utils::withLock(m_mutex, [this, &lookupID]() {
+        utility::thread::withLock(m_mutex, [this, &lookupID]() {
             // Find the lookup
             auto it = m_lookups.find(lookupID);
             if (it == m_lookups.end()) {
@@ -133,7 +133,7 @@ void NodeLookup::sendQueries(const std::string& lookupID) {
                 }
             }
         }, "NodeLookup::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.NodeLookup", e.what());
     }
 }

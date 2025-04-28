@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/network/message_handler.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
@@ -21,14 +21,14 @@ std::shared_ptr<MessageHandler> MessageHandler::getInstance(
     std::shared_ptr<TransactionManager> transactionManager) {
 
     try {
-        return utils::withLock(s_instanceMutex, [&]() {
+        return utility::thread::withLock(s_instanceMutex, [&]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<MessageHandler>(new MessageHandler(
                     config, nodeID, messageSender, routingTable, tokenManager, peerStorage, transactionManager));
             }
             return s_instance;
         }, "MessageHandler::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.MessageHandler", e.what());
         return nullptr;
     }
@@ -54,12 +54,12 @@ MessageHandler::MessageHandler(const DHTConfig& config,
 MessageHandler::~MessageHandler() {
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "MessageHandler::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.MessageHandler", e.what());
     }
 }

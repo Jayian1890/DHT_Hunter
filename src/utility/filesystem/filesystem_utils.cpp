@@ -1,4 +1,4 @@
-#include "dht_hunter/util/filesystem_utils.hpp"
+#include "dht_hunter/utility/filesystem/filesystem_utils.hpp"
 
 #include <fstream>
 #include <array>
@@ -15,7 +15,7 @@
 
 // No logging in utility functions
 
-namespace dht_hunter::util {
+namespace dht_hunter::utility::filesystem {
 
 bool FilesystemUtils::ensureDirectoryExists(
     const std::filesystem::path& path,
@@ -178,4 +178,4 @@ void FilesystemUtils::setTerminalTitle(const std::string& title) {
     std::cout << "\033]0;" << title << "\007" << std::flush;
 }
 
-} // namespace dht_hunter::util
+} // namespace dht_hunter::utility::filesystem

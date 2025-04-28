@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/crawler/crawler.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup.hpp"
 #include "dht_hunter/dht/peer_lookup/peer_lookup.hpp"
@@ -31,7 +31,7 @@ std::shared_ptr<Crawler> Crawler::getInstance(
     const CrawlerConfig& crawlerConfig) {
 
     try {
-        return utils::withLock(s_instanceMutex, [&]() {
+        return utility::thread::withLock(s_instanceMutex, [&]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<Crawler>(new Crawler(
                     config, nodeID, routingManager, nodeLookup, peerLookup,
@@ -39,7 +39,7 @@ std::shared_ptr<Crawler> Crawler::getInstance(
             }
             return s_instance;
         }, "Crawler::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return nullptr;
     }
@@ -121,19 +121,19 @@ Crawler::~Crawler() {
 
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "Crawler::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 }
 
 bool Crawler::start() {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             if (m_running) {
                 return true;
             }
@@ -145,7 +145,7 @@ bool Crawler::start() {
 
             return m_running;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return false;
     }
@@ -153,7 +153,7 @@ bool Crawler::start() {
 
 void Crawler::stop() {
     try {
-        bool shouldJoin = utils::withLock(m_mutex, [this]() {
+        bool shouldJoin = utility::thread::withLock(m_mutex, [this]() {
             if (!m_running) {
                 return false;
             }
@@ -168,7 +168,7 @@ void Crawler::stop() {
         if (!shouldJoin) {
             return;
         }
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return;
     }
@@ -180,10 +180,10 @@ void Crawler::stop() {
 
 bool Crawler::isRunning() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             return m_running;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return false;
     }
@@ -191,10 +191,10 @@ bool Crawler::isRunning() const {
 
 CrawlerStatistics Crawler::getStatistics() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             return m_statistics;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return CrawlerStatistics();
     }
@@ -202,7 +202,7 @@ CrawlerStatistics Crawler::getStatistics() const {
 
 std::vector<std::shared_ptr<Node>> Crawler::getDiscoveredNodes(size_t maxNodes) const {
     try {
-        return utils::withLock(m_mutex, [this, maxNodes]() {
+        return utility::thread::withLock(m_mutex, [this, maxNodes]() {
             std::vector<std::shared_ptr<Node>> nodes;
             nodes.reserve(m_discoveredNodes.size());
 
@@ -215,7 +215,7 @@ std::vector<std::shared_ptr<Node>> Crawler::getDiscoveredNodes(size_t maxNodes) 
 
             return nodes;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return std::vector<std::shared_ptr<Node>>();
     }
@@ -223,7 +223,7 @@ std::vector<std::shared_ptr<Node>> Crawler::getDiscoveredNodes(size_t maxNodes) 
 
 std::vector<InfoHash> Crawler::getDiscoveredInfoHashes(size_t maxInfoHashes) const {
     try {
-        return utils::withLock(m_mutex, [this, maxInfoHashes]() {
+        return utility::thread::withLock(m_mutex, [this, maxInfoHashes]() {
             std::vector<InfoHash> infoHashes;
             infoHashes.reserve(m_discoveredInfoHashes.size());
 
@@ -236,7 +236,7 @@ std::vector<InfoHash> Crawler::getDiscoveredInfoHashes(size_t maxInfoHashes) con
 
             return infoHashes;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return std::vector<InfoHash>();
     }
@@ -244,7 +244,7 @@ std::vector<InfoHash> Crawler::getDiscoveredInfoHashes(size_t maxInfoHashes) con
 
 std::vector<network::EndPoint> Crawler::getPeersForInfoHash(const InfoHash& infoHash) const {
     try {
-        return utils::withLock(m_mutex, [this, &infoHash]() {
+        return utility::thread::withLock(m_mutex, [this, &infoHash]() {
             std::vector<network::EndPoint> peers;
             std::string infoHashStr = infoHashToString(infoHash);
 
@@ -265,7 +265,7 @@ std::vector<network::EndPoint> Crawler::getPeersForInfoHash(const InfoHash& info
 
             return peers;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return std::vector<network::EndPoint>();
     }
@@ -273,30 +273,30 @@ std::vector<network::EndPoint> Crawler::getPeersForInfoHash(const InfoHash& info
 
 void Crawler::monitorInfoHash(const InfoHash& infoHash) {
     try {
-        utils::withLock(m_mutex, [this, &infoHash]() {
+        utility::thread::withLock(m_mutex, [this, &infoHash]() {
             m_monitoredInfoHashes.insert(infoHashToString(infoHash));
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 }
 
 void Crawler::stopMonitoringInfoHash(const InfoHash& infoHash) {
     try {
-        utils::withLock(m_mutex, [this, &infoHash]() {
+        utility::thread::withLock(m_mutex, [this, &infoHash]() {
             m_monitoredInfoHashes.erase(infoHashToString(infoHash));
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 }
 
 bool Crawler::isMonitoringInfoHash(const InfoHash& infoHash) const {
     try {
-        return utils::withLock(m_mutex, [this, &infoHash]() {
+        return utility::thread::withLock(m_mutex, [this, &infoHash]() {
             return m_monitoredInfoHashes.find(infoHashToString(infoHash)) != m_monitoredInfoHashes.end();
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return false;
     }
@@ -304,7 +304,7 @@ bool Crawler::isMonitoringInfoHash(const InfoHash& infoHash) const {
 
 std::vector<InfoHash> Crawler::getMonitoredInfoHashes() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             std::vector<InfoHash> infoHashes;
             infoHashes.reserve(m_monitoredInfoHashes.size());
 
@@ -317,7 +317,7 @@ std::vector<InfoHash> Crawler::getMonitoredInfoHashes() const {
 
             return infoHashes;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
         return std::vector<InfoHash>();
     }
@@ -364,7 +364,7 @@ void Crawler::discoverNodes() {
     // Get a random subset of nodes to crawl
     std::vector<std::shared_ptr<Node>> nodesToCrawl;
     try {
-        nodesToCrawl = utils::withLock(m_mutex, [this]() {
+        nodesToCrawl = utility::thread::withLock(m_mutex, [this]() {
             // Get all nodes
             std::vector<std::shared_ptr<Node>> allNodes;
             allNodes.reserve(m_discoveredNodes.size());
@@ -389,7 +389,7 @@ void Crawler::discoverNodes() {
             result.assign(allNodes.begin(), allNodes.begin() + static_cast<long>(nodesToTake));
             return result;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 
@@ -408,7 +408,7 @@ void Crawler::discoverNodes() {
 
             m_nodeLookup->lookup(node->getID(), [this, nodeIDStr](const std::vector<std::shared_ptr<Node>>& nodes) {
                 try {
-                    size_t newNodes = utils::withLock(m_mutex, [this, &nodes]() {
+                    size_t newNodes = utility::thread::withLock(m_mutex, [this, &nodes]() {
                         size_t newNodesCount = 0;
 
                         // Add the nodes to our discovered nodes
@@ -433,7 +433,7 @@ void Crawler::discoverNodes() {
                     completionMessage += " - Found: " + std::to_string(nodes.size());
                     completionMessage += ", New: " + std::to_string(newNodes);
                     unified_event::logDebug("DHT.Crawler", completionMessage);
-                } catch (const utils::LockTimeoutException& e) {
+                } catch (const utility::thread::LockTimeoutException& e) {
                     unified_event::logError("DHT.Crawler", e.what());
                 }
             });
@@ -468,7 +468,7 @@ void Crawler::discoverNodes() {
         if (m_nodeLookup) {
             m_nodeLookup->lookup(randomNodeID, [this, randomNodeIDStr](const std::vector<std::shared_ptr<Node>>& nodes) {
                 try {
-                    size_t newNodes = utils::withLock(m_mutex, [this, &nodes]() {
+                    size_t newNodes = utility::thread::withLock(m_mutex, [this, &nodes]() {
                         size_t newNodesCount = 0;
 
                         // Add the nodes to our discovered nodes
@@ -493,7 +493,7 @@ void Crawler::discoverNodes() {
                     randomCompletionMessage += " - Found: " + std::to_string(nodes.size());
                     randomCompletionMessage += ", New: " + std::to_string(newNodes);
                     unified_event::logDebug("DHT.Crawler", randomCompletionMessage);
-                } catch (const utils::LockTimeoutException& e) {
+                } catch (const utility::thread::LockTimeoutException& e) {
                     unified_event::logError("DHT.Crawler", e.what());
                 }
             });
@@ -509,7 +509,7 @@ void Crawler::monitorInfoHashes() {
 
     std::vector<InfoHash> infoHashesToMonitor;
     try {
-        infoHashesToMonitor = utils::withLock(m_mutex, [this]() {
+        infoHashesToMonitor = utility::thread::withLock(m_mutex, [this]() {
             std::vector<InfoHash> result;
 
             // Get all monitored info hashes
@@ -522,7 +522,7 @@ void Crawler::monitorInfoHashes() {
 
             return result;
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 
@@ -541,7 +541,7 @@ void Crawler::monitorInfoHashes() {
             m_peerLookup->lookup(infoHash, [this, infoHash](const std::vector<network::EndPoint>& peers) {
                 try {
                     std::string infoHashStr = infoHashToString(infoHash);
-                    size_t totalPeers = utils::withLock(m_mutex, [this, &infoHash, &peers, &infoHashStr]() {
+                    size_t totalPeers = utility::thread::withLock(m_mutex, [this, &infoHash, &peers, &infoHashStr]() {
                         // Add the info hash to our discovered info hashes
                         m_discoveredInfoHashes[infoHashStr] = infoHash;
 
@@ -566,7 +566,7 @@ void Crawler::monitorInfoHashes() {
                     completionMessage += " - Found: " + std::to_string(peers.size());
                     completionMessage += ", Total: " + std::to_string(totalPeers);
                     unified_event::logDebug("DHT.Crawler", completionMessage);
-                } catch (const utils::LockTimeoutException& e) {
+                } catch (const utility::thread::LockTimeoutException& e) {
                     unified_event::logError("DHT.Crawler", e.what());
                 }
             });
@@ -604,7 +604,7 @@ void Crawler::monitorInfoHashes() {
         if (m_peerLookup) {
             m_peerLookup->lookup(randomInfoHash, [this, randomInfoHash, randomInfoHashStr](const std::vector<network::EndPoint>& peers) {
                 try {
-                    utils::withLock(m_mutex, [this, &peers, &randomInfoHash, &randomInfoHashStr]() {
+                    utility::thread::withLock(m_mutex, [this, &peers, &randomInfoHash, &randomInfoHashStr]() {
                         // Only add the info hash if we found peers
                         if (!peers.empty()) {
                             // Add the info hash to our discovered info hashes
@@ -634,7 +634,7 @@ void Crawler::monitorInfoHashes() {
                         std::string noPeersMessage = "No peers found for random info hash: " + randomInfoHashStr;
                         unified_event::logDebug("DHT.Crawler", noPeersMessage);
                     }
-                } catch (const utils::LockTimeoutException& e) {
+                } catch (const utility::thread::LockTimeoutException& e) {
                     unified_event::logError("DHT.Crawler", e.what());
                 }
             });
@@ -646,7 +646,7 @@ void Crawler::updateStatistics() {
     unified_event::logDebug("DHT.Crawler", "Updating statistics and pruning data");
 
     try {
-        utils::withLock(m_mutex, [this]() {
+        utility::thread::withLock(m_mutex, [this]() {
             // Limit the number of nodes and info hashes stored
             if (m_discoveredNodes.size() > m_crawlerConfig.maxNodes) {
                 // Remove the oldest nodes
@@ -694,7 +694,7 @@ void Crawler::updateStatistics() {
                 unified_event::logDebug("DHT.Crawler", prunedHashesMessage);
             }
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 
@@ -719,7 +719,7 @@ void Crawler::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Eve
     }
 
     try {
-        utils::withLock(m_mutex, [this, node, nodeDiscoveredEvent]() {
+        utility::thread::withLock(m_mutex, [this, node, nodeDiscoveredEvent]() {
             // Add the node to our discovered nodes
             std::string nodeIDStr = nodeIDToString(node->getID());
             std::string endpoint = node->getEndpoint().toString();
@@ -747,7 +747,7 @@ void Crawler::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Eve
                 unified_event::logInfo("DHT.Crawler", logMessage);
             }
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 }
@@ -762,7 +762,7 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
     auto peer = peerDiscoveredEvent->getPeer();
 
     try {
-        utils::withLock(m_mutex, [this, infoHash, peer]() {
+        utility::thread::withLock(m_mutex, [this, infoHash, peer]() {
             // Add the info hash to our discovered info hashes
             std::string infoHashStr = infoHashToString(infoHash);
             std::string peerStr = peer.toString();
@@ -797,7 +797,7 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
                 unified_event::logInfo("DHT.Crawler", logMessage);
             }
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 }
@@ -809,7 +809,7 @@ void Crawler::handleMessageReceivedEvent(const std::shared_ptr<unified_event::Ev
     }
 
     try {
-        utils::withLock(m_mutex, [this, messageReceivedEvent]() {
+        utility::thread::withLock(m_mutex, [this, messageReceivedEvent]() {
             // Update statistics
             m_statistics.responsesReceived++;
 
@@ -846,7 +846,7 @@ void Crawler::handleMessageReceivedEvent(const std::shared_ptr<unified_event::Ev
                 unified_event::logDebug("DHT.Crawler", logMessage);
             }
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 }
@@ -858,7 +858,7 @@ void Crawler::handleMessageSentEvent(const std::shared_ptr<unified_event::Event>
     }
 
     try {
-        utils::withLock(m_mutex, [this, messageSentEvent]() {
+        utility::thread::withLock(m_mutex, [this, messageSentEvent]() {
             // Update statistics
             m_statistics.queriesSent++;
 
@@ -906,7 +906,7 @@ void Crawler::handleMessageSentEvent(const std::shared_ptr<unified_event::Event>
                 unified_event::logDebug("DHT.Crawler", logMessage);
             }
         }, "Crawler::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
     }
 }

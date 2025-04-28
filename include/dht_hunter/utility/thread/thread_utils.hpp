@@ -5,8 +5,10 @@
 #include <string>
 #include <functional>
 #include <stdexcept>
+#include <thread>
+#include <future>
 
-namespace dht_hunter::utils {
+namespace dht_hunter::utility::thread {
 
 /**
  * @brief Exception thrown when a lock timeout occurs
@@ -76,4 +78,25 @@ auto withLock(std::mutex& mutex, Func func, const std::string& lockName = "unnam
     return func();
 }
 
-} // namespace dht_hunter::utils
+/**
+ * @brief Executes a function asynchronously
+ * 
+ * @param func The function to execute
+ * @param args The arguments to pass to the function
+ * @return A future containing the result of the function
+ */
+template <typename Func, typename... Args>
+auto runAsync(Func&& func, Args&&... args) {
+    return std::async(std::launch::async, std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+/**
+ * @brief Sleeps for the specified duration
+ * 
+ * @param milliseconds The duration to sleep in milliseconds
+ */
+inline void sleep(unsigned int milliseconds) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
+
+} // namespace dht_hunter::utility::thread

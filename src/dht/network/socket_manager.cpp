@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/network/socket_manager.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 
 namespace dht_hunter::dht {
 
@@ -9,13 +9,13 @@ std::mutex SocketManager::s_instanceMutex;
 
 std::shared_ptr<SocketManager> SocketManager::getInstance(const DHTConfig& config) {
     try {
-        return utils::withLock(s_instanceMutex, [&]() {
+        return utility::thread::withLock(s_instanceMutex, [&]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<SocketManager>(new SocketManager(config));
             }
             return s_instance;
         }, "SocketManager::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.SocketManager", e.what());
         return nullptr;
     }
@@ -30,19 +30,19 @@ SocketManager::~SocketManager() {
 
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "SocketManager::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.SocketManager", e.what());
     }
 }
 
 bool SocketManager::start(std::function<void(const uint8_t*, size_t, const network::EndPoint&)> receiveCallback) {
     try {
-        return utils::withLock(m_mutex, [this, receiveCallback]() {
+        return utility::thread::withLock(m_mutex, [this, receiveCallback]() {
             if (m_running) {
                 return true;
             }
@@ -76,7 +76,7 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
 
             return true;
         }, "SocketManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.SocketManager", e.what());
         return false;
     }
@@ -84,7 +84,7 @@ bool SocketManager::start(std::function<void(const uint8_t*, size_t, const netwo
 
 void SocketManager::stop() {
     try {
-        utils::withLock(m_mutex, [this]() {
+        utility::thread::withLock(m_mutex, [this]() {
             if (!m_running) {
                 return;
             }
@@ -99,7 +99,7 @@ void SocketManager::stop() {
 
             // Socket manager stopped event is published through the event system
         }, "SocketManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.SocketManager", e.what());
     }
 }

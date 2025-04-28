@@ -8,6 +8,7 @@ target_link_libraries(dht_hunter_bittorrent
         PUBLIC
         dht_hunter_core
         dht_hunter_types
+        dht_hunter_utility
         dht_hunter_network
         dht_hunter_dht
 )

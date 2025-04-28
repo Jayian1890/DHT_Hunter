@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
@@ -20,14 +20,14 @@ std::shared_ptr<Bootstrapper> Bootstrapper::getInstance(
     std::shared_ptr<NodeLookup> nodeLookup) {
 
     try {
-        return utils::withLock(s_instanceMutex, [&]() {
+        return utility::thread::withLock(s_instanceMutex, [&]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<Bootstrapper>(new Bootstrapper(
                     config, nodeID, routingManager, nodeLookup));
             }
             return s_instance;
         }, "Bootstrapper::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Bootstrapper", e.what());
         return nullptr;
     }
@@ -45,12 +45,12 @@ Bootstrapper::Bootstrapper(const DHTConfig& config,
 Bootstrapper::~Bootstrapper() {
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "Bootstrapper::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Bootstrapper", e.what());
     }
 }
@@ -62,7 +62,7 @@ void Bootstrapper::bootstrap(std::function<void(bool)> callback) {
     // Use a separate thread to perform the bootstrap process
     std::thread bootstrapThread([this]() {
         try {
-            bool shouldContinue = utils::withLock(m_mutex, [this]() {
+            bool shouldContinue = utility::thread::withLock(m_mutex, [this]() {
                 // Check if we already have nodes in the routing table
                 if (m_routingManager && m_routingManager->getNodeCount() > 0) {
                     return false; // Don't continue with bootstrap
@@ -73,7 +73,7 @@ void Bootstrapper::bootstrap(std::function<void(bool)> callback) {
             if (!shouldContinue) {
                 return;
             }
-        } catch (const utils::LockTimeoutException& e) {
+        } catch (const utility::thread::LockTimeoutException& e) {
             unified_event::logError("DHT.Bootstrapper", e.what());
             return;
         }

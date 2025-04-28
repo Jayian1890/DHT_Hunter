@@ -1,6 +1,7 @@
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
+#include "dht_hunter/utility/random/random_utils.hpp"
 #include <sstream>
 #include <iomanip>
 
@@ -12,13 +13,13 @@ std::mutex TransactionManager::s_instanceMutex;
 
 std::shared_ptr<TransactionManager> TransactionManager::getInstance(const DHTConfig& config) {
     try {
-        return utils::withLock(s_instanceMutex, [&config]() {
+        return utility::thread::withLock(s_instanceMutex, [&config]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<TransactionManager>(new TransactionManager(config));
             }
             return s_instance;
         }, "TransactionManager::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return nullptr;
     }
@@ -33,19 +34,19 @@ TransactionManager::~TransactionManager() {
 
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "TransactionManager::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
     }
 }
 
 bool TransactionManager::start() {
     try {
-        bool shouldStartThread = utils::withLock(m_mutex, [this]() {
+        bool shouldStartThread = utility::thread::withLock(m_mutex, [this]() {
             if (m_running) {
                 return false; // Thread already running
             }
@@ -60,7 +61,7 @@ bool TransactionManager::start() {
         }
 
         return true;
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return false;
     }
@@ -70,7 +71,7 @@ void TransactionManager::stop() {
     bool shouldJoinThread = false;
 
     try {
-        shouldJoinThread = utils::withLock(m_mutex, [this]() {
+        shouldJoinThread = utility::thread::withLock(m_mutex, [this]() {
             if (!m_running) {
                 return false; // No thread to join
             }
@@ -78,7 +79,7 @@ void TransactionManager::stop() {
             m_running = false;
             return true; // Need to join thread
         }, "TransactionManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return;
     }
@@ -99,7 +100,7 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
                                                 TransactionErrorCallback errorCallback,
                                                 TransactionTimeoutCallback timeoutCallback) {
     try {
-        return utils::withLock(m_mutex, [this, &query, &endpoint, &responseCallback, &errorCallback, &timeoutCallback]() {
+        return utility::thread::withLock(m_mutex, [this, &query, &endpoint, &responseCallback, &errorCallback, &timeoutCallback]() {
             // Check if we have too many transactions
             if (m_transactions.size() >= MAX_TRANSACTIONS) {
                 return std::string("");
@@ -119,7 +120,7 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
 
             return transactionID;
         }, "TransactionManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return "";
     }
@@ -130,7 +131,7 @@ void TransactionManager::handleResponse(std::shared_ptr<ResponseMessage> respons
     TransactionResponseCallback callback = nullptr;
 
     try {
-        utils::withLock(m_mutex, [this, &response, &callback]() {
+        utility::thread::withLock(m_mutex, [this, &response, &callback]() {
             // Get the transaction ID
             const std::string& transactionID = response->getTransactionID();
 
@@ -149,7 +150,7 @@ void TransactionManager::handleResponse(std::shared_ptr<ResponseMessage> respons
             // Remove the transaction
             m_transactions.erase(it);
         }, "TransactionManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return;
     }
@@ -165,7 +166,7 @@ void TransactionManager::handleError(std::shared_ptr<ErrorMessage> error, const 
     TransactionErrorCallback callback = nullptr;
 
     try {
-        utils::withLock(m_mutex, [this, &error, &callback]() {
+        utility::thread::withLock(m_mutex, [this, &error, &callback]() {
             // Get the transaction ID
             const std::string& transactionID = error->getTransactionID();
 
@@ -184,7 +185,7 @@ void TransactionManager::handleError(std::shared_ptr<ErrorMessage> error, const 
             // Remove the transaction
             m_transactions.erase(it);
         }, "TransactionManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return;
     }
@@ -197,27 +198,18 @@ void TransactionManager::handleError(std::shared_ptr<ErrorMessage> error, const 
 
 size_t TransactionManager::getTransactionCount() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             return m_transactions.size();
         }, "TransactionManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return 0;
     }
 }
 
 std::string TransactionManager::generateTransactionID() {
-    // Generate a random transaction ID
-    std::uniform_int_distribution<> dis(0, 255);
-
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0');
-
-    for (size_t i = 0; i < 4; ++i) {
-        ss << std::setw(2) << dis(m_rng);
-    }
-
-    return ss.str();
+    // Use the utility function to generate a random transaction ID
+    return utility::random::generateTransactionID();
 }
 
 void TransactionManager::checkTimeouts() {
@@ -225,7 +217,7 @@ void TransactionManager::checkTimeouts() {
     std::vector<std::function<void()>> timeoutCallbacks;
 
     try {
-        utils::withLock(m_mutex, [this, &timeoutCallbacks]() {
+        utility::thread::withLock(m_mutex, [this, &timeoutCallbacks]() {
             auto now = std::chrono::steady_clock::now();
 
             // Check for timed out transactions
@@ -250,7 +242,7 @@ void TransactionManager::checkTimeouts() {
                 }
             }
         }, "TransactionManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TransactionManager", e.what());
         return;
     }

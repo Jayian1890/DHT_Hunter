@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/types.hpp"
+#include "dht_hunter/utility/node/node_utils.hpp"
 #include <string>
 #include <vector>
 #include <memory>
@@ -18,9 +19,11 @@ namespace peer_lookup_utils {
  * @param targetID The target ID
  * @return The sorted nodes
  */
-std::vector<std::shared_ptr<Node>> sortNodesByDistance(
+inline std::vector<std::shared_ptr<Node>> sortNodesByDistance(
     const std::vector<std::shared_ptr<Node>>& nodes,
-    const NodeID& targetID);
+    const NodeID& targetID) {
+    return utility::node::sortNodesByDistance(nodes, targetID);
+}
 
 /**
  * @brief Finds a node by endpoint
@@ -28,9 +31,11 @@ std::vector<std::shared_ptr<Node>> sortNodesByDistance(
  * @param endpoint The endpoint to find
  * @return The node, or nullptr if not found
  */
-std::shared_ptr<Node> findNodeByEndpoint(
+inline std::shared_ptr<Node> findNodeByEndpoint(
     const std::vector<std::shared_ptr<Node>>& nodes,
-    const EndPoint& endpoint);
+    const EndPoint& endpoint) {
+    return utility::node::findNodeByEndpoint(nodes, endpoint);
+}
 
 /**
  * @brief Finds a node by ID
@@ -38,16 +43,20 @@ std::shared_ptr<Node> findNodeByEndpoint(
  * @param nodeID The node ID to find
  * @return The node, or nullptr if not found
  */
-std::shared_ptr<Node> findNodeByID(
+inline std::shared_ptr<Node> findNodeByID(
     const std::vector<std::shared_ptr<Node>>& nodes,
-    const NodeID& nodeID);
+    const NodeID& nodeID) {
+    return utility::node::findNodeByID(nodes, nodeID);
+}
 
 /**
  * @brief Generates a lookup ID from an info hash
  * @param infoHash The info hash
  * @return The lookup ID
  */
-std::string generateLookupID(const InfoHash& infoHash);
+inline std::string generateLookupID(const InfoHash& infoHash) {
+    return utility::node::generatePeerLookupID(infoHash);
+}
 
 } // namespace peer_lookup_utils
 

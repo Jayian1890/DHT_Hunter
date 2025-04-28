@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/core/routing_table.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 #include "dht_hunter/unified_event/events/node_events.hpp"
 #include <algorithm>
 #include <fstream>
@@ -25,43 +25,43 @@ KBucket& KBucket::operator=(KBucket&& other) noexcept {
         // We'll use a simple address-based ordering to ensure consistent lock acquisition order
         if (this < &other) {
             try {
-                utils::withLock(m_mutex, [this, &other]() {
+                utility::thread::withLock(m_mutex, [this, &other]() {
                     try {
-                        utils::withLock(other.m_mutex, [this, &other]() {
+                        utility::thread::withLock(other.m_mutex, [this, &other]() {
                             // Both locks acquired, now do the move
                             m_prefix = other.m_prefix;
                             m_kSize = other.m_kSize;
                             m_nodes = std::move(other.m_nodes);
                             m_lastChanged = other.m_lastChanged;
                         }, "KBucket::other.m_mutex");
-                    } catch (const utils::LockTimeoutException& e) {
+                    } catch (const utility::thread::LockTimeoutException& e) {
                         // Log error and rethrow
                         unified_event::logError("DHT.RoutingTable", e.what());
                         throw;
                     }
                 }, "KBucket::m_mutex");
-            } catch (const utils::LockTimeoutException& e) {
+            } catch (const utility::thread::LockTimeoutException& e) {
                 unified_event::logError("DHT.RoutingTable", e.what());
                 // Continue without moving, better than deadlocking
             }
         } else {
             try {
-                utils::withLock(other.m_mutex, [this, &other]() {
+                utility::thread::withLock(other.m_mutex, [this, &other]() {
                     try {
-                        utils::withLock(m_mutex, [this, &other]() {
+                        utility::thread::withLock(m_mutex, [this, &other]() {
                             // Both locks acquired, now do the move
                             m_prefix = other.m_prefix;
                             m_kSize = other.m_kSize;
                             m_nodes = std::move(other.m_nodes);
                             m_lastChanged = other.m_lastChanged;
                         }, "KBucket::m_mutex");
-                    } catch (const utils::LockTimeoutException& e) {
+                    } catch (const utility::thread::LockTimeoutException& e) {
                         // Log error and rethrow
                         unified_event::logError("DHT.RoutingTable", e.what());
                         throw;
                     }
                 }, "KBucket::other.m_mutex");
-            } catch (const utils::LockTimeoutException& e) {
+            } catch (const utility::thread::LockTimeoutException& e) {
                 unified_event::logError("DHT.RoutingTable", e.what());
                 // Continue without moving, better than deadlocking
             }
@@ -78,7 +78,7 @@ bool KBucket::addNode(std::shared_ptr<Node> node) {
     }
 
     try {
-        return utils::withLock(m_mutex, [this, node]() {
+        return utility::thread::withLock(m_mutex, [this, node]() {
             // Check if the node is already in the bucket
             auto it = std::find_if(m_nodes.begin(), m_nodes.end(),
                 [&node](const std::shared_ptr<Node>& existingNode) {
@@ -105,7 +105,7 @@ bool KBucket::addNode(std::shared_ptr<Node> node) {
             // Bucket is full, can't add the node
             return false;
         }, "KBucket::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return false;
     }
@@ -113,7 +113,7 @@ bool KBucket::addNode(std::shared_ptr<Node> node) {
 
 bool KBucket::removeNode(const NodeID& nodeID) {
     try {
-        return utils::withLock(m_mutex, [this, &nodeID]() {
+        return utility::thread::withLock(m_mutex, [this, &nodeID]() {
             auto it = std::find_if(m_nodes.begin(), m_nodes.end(),
                 [&nodeID](const std::shared_ptr<Node>& node) {
                     return node->getID() == nodeID;
@@ -128,7 +128,7 @@ bool KBucket::removeNode(const NodeID& nodeID) {
 
             return false;
         }, "KBucket::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return false;
     }
@@ -136,7 +136,7 @@ bool KBucket::removeNode(const NodeID& nodeID) {
 
 std::shared_ptr<Node> KBucket::getNode(const NodeID& nodeID) const {
     try {
-        return utils::withLock(m_mutex, [this, &nodeID]() {
+        return utility::thread::withLock(m_mutex, [this, &nodeID]() {
             auto it = std::find_if(m_nodes.begin(), m_nodes.end(),
                 [&nodeID](const std::shared_ptr<Node>& node) {
                     return node->getID() == nodeID;
@@ -148,7 +148,7 @@ std::shared_ptr<Node> KBucket::getNode(const NodeID& nodeID) const {
 
             return std::shared_ptr<Node>(nullptr);
         }, "KBucket::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return nullptr;
     }
@@ -156,10 +156,10 @@ std::shared_ptr<Node> KBucket::getNode(const NodeID& nodeID) const {
 
 std::vector<std::shared_ptr<Node>> KBucket::getNodes() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             return m_nodes;
         }, "KBucket::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return std::vector<std::shared_ptr<Node>>();
     }
@@ -167,10 +167,10 @@ std::vector<std::shared_ptr<Node>> KBucket::getNodes() const {
 
 size_t KBucket::getNodeCount() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             return m_nodes.size();
         }, "KBucket::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return 0;
     }
@@ -217,13 +217,13 @@ std::mutex RoutingTable::s_instanceMutex;
 
 std::shared_ptr<RoutingTable> RoutingTable::getInstance(const NodeID& ownID, size_t kBucketSize) {
     try {
-        return utils::withLock(s_instanceMutex, [&ownID, kBucketSize]() {
+        return utility::thread::withLock(s_instanceMutex, [&ownID, kBucketSize]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<RoutingTable>(new RoutingTable(ownID, kBucketSize));
             }
             return s_instance;
         }, "RoutingTable::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return nullptr;
     }
@@ -238,12 +238,12 @@ RoutingTable::RoutingTable(const NodeID& ownID, size_t kBucketSize)
 RoutingTable::~RoutingTable() {
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "RoutingTable::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
     }
 }
@@ -254,7 +254,7 @@ bool RoutingTable::addNode(const std::shared_ptr<Node> &node) {
     }
 
     try {
-        return utils::withLock(m_mutex, [this, &node]() {
+        return utility::thread::withLock(m_mutex, [this, &node]() {
             // Find the appropriate bucket
             KBucket& bucket = getBucketForNodeID(node->getID());
 
@@ -276,7 +276,7 @@ bool RoutingTable::addNode(const std::shared_ptr<Node> &node) {
             // Bucket is full and doesn't contain our own node ID, can't add the node
             return false;
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return false;
     }
@@ -284,7 +284,7 @@ bool RoutingTable::addNode(const std::shared_ptr<Node> &node) {
 
 bool RoutingTable::removeNode(const NodeID& nodeID) {
     try {
-        return utils::withLock(m_mutex, [this, &nodeID]() {
+        return utility::thread::withLock(m_mutex, [this, &nodeID]() {
             // Find the appropriate bucket
             KBucket& bucket = const_cast<KBucket&>(getBucketForNodeID(nodeID));
 
@@ -295,7 +295,7 @@ bool RoutingTable::removeNode(const NodeID& nodeID) {
 
             return false;
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return false;
     }
@@ -303,14 +303,14 @@ bool RoutingTable::removeNode(const NodeID& nodeID) {
 
 std::shared_ptr<Node> RoutingTable::getNode(const NodeID& nodeID) const {
     try {
-        return utils::withLock(m_mutex, [this, &nodeID]() {
+        return utility::thread::withLock(m_mutex, [this, &nodeID]() {
             // Find the appropriate bucket
             const KBucket& bucket = getBucketForNodeID(nodeID);
 
             // Try to get the node from the bucket
             return bucket.getNode(nodeID);
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return nullptr;
     }
@@ -318,7 +318,7 @@ std::shared_ptr<Node> RoutingTable::getNode(const NodeID& nodeID) const {
 
 std::vector<std::shared_ptr<Node>> RoutingTable::getClosestNodes(const NodeID& targetID, size_t k) const {
     try {
-        return utils::withLock(m_mutex, [this, &targetID, k]() {
+        return utility::thread::withLock(m_mutex, [this, &targetID, k]() {
             // Get all nodes
             std::vector<std::shared_ptr<Node>> allNodes;
             for (const auto& bucket : m_buckets) {
@@ -341,7 +341,7 @@ std::vector<std::shared_ptr<Node>> RoutingTable::getClosestNodes(const NodeID& t
 
             return allNodes;
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return std::vector<std::shared_ptr<Node>>();
     }
@@ -349,7 +349,7 @@ std::vector<std::shared_ptr<Node>> RoutingTable::getClosestNodes(const NodeID& t
 
 std::vector<std::shared_ptr<Node>> RoutingTable::getAllNodes() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             std::vector<std::shared_ptr<Node>> allNodes;
             for (const auto& bucket : m_buckets) {
                 auto bucketNodes = bucket.getNodes();
@@ -358,7 +358,7 @@ std::vector<std::shared_ptr<Node>> RoutingTable::getAllNodes() const {
 
             return allNodes;
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return std::vector<std::shared_ptr<Node>>();
     }
@@ -366,7 +366,7 @@ std::vector<std::shared_ptr<Node>> RoutingTable::getAllNodes() const {
 
 size_t RoutingTable::getNodeCount() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             size_t count = 0;
             for (const auto& bucket : m_buckets) {
                 count += bucket.getNodeCount();
@@ -374,7 +374,7 @@ size_t RoutingTable::getNodeCount() const {
 
             return count;
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return 0;
     }
@@ -382,7 +382,7 @@ size_t RoutingTable::getNodeCount() const {
 
 bool RoutingTable::saveToFile(const std::string& filePath) const {
     try {
-        return utils::withLock(m_mutex, [this, &filePath]() {
+        return utility::thread::withLock(m_mutex, [this, &filePath]() {
             std::ofstream file(filePath, std::ios::binary);
             if (!file) {
                 return false;
@@ -414,7 +414,7 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
             }
             return true;
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return false;
     }
@@ -422,7 +422,7 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
 
 bool RoutingTable::loadFromFile(const std::string& filePath) {
     try {
-        return utils::withLock(m_mutex, [this, &filePath]() {
+        return utility::thread::withLock(m_mutex, [this, &filePath]() {
             std::ifstream file(filePath, std::ios::binary);
             if (!file) {
                 return false;
@@ -466,7 +466,7 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
             }
             return true;
         }, "RoutingTable::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.RoutingTable", e.what());
         return false;
     }

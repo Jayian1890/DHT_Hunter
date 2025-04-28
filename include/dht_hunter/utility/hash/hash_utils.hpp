@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace dht_hunter::util {
+namespace dht_hunter::utility::hash {
 
 /**
  * @brief Computes the SHA-1 hash of the input data
@@ -29,19 +29,4 @@ std::array<uint8_t, 20> sha1(const std::vector<uint8_t>& data);
  */
 std::array<uint8_t, 20> sha1(const std::string& data);
 
-/**
- * @brief Converts a byte array to a hex string
- * @param data Pointer to the input data
- * @param length Length of the input data
- * @return The hex string representation
- */
-std::string bytesToHex(const uint8_t* data, size_t length);
-
-/**
- * @brief Converts a hex string to a byte vector
- * @param hex The hex string
- * @return The byte vector
- */
-std::vector<uint8_t> hexToBytes(const std::string& hex);
-
-} // namespace dht_hunter::util
+} // namespace dht_hunter::utility::hash

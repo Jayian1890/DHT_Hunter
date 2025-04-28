@@ -1,6 +1,8 @@
 #include "dht_hunter/dht/storage/token_manager.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
-#include "dht_hunter/util/hash.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
+#include "dht_hunter/utility/hash/hash_utils.hpp"
+#include "dht_hunter/utility/random/random_utils.hpp"
+#include "dht_hunter/utility/string/string_utils.hpp"
 #include <random>
 #include <sstream>
 #include <iomanip>
@@ -13,13 +15,13 @@ std::mutex TokenManager::s_instanceMutex;
 
 std::shared_ptr<TokenManager> TokenManager::getInstance(const DHTConfig& config) {
     try {
-        return utils::withLock(s_instanceMutex, [&config]() {
+        return utility::thread::withLock(s_instanceMutex, [&config]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<TokenManager>(new TokenManager(config));
             }
             return s_instance;
         }, "TokenManager::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TokenManager", e.what());
         return nullptr;
     }
@@ -38,12 +40,12 @@ TokenManager::~TokenManager() {
 
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "TokenManager::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TokenManager", e.what());
     }
 }
@@ -52,7 +54,7 @@ bool TokenManager::start() {
     bool shouldStartThread = false;
 
     try {
-        shouldStartThread = utils::withLock(m_mutex, [this]() {
+        shouldStartThread = utility::thread::withLock(m_mutex, [this]() {
             if (m_running) {
                 return false; // Thread already running
             }
@@ -60,7 +62,7 @@ bool TokenManager::start() {
             m_running = true;
             return true; // Need to start thread
         }, "TokenManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TokenManager", e.what());
         return false;
     }
@@ -77,7 +79,7 @@ void TokenManager::stop() {
     bool shouldJoinThread = false;
 
     try {
-        shouldJoinThread = utils::withLock(m_mutex, [this]() {
+        shouldJoinThread = utility::thread::withLock(m_mutex, [this]() {
             if (!m_running) {
                 return false; // No thread to join
             }
@@ -85,7 +87,7 @@ void TokenManager::stop() {
             m_running = false;
             return true; // Need to join thread
         }, "TokenManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TokenManager", e.what());
         return;
     }
@@ -107,12 +109,12 @@ bool TokenManager::isRunning() const {
 
 std::string TokenManager::generateToken(const network::EndPoint& endpoint) {
     try {
-        return utils::withLock(m_mutex, [this, &endpoint]() {
+        return utility::thread::withLock(m_mutex, [this, &endpoint]() {
             // Generate a token using the current secret
             // As per BEP-5, tokens are generated using the SHA1 hash of the IP address concatenated with a secret
             return computeToken(endpoint, m_currentSecret);
         }, "TokenManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TokenManager", e.what());
         return ""; // Return empty token on error
     }
@@ -120,7 +122,7 @@ std::string TokenManager::generateToken(const network::EndPoint& endpoint) {
 
 bool TokenManager::verifyToken(const std::string& token, const network::EndPoint& endpoint) {
     try {
-        return utils::withLock(m_mutex, [this, &token, &endpoint]() {
+        return utility::thread::withLock(m_mutex, [this, &token, &endpoint]() {
             // Check if the token matches the current secret
             std::string currentToken = computeToken(endpoint, m_currentSecret);
             if (token == currentToken) {
@@ -137,7 +139,7 @@ bool TokenManager::verifyToken(const std::string& token, const network::EndPoint
 
             return false;
         }, "TokenManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TokenManager", e.what());
         return false; // Fail closed on error
     }
@@ -145,7 +147,7 @@ bool TokenManager::verifyToken(const std::string& token, const network::EndPoint
 
 void TokenManager::rotateSecret() {
     try {
-        utils::withLock(m_mutex, [this]() {
+        utility::thread::withLock(m_mutex, [this]() {
             // Rotate the secrets
             // Keep the previous secret to verify tokens that were issued with it
             // As per BEP-5, tokens up to 10 minutes old should be accepted
@@ -153,7 +155,7 @@ void TokenManager::rotateSecret() {
             m_currentSecret = generateRandomSecret();
             m_lastRotation = std::chrono::steady_clock::now();
         }, "TokenManager::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.TokenManager", e.what());
     }
 }
@@ -174,19 +176,8 @@ void TokenManager::rotateSecretPeriodically() {
 }
 
 std::string TokenManager::generateRandomSecret() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 255);
-
-    // Generate a random secret
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0');
-
-    for (size_t i = 0; i < 20; ++i) {
-        ss << std::setw(2) << dis(gen);
-    }
-
-    return ss.str();
+    // Use the utility function to generate a random hex string
+    return utility::random::generateRandomHexString(20);
 }
 
 std::string TokenManager::computeToken(const network::EndPoint& endpoint, const std::string& secret) {
@@ -196,10 +187,10 @@ std::string TokenManager::computeToken(const network::EndPoint& endpoint, const 
     std::string data = endpoint.getAddress().toString() + ":" + std::to_string(endpoint.getPort()) + ":" + secret;
 
     // Compute the SHA-1 hash
-    auto hash = util::sha1(data);
+    auto hash = utility::hash::sha1(data);
 
-    // Convert the hash to a hex string
-    return util::bytesToHex(hash.data(), hash.size());
+    // Convert the hash to a hex string using the utility function
+    return utility::string::bytesToHex(hash.data(), hash.size());
 }
 
 } // namespace dht_hunter::dht

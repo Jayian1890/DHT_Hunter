@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace dht_hunter::util {
+namespace dht_hunter::utility::process {
 
 /**
  * @brief Utility functions for process information
@@ -24,4 +24,4 @@ public:
     static std::string formatSize(uint64_t bytes);
 };
 
-} // namespace dht_hunter::util
+} // namespace dht_hunter::utility::process

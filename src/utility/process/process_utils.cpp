@@ -1,4 +1,4 @@
-#include "dht_hunter/util/process_utils.hpp"
+#include "dht_hunter/utility/process/process_utils.hpp"
 #include <sstream>
 #include <iomanip>
 
@@ -13,7 +13,7 @@
 #include <sys/resource.h>
 #endif
 
-namespace dht_hunter::util {
+namespace dht_hunter::utility::process {
 
 uint64_t ProcessUtils::getMemoryUsage() {
     try {
@@ -69,4 +69,4 @@ std::string ProcessUtils::formatSize(uint64_t bytes) {
     return oss.str();
 }
 
-} // namespace dht_hunter::util
+} // namespace dht_hunter::utility::process

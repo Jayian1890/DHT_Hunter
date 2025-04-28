@@ -1,5 +1,5 @@
 #include "dht_hunter/types/node_id.hpp"
-#include "dht_hunter/util/hash.hpp"
+#include "dht_hunter/utility/hash/hash_utils.hpp"
 #include <iomanip>
 #include <random>
 #include <sstream>

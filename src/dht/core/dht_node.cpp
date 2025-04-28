@@ -1,5 +1,5 @@
 #include "dht_hunter/dht/core/dht_node.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 
 #include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
 #include "dht_hunter/dht/extensions/azureus_dht.hpp"

@@ -9,7 +9,7 @@
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 #include <algorithm>
 #include <random>
 
@@ -29,14 +29,14 @@ std::shared_ptr<PeerLookup> PeerLookup::getInstance(
     std::shared_ptr<PeerStorage> peerStorage) {
 
     try {
-        return utils::withLock(s_instanceMutex, [&]() {
+        return utility::thread::withLock(s_instanceMutex, [&]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<PeerLookup>(new PeerLookup(
                     config, nodeID, routingTable, transactionManager, messageSender, tokenManager, peerStorage));
             }
             return s_instance;
         }, "PeerLookup::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerLookup", e.what());
         return nullptr;
     }
@@ -120,7 +120,7 @@ void PeerLookup::announce(const InfoHash& infoHash, uint16_t port, std::function
 
 void PeerLookup::sendQueries(const std::string& lookupID) {
     try {
-        utils::withLock(m_mutex, [this, &lookupID]() {
+        utility::thread::withLock(m_mutex, [this, &lookupID]() {
             // Find the lookup
             auto it = m_lookups.find(lookupID);
             if (it == m_lookups.end()) {
@@ -181,7 +181,7 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
                 }
             }
         }, "PeerLookup::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerLookup", e.what());
     }
 }

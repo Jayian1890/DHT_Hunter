@@ -26,6 +26,7 @@ add_library(dht_hunter_dht
         node_lookup/node_lookup.cpp
         node_lookup/node_lookup_query_manager.cpp
         node_lookup/node_lookup_response_handler.cpp
+        # node_lookup_utils.cpp is now empty as implementation moved to util/node_utils.cpp
         node_lookup/node_lookup_utils.cpp
 
         # Peer Lookup components
@@ -33,6 +34,7 @@ add_library(dht_hunter_dht
         peer_lookup/peer_lookup_query_manager.cpp
         peer_lookup/peer_lookup_announce_manager.cpp
         peer_lookup/peer_lookup_response_handler.cpp
+        # peer_lookup_utils.cpp is now empty as implementation moved to util/node_utils.cpp
         peer_lookup/peer_lookup_utils.cpp
 
         # Storage components
@@ -75,9 +77,9 @@ target_compile_features(dht_hunter_dht
 target_link_libraries(dht_hunter_dht
         PUBLIC
         dht_hunter_types
+        dht_hunter_utility
         dht_hunter_network
         dht_hunter_unified_event
         dht_hunter_bencode
-        dht_hunter_util
 )
 

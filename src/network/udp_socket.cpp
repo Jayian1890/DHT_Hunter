@@ -1,5 +1,5 @@
 #include "dht_hunter/network/udp_socket.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 
 #include <thread>
@@ -136,10 +136,10 @@ public:
 
     void setReceiveCallback(std::function<void(const std::vector<uint8_t>&, const std::string&, uint16_t)> callback) {
         try {
-            utils::withLock(m_callbackMutex, [this, callback = std::move(callback)]() mutable {
+            utility::thread::withLock(m_callbackMutex, [this, callback = std::move(callback)]() mutable {
                 m_receiveCallback = std::move(callback);
             }, "UDPSocket::m_callbackMutex");
-        } catch (const utils::LockTimeoutException& e) {
+        } catch (const utility::thread::LockTimeoutException& e) {
             // Log the error
             unified_event::logError("Network.UDPSocket", e.what());
         }
@@ -219,7 +219,7 @@ private:
                 std::vector<uint8_t> data(buffer.data(), buffer.data() + bytesReceived);
 
                 try {
-                    utils::withLock(m_callbackMutex, [this, &data, &address, port]() {
+                    utility::thread::withLock(m_callbackMutex, [this, &data, &address, port]() {
                         if (m_receiveCallback) {
                             try {
                                 m_receiveCallback(data, address, port);
@@ -228,7 +228,7 @@ private:
                             }
                         }
                     }, "UDPSocket::m_callbackMutex");
-                } catch (const utils::LockTimeoutException& e) {
+                } catch (const utility::thread::LockTimeoutException& e) {
                     unified_event::logError("Network.UDPSocket", "Failed to acquire lock in receive loop: " + std::string(e.what()));
                 }
             } else if (bytesReceived < 0) {

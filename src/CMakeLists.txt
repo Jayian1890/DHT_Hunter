@@ -1,6 +1,6 @@
 # Add all components in the correct dependency order
 add_subdirectory(types)     # Types component
-add_subdirectory(util)      # Utility functions
+add_subdirectory(utility)   # Utility functions
 add_subdirectory(network)   # Network component
 add_subdirectory(bencode)   # Bencode component
 add_subdirectory(dht)       # DHT component
@@ -21,7 +21,7 @@ add_executable(dht_hunter main.cpp)
 target_link_libraries(dht_hunter
         PRIVATE
         dht_hunter_types
-        dht_hunter_util
+        dht_hunter_utility
         dht_hunter_network
         dht_hunter_dht
         dht_hunter_bittorrent

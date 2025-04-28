@@ -22,6 +22,7 @@ target_compile_features(dht_hunter_network
 target_link_libraries(dht_hunter_network
         PUBLIC
         dht_hunter_types         # Types module
+        dht_hunter_utility       # Utility module
         dht_hunter_unified_event  # Unified event system
 )
 

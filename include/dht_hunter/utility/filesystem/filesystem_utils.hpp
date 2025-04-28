@@ -6,7 +6,7 @@
 #include <optional>
 #include <iostream>
 
-namespace dht_hunter::util {
+namespace dht_hunter::utility::filesystem {
 
 /**
  * Utility class for filesystem operations
@@ -68,4 +68,4 @@ public:
     static void setTerminalTitle(const std::string& title);
 };
 
-} // namespace dht_hunter::util
+} // namespace dht_hunter::utility::filesystem

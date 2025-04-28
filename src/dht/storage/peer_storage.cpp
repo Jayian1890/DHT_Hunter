@@ -1,6 +1,6 @@
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
-#include "dht_hunter/utils/lock_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
 
 namespace dht_hunter::dht {
 
@@ -10,13 +10,13 @@ std::mutex PeerStorage::s_instanceMutex;
 
 std::shared_ptr<PeerStorage> PeerStorage::getInstance(const DHTConfig& config) {
     try {
-        return utils::withLock(s_instanceMutex, [&config]() {
+        return utility::thread::withLock(s_instanceMutex, [&config]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<PeerStorage>(new PeerStorage(config));
             }
             return s_instance;
         }, "PeerStorage::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
         return nullptr;
     }
@@ -33,12 +33,12 @@ PeerStorage::~PeerStorage() {
 
     // Clear the singleton instance
     try {
-        utils::withLock(s_instanceMutex, [this]() {
+        utility::thread::withLock(s_instanceMutex, [this]() {
             if (s_instance.get() == this) {
                 s_instance.reset();
             }
         }, "PeerStorage::s_instanceMutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
     }
 }
@@ -85,7 +85,7 @@ bool dht_hunter::dht::PeerStorage::isRunning() const {
 
 void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_hunter::network::EndPoint& endpoint) {
     try {
-        utils::withLock(m_mutex, [this, &infoHash, &endpoint]() {
+        utility::thread::withLock(m_mutex, [this, &infoHash, &endpoint]() {
             // Check if the info hash exists
             auto it = m_peers.find(infoHash);
             if (it == m_peers.end()) {
@@ -107,7 +107,7 @@ void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_h
             // Add the peer to the list
             peers.push_back(TimestampedPeer(endpoint));
         }, "PeerStorage::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
     }
 
@@ -124,7 +124,7 @@ void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_h
 
 std::vector<dht_hunter::network::EndPoint> dht_hunter::dht::PeerStorage::getPeers(const InfoHash& infoHash) {
     try {
-        return utils::withLock(m_mutex, [this, &infoHash]() {
+        return utility::thread::withLock(m_mutex, [this, &infoHash]() {
             // Check if the info hash exists
             auto it = m_peers.find(infoHash);
             if (it == m_peers.end()) {
@@ -139,7 +139,7 @@ std::vector<dht_hunter::network::EndPoint> dht_hunter::dht::PeerStorage::getPeer
 
             return endpoints;
         }, "PeerStorage::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
         return std::vector<dht_hunter::network::EndPoint>{};
     }
@@ -147,10 +147,10 @@ std::vector<dht_hunter::network::EndPoint> dht_hunter::dht::PeerStorage::getPeer
 
 size_t dht_hunter::dht::PeerStorage::getInfoHashCount() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             return m_peers.size();
         }, "PeerStorage::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
         return 0;
     }
@@ -158,7 +158,7 @@ size_t dht_hunter::dht::PeerStorage::getInfoHashCount() const {
 
 size_t dht_hunter::dht::PeerStorage::getPeerCount(const InfoHash& infoHash) const {
     try {
-        return utils::withLock(m_mutex, [this, &infoHash]() {
+        return utility::thread::withLock(m_mutex, [this, &infoHash]() {
             // Check if the info hash exists
             auto it = m_peers.find(infoHash);
             if (it == m_peers.end()) {
@@ -167,7 +167,7 @@ size_t dht_hunter::dht::PeerStorage::getPeerCount(const InfoHash& infoHash) cons
 
             return it->second.size();
         }, "PeerStorage::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
         return 0;
     }
@@ -175,7 +175,7 @@ size_t dht_hunter::dht::PeerStorage::getPeerCount(const InfoHash& infoHash) cons
 
 size_t dht_hunter::dht::PeerStorage::getTotalPeerCount() const {
     try {
-        return utils::withLock(m_mutex, [this]() {
+        return utility::thread::withLock(m_mutex, [this]() {
             size_t count = 0;
             for (const auto& entry : m_peers) {
                 count += entry.second.size();
@@ -183,7 +183,7 @@ size_t dht_hunter::dht::PeerStorage::getTotalPeerCount() const {
 
             return count;
         }, "PeerStorage::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
         return 0;
     }
@@ -191,7 +191,7 @@ size_t dht_hunter::dht::PeerStorage::getTotalPeerCount() const {
 
 void dht_hunter::dht::PeerStorage::cleanupExpiredPeers() {
     try {
-        utils::withLock(m_mutex, [this]() {
+        utility::thread::withLock(m_mutex, [this]() {
             auto now = std::chrono::steady_clock::now();
 
             // Iterate over all info hashes
@@ -215,7 +215,7 @@ void dht_hunter::dht::PeerStorage::cleanupExpiredPeers() {
                 }
             }
         }, "PeerStorage::m_mutex");
-    } catch (const utils::LockTimeoutException& e) {
+    } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
     }
 }
