@@ -203,8 +203,14 @@ size_t KBucket::getPrefix() const {
 }
 
 std::chrono::steady_clock::time_point KBucket::getLastChanged() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_lastChanged;
+    try {
+        return utility::thread::withLock(m_mutex, [this]() {
+            return m_lastChanged;
+        }, "KBucket::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.RoutingTable", e.what());
+        return std::chrono::steady_clock::now(); // Return current time as fallback
+    }
 }
 
 void KBucket::updateLastChanged() {
@@ -525,24 +531,37 @@ void RoutingTable::splitBucket(size_t bucketIndex) {
 }
 
 bool RoutingTable::needsRefresh(size_t bucketIndex) const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        return utility::thread::withLock(m_mutex, [this, bucketIndex]() {
+            if (bucketIndex >= m_buckets.size()) {
+                return false;
+            }
 
-    if (bucketIndex >= m_buckets.size()) {
-        return false;
+            // According to BEP-5, buckets that have not been changed in 15 minutes should be refreshed
+            auto now = std::chrono::steady_clock::now();
+            auto lastChanged = m_buckets[bucketIndex].getLastChanged();
+            auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(now - lastChanged).count();
+
+            return elapsed >= 15; // 15 minutes as specified in BEP-5
+        }, "RoutingTable::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.RoutingTable", e.what());
+        return false; // Assume no refresh needed on error
     }
-
-    // According to BEP-5, buckets that have not been changed in 15 minutes should be refreshed
-    auto now = std::chrono::steady_clock::now();
-    auto lastChanged = m_buckets[bucketIndex].getLastChanged();
-    auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(now - lastChanged).count();
-
-    return elapsed >= 15; // 15 minutes as specified in BEP-5
 }
 
 void RoutingTable::refreshBucket(size_t bucketIndex, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    if (bucketIndex >= m_buckets.size()) {
+    try {
+        utility::thread::withLock(m_mutex, [this, bucketIndex, &callback]() {
+            if (bucketIndex >= m_buckets.size()) {
+                if (callback) {
+                    callback({});
+                }
+                return;
+            }
+        }, "RoutingTable::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.RoutingTable", e.what());
         if (callback) {
             callback({});
         }
@@ -574,47 +593,58 @@ void RoutingTable::refreshBucket(size_t bucketIndex, std::function<void(const st
         std::vector<std::shared_ptr<Node>> nodesInBucket;
 
         // Re-acquire the lock to access the bucket
-        std::lock_guard<std::mutex> newLock(m_mutex);
-
-        if (bucketIndex < m_buckets.size()) {
-            nodesInBucket = m_buckets[bucketIndex].getNodes();
+        try {
+            utility::thread::withLock(m_mutex, [this, bucketIndex, &nodesInBucket]() {
+                if (bucketIndex < m_buckets.size()) {
+                    nodesInBucket = m_buckets[bucketIndex].getNodes();
+                }
+            }, "RoutingTable::m_mutex");
+        } catch (const utility::thread::LockTimeoutException& e) {
+            unified_event::logError("DHT.RoutingTable", e.what());
         }
-
-        // Release the lock before calling the callback
-        newLock.~lock_guard();
 
         callback(nodesInBucket);
     }
 }
 
 size_t RoutingTable::getBucketCount() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_buckets.size();
+    try {
+        return utility::thread::withLock(m_mutex, [this]() {
+            return m_buckets.size();
+        }, "RoutingTable::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.RoutingTable", e.what());
+        return 0; // Return 0 as fallback
+    }
 }
 
 size_t RoutingTable::getBucketIndex(const NodeID& nodeID) const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        return utility::thread::withLock(m_mutex, [this, &nodeID]() {
+            // Calculate the distance between our node ID and the given node ID
+            NodeID distance = m_ownID.distanceTo(nodeID);
 
-    // Calculate the distance between our node ID and the given node ID
-    NodeID distance = m_ownID.distanceTo(nodeID);
-
-    // Find the index of the first bit that is 1 in the distance
-    // This is the bucket index
-    size_t bucketIndex = 0;
-    // NodeID is a 20-byte array
-    for (size_t i = 0; i < 20; ++i) {
-        for (size_t j = 7; j >= 0 && j < 8; --j) { // Ensure j is unsigned and doesn't underflow
-            if ((distance[i] & (1 << j)) != 0) {
-                // Found a 1 bit, this is the bucket index
-                bucketIndex = (i * 8) + (7 - j);
-                return std::min(bucketIndex, m_buckets.size() - 1);
+            // Find the index of the first bit that is 1 in the distance
+            // This is the bucket index
+            size_t bucketIndex = 0;
+            // NodeID is a 20-byte array
+            for (size_t i = 0; i < 20; ++i) {
+                for (size_t j = 7; j >= 0 && j < 8; --j) { // Ensure j is unsigned and doesn't underflow
+                    if ((distance[i] & (1 << j)) != 0) {
+                        // Found a 1 bit, this is the bucket index
+                        bucketIndex = (i * 8) + (7 - j);
+                        return std::min(bucketIndex, m_buckets.size() - 1);
+                    }
+                }
             }
-        }
-    }
 
-    // If the distance is 0 (same node ID), use the first bucket
-    return 0;
-}
+            // If no 1 bit is found, return the last bucket
+            return m_buckets.size() - 1;
+        }, "RoutingTable::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.RoutingTable", e.what());
+        return 0; // Return 0 as fallback
+    }
 
 NodeID RoutingTable::generateRandomIDInBucket(size_t bucketIndex) const {
     // Generate a random ID in the range of the bucket
