@@ -5,7 +5,7 @@ namespace dht_hunter::dht {
 
 // Initialize static members
 std::shared_ptr<SocketManager> SocketManager::s_instance = nullptr;
-std::mutex SocketManager::s_instanceMutex;
+std::recursive_mutex SocketManager::s_instanceMutex;
 
 std::shared_ptr<SocketManager> SocketManager::getInstance(const DHTConfig& config) {
     try {

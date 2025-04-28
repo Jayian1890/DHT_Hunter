@@ -78,13 +78,13 @@ private:
 
     // Static instance for singleton pattern
     static std::shared_ptr<SocketManager> s_instance;
-    static std::mutex s_instanceMutex;
+    static std::recursive_mutex s_instanceMutex;
 
     DHTConfig m_config;
     uint16_t m_port;
     std::atomic<bool> m_running;
     std::unique_ptr<network::UDPSocket> m_socket;
-    std::mutex m_mutex;    // Logger removed
+    std::recursive_mutex m_mutex;    // Logger removed
 };
 
 } // namespace dht_hunter::dht

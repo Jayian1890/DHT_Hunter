@@ -244,7 +244,7 @@ private:
     SOCKET m_socket;
     std::atomic<bool> m_running;
     std::thread m_receiveThread;
-    std::mutex m_callbackMutex;
+    std::recursive_mutex m_callbackMutex;
     std::function<void(const std::vector<uint8_t>&, const std::string&, uint16_t)> m_receiveCallback;
 };
 
