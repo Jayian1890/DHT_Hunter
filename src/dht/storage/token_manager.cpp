@@ -1,4 +1,5 @@
 #include "dht_hunter/dht/storage/token_manager.hpp"
+#include "dht_hunter/utils/lock_utils.hpp"
 #include "dht_hunter/util/hash.hpp"
 #include <random>
 #include <sstream>
@@ -11,13 +12,17 @@ std::shared_ptr<TokenManager> TokenManager::s_instance = nullptr;
 std::mutex TokenManager::s_instanceMutex;
 
 std::shared_ptr<TokenManager> TokenManager::getInstance(const DHTConfig& config) {
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-
-    if (!s_instance) {
-        s_instance = std::shared_ptr<TokenManager>(new TokenManager(config));
+    try {
+        return utils::withLock(s_instanceMutex, [&config]() {
+            if (!s_instance) {
+                s_instance = std::shared_ptr<TokenManager>(new TokenManager(config));
+            }
+            return s_instance;
+        }, "TokenManager::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.TokenManager", e.what());
+        return nullptr;
     }
-
-    return s_instance;
 }
 
 TokenManager::TokenManager(const DHTConfig& config)
@@ -32,37 +37,63 @@ TokenManager::~TokenManager() {
     stop();
 
     // Clear the singleton instance
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-    if (s_instance.get() == this) {
-        s_instance.reset();
+    try {
+        utils::withLock(s_instanceMutex, [this]() {
+            if (s_instance.get() == this) {
+                s_instance.reset();
+            }
+        }, "TokenManager::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.TokenManager", e.what());
     }
 }
 
 bool TokenManager::start() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    bool shouldStartThread = false;
 
-    if (m_running) {
-        return true;
+    try {
+        shouldStartThread = utils::withLock(m_mutex, [this]() {
+            if (m_running) {
+                return false; // Thread already running
+            }
+
+            m_running = true;
+            return true; // Need to start thread
+        }, "TokenManager::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.TokenManager", e.what());
+        return false;
     }
 
-    m_running = true;
-
-    // Start the rotation thread
-    m_rotationThread = std::thread(&TokenManager::rotateSecretPeriodically, this);
+    // Start the rotation thread if needed
+    if (shouldStartThread) {
+        m_rotationThread = std::thread(&TokenManager::rotateSecretPeriodically, this);
+    }
 
     return true;
 }
 
 void TokenManager::stop() {
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
+    bool shouldJoinThread = false;
 
-        if (!m_running) {
-            return;
-        }
+    try {
+        shouldJoinThread = utils::withLock(m_mutex, [this]() {
+            if (!m_running) {
+                return false; // No thread to join
+            }
 
-        m_running = false;
-    } // Release the lock before joining the thread
+            m_running = false;
+            return true; // Need to join thread
+        }, "TokenManager::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.TokenManager", e.what());
+        return;
+    }
+
+    // Only join the thread if we actually stopped it
+    if (!shouldJoinThread) {
+        return;
+    }
 
     // Wait for the rotation thread to finish
     if (m_rotationThread.joinable()) {
@@ -75,42 +106,56 @@ bool TokenManager::isRunning() const {
 }
 
 std::string TokenManager::generateToken(const network::EndPoint& endpoint) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    // Generate a token using the current secret
-    // As per BEP-5, tokens are generated using the SHA1 hash of the IP address concatenated with a secret
-    return computeToken(endpoint, m_currentSecret);
+    try {
+        return utils::withLock(m_mutex, [this, &endpoint]() {
+            // Generate a token using the current secret
+            // As per BEP-5, tokens are generated using the SHA1 hash of the IP address concatenated with a secret
+            return computeToken(endpoint, m_currentSecret);
+        }, "TokenManager::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.TokenManager", e.what());
+        return ""; // Return empty token on error
+    }
 }
 
 bool TokenManager::verifyToken(const std::string& token, const network::EndPoint& endpoint) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        return utils::withLock(m_mutex, [this, &token, &endpoint]() {
+            // Check if the token matches the current secret
+            std::string currentToken = computeToken(endpoint, m_currentSecret);
+            if (token == currentToken) {
+                return true;
+            }
 
-    // Check if the token matches the current secret
-    std::string currentToken = computeToken(endpoint, m_currentSecret);
-    if (token == currentToken) {
-        return true;
+            // Check if the token matches the previous secret
+            // As per BEP-5, tokens must be accepted for a reasonable amount of time after they have been distributed
+            // BEP-5 recommends accepting tokens up to 10 minutes old
+            std::string previousToken = computeToken(endpoint, m_previousSecret);
+            if (token == previousToken) {
+                return true;
+            }
+
+            return false;
+        }, "TokenManager::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.TokenManager", e.what());
+        return false; // Fail closed on error
     }
-
-    // Check if the token matches the previous secret
-    // As per BEP-5, tokens must be accepted for a reasonable amount of time after they have been distributed
-    // BEP-5 recommends accepting tokens up to 10 minutes old
-    std::string previousToken = computeToken(endpoint, m_previousSecret);
-    if (token == previousToken) {
-        return true;
-    }
-
-    return false;
 }
 
 void TokenManager::rotateSecret() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    // Rotate the secrets
-    // Keep the previous secret to verify tokens that were issued with it
-    // As per BEP-5, tokens up to 10 minutes old should be accepted
-    m_previousSecret = m_currentSecret;
-    m_currentSecret = generateRandomSecret();
-    m_lastRotation = std::chrono::steady_clock::now();
+    try {
+        utils::withLock(m_mutex, [this]() {
+            // Rotate the secrets
+            // Keep the previous secret to verify tokens that were issued with it
+            // As per BEP-5, tokens up to 10 minutes old should be accepted
+            m_previousSecret = m_currentSecret;
+            m_currentSecret = generateRandomSecret();
+            m_lastRotation = std::chrono::steady_clock::now();
+        }, "TokenManager::m_mutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.TokenManager", e.what());
+    }
 }
 
 void TokenManager::rotateSecretPeriodically() {
