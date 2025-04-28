@@ -31,17 +31,17 @@ public:
      *
      * @param mutex The mutex to lock
      * @param lockName The name of the lock (for debugging)
-     * @param timeoutMs The timeout in milliseconds (default: 1000)
-     * @param maxRetries The maximum number of retries (default: 3)
+     * @param timeoutMs The timeout in milliseconds (default: 5000)
+     * @param maxRetries The maximum number of retries (default: 10)
      * @throws LockTimeoutException if the lock cannot be acquired after all retries
      */
     SafeLockGuard(std::mutex& mutex, const std::string& lockName = "unnamed",
-                 unsigned int timeoutMs = 1000, unsigned int maxRetries = 3)
+                 unsigned int timeoutMs = 5000, unsigned int maxRetries = 10)
         : m_mutex(mutex), m_locked(false) {
 
         // Try to acquire the lock with retries
         for (unsigned int attempt = 0; attempt <= maxRetries; ++attempt) {
-            // Try to acquire the lock with timeout
+            // Try to acquire the lock
             if (mutex.try_lock()) {
                 m_locked = true;
                 return;
@@ -84,15 +84,15 @@ private:
  * @param mutex The mutex to lock
  * @param func The function to execute while the lock is held
  * @param lockName The name of the lock (for debugging)
- * @param timeoutMs The timeout in milliseconds (default: 1000)
- * @param maxRetries The maximum number of retries (default: 3)
+ * @param timeoutMs The timeout in milliseconds (default: 5000)
+ * @param maxRetries The maximum number of retries (default: 10)
  * @return The result of the function
  * @throws LockTimeoutException if the lock cannot be acquired after all retries
  * @throws Any exception thrown by the function
  */
 template <typename Func>
 auto withLock(std::mutex& mutex, Func func, const std::string& lockName = "unnamed",
-             unsigned int timeoutMs = 1000, unsigned int maxRetries = 3)
+             unsigned int timeoutMs = 5000, unsigned int maxRetries = 10)
     -> decltype(func()) {
     SafeLockGuard guard(mutex, lockName, timeoutMs, maxRetries);
     return func();
