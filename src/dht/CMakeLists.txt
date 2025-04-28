@@ -8,6 +8,7 @@ add_library(dht_hunter_dht
         core/dht_config.cpp
         core/dht_constants.cpp
         core/routing_table.cpp
+        core/persistence_manager.cpp
 
         # Network components
         network/socket_manager.cpp

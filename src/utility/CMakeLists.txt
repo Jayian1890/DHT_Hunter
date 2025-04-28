@@ -21,6 +21,9 @@ add_library(dht_hunter_utility
 
         # Process utilities
         process/process_utils.cpp
+
+        # JSON utilities
+        json/json_utility.cpp
 )
 
 # Set include directories

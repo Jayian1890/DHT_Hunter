@@ -163,6 +163,12 @@ public:
      */
     std::shared_ptr<RoutingManager> getRoutingManager() const;
 
+    /**
+     * @brief Gets the peer storage
+     * @return The peer storage
+     */
+    std::shared_ptr<PeerStorage> getPeerStorage() const;
+
 private:
     /**
      * @brief Saves the routing table periodically

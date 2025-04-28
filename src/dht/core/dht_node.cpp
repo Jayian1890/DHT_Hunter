@@ -820,4 +820,10 @@ std::shared_ptr<RoutingManager> DHTNode::getRoutingManager() const {
     return m_routingManager;
 }
 
+std::shared_ptr<PeerStorage> DHTNode::getPeerStorage() const {
+    unified_event::logTrace("DHT.Node", "TRACE: getPeerStorage() called");
+    unified_event::logTrace("DHT.Node", "TRACE: getPeerStorage() returning peer storage instance");
+    return m_peerStorage;
+}
+
 }  // namespace dht_hunter::dht

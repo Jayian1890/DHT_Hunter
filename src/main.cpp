@@ -20,6 +20,7 @@
 #include "dht_hunter/dht/core/dht_node.hpp"
 #include "dht_hunter/dht/services/statistics_service.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
+#include "dht_hunter/dht/core/persistence_manager.hpp"
 
 // Project includes - Network module
 #include "dht_hunter/network/udp_server.hpp"
@@ -127,13 +128,30 @@ int main(int argc, char* argv[]) {
     loggingConfig.minSeverity = verbose ? dht_hunter::types::EventSeverity::Trace : dht_hunter::types::EventSeverity::Debug;
     dht_hunter::unified_event::configureLoggingProcessor(loggingConfig);
 
+    // Initialize the persistence manager
+    auto persistenceManager = dht_hunter::dht::PersistenceManager::getInstance(configDir);
+
     // Set the routing table path to be in the config directory
     dhtConfig.setRoutingTablePath(dhtConfig.getFullPath("routing_table.dat"));
 
     // Create and start a DHT node
     g_dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(dhtConfig);
     if (!g_dhtNode->start()) {
+        std::cerr << "Failed to start DHT node" << std::endl;
         return 1;
+    }
+
+    // Start the persistence manager
+    if (persistenceManager) {
+        auto routingTable = g_dhtNode->getRoutingTable();
+        auto peerStorage = g_dhtNode->getPeerStorage();
+        if (!persistenceManager->start(routingTable, peerStorage)) {
+            std::cerr << "Warning: Failed to start persistence manager" << std::endl;
+        } else {
+            std::cout << "Persistence manager started" << std::endl;
+        }
+    } else {
+        std::cerr << "Warning: Failed to get persistence manager instance" << std::endl;
     }
 
     // Wait for the node to bootstrap
@@ -181,6 +199,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Clean up resources
+    if (persistenceManager) {
+        persistenceManager->stop();
+    }
+
     if (g_dhtNode) {
         g_dhtNode->stop();
         g_dhtNode.reset();
