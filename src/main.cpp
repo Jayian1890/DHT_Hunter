@@ -36,10 +36,8 @@ void signalHandler(int signal) {
     std::cout << "Received signal " << signal << ", shutting down gracefully..." << std::endl;
     g_running = false;
 
-    // Stop the DHT node if it's running
-    if (g_dhtNode) {
-        g_dhtNode->stop();
-    }
+    // Don't call stop() here - we'll do it in the main thread
+    // This avoids mutex issues in signal handlers
 }
 
 /**
