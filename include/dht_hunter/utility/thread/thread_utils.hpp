@@ -153,8 +153,12 @@ public:
     RecursiveSafeLockGuard(std::recursive_mutex& mutex, const std::string& lockName = "unnamed")
         : m_mutex(&mutex) {
 
-        mutex.lock();
-        m_locked = true;
+        try {
+            mutex.lock();
+            m_locked = true;
+        } catch (const std::system_error& e) {
+            throw LockTimeoutException("Failed to acquire lock '" + lockName + "': " + e.what());
+        }
     }
 
     /**
