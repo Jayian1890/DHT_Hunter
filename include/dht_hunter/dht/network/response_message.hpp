@@ -150,7 +150,7 @@ public:
      * @param peers The peers
      * @param token The token
      */
-    GetPeersResponse(const std::string& transactionID, const NodeID& nodeID, const std::vector<network::EndPoint>& peers, const std::string& token);
+    GetPeersResponse(const std::string& transactionID, const NodeID& nodeID, const std::vector<EndPoint>& peers, const std::string& token);
 
     /**
      * @brief Gets the nodes
@@ -162,7 +162,7 @@ public:
      * @brief Gets the peers
      * @return The peers
      */
-    const std::vector<network::EndPoint>& getPeers() const;
+    const std::vector<EndPoint>& getPeers() const;
 
     /**
      * @brief Gets the token
@@ -200,7 +200,7 @@ protected:
 
 private:
     std::vector<std::shared_ptr<Node>> m_nodes;
-    std::vector<network::EndPoint> m_peers;
+    std::vector<EndPoint> m_peers;
     std::string m_token;
     bool m_hasNodes;
     bool m_hasPeers;

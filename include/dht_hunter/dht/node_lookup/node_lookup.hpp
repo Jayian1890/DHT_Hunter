@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/types/dht_types.hpp"
+#include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/message.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
@@ -19,6 +19,22 @@ namespace dht_hunter::dht {
 class RoutingTable;
 class TransactionManager;
 class MessageSender;
+
+/**
+ * @brief A lookup state for node lookups
+ */
+struct NodeLookupState {
+    NodeID targetID;
+    std::vector<std::shared_ptr<Node>> nodes;
+    std::unordered_set<std::string> queriedNodes;
+    std::unordered_set<std::string> respondedNodes;
+    std::unordered_set<std::string> activeQueries;
+    size_t iteration;
+    std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback;
+
+    NodeLookupState(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback)
+        : targetID(targetID), iteration(0), callback(callback) {}
+};
 
 /**
  * @brief Performs a node lookup (Singleton)
@@ -105,22 +121,6 @@ private:
     void completeLookup(const std::string& lookupID);
 
     /**
-     * @brief A lookup state
-     */
-    struct Lookup {
-        NodeID targetID;
-        std::vector<std::shared_ptr<Node>> nodes;
-        std::unordered_set<std::string> queriedNodes;
-        std::unordered_set<std::string> respondedNodes;
-        std::unordered_set<std::string> activeQueries;
-        size_t iteration;
-        std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback;
-
-        Lookup(const NodeID& targetID, std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback)
-            : targetID(targetID), iteration(0), callback(callback) {}
-    };
-
-    /**
      * @brief Private constructor for singleton pattern
      */
     NodeLookup(const DHTConfig& config,
@@ -138,8 +138,8 @@ private:
     std::shared_ptr<RoutingTable> m_routingTable;
     std::shared_ptr<TransactionManager> m_transactionManager;
     std::shared_ptr<MessageSender> m_messageSender;
-    std::unordered_map<std::string, Lookup> m_lookups;
-    std::mutex m_mutex;    // Logger removed
+    std::unordered_map<std::string, NodeLookupState> m_lookups;
+    std::mutex m_mutex;
 };
 
 } // namespace dht_hunter::dht

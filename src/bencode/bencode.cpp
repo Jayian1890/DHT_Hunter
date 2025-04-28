@@ -1,13 +1,7 @@
 #include "dht_hunter/bencode/bencode.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
 #include <sstream>
 #include <algorithm>
-
-namespace {
-    dht_hunter::logforge::LogForge& getLogger() {
-        return dht_hunter::logforge::LogForge::getInstance();
-    }
-}
+#include <iostream>
 
 
 
@@ -240,7 +234,7 @@ std::shared_ptr<BencodeValue> BencodeDecoder::decode(const std::string& data) {
     if (pos != data.size()) {
         std::stringstream ss;
         ss << "Decoded only " << pos << " of " << data.size() << " bytes";
-        getLogger().warning("Bencode.Parser", ss.str());
+        std::cerr << "[WARNING] [Bencode.Parser] " << ss.str() << std::endl;
     }
     return result;
 }

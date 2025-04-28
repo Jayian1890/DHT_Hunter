@@ -1,6 +1,7 @@
 #pragma once
 
-#include "dht_hunter/dht/types/dht_types.hpp"
+#include "dht_hunter/types/message_types.hpp"
+#include "dht_hunter/types/endpoint.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/network/network_address.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
@@ -12,21 +13,8 @@
 
 namespace dht_hunter::bittorrent {
 
-/**
- * @brief BitTorrent message IDs
- */
-enum class BTMessageID : uint8_t {
-    CHOKE = 0,
-    UNCHOKE = 1,
-    INTERESTED = 2,
-    NOT_INTERESTED = 3,
-    HAVE = 4,
-    BITFIELD = 5,
-    REQUEST = 6,
-    PIECE = 7,
-    CANCEL = 8,
-    PORT = 9  // DHT port message
-};
+// Use the BTMessageID from the Types module
+using BTMessageID = types::BTMessageID;
 
 /**
  * @class BTMessageHandler

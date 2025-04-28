@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/unified_event/event.hpp"
-#include "dht_hunter/dht/types/dht_types.hpp"
+#include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/network/network_address.hpp"
 #include <string>
 

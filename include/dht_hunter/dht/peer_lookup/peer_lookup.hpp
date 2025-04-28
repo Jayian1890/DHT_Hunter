@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/types/dht_types.hpp"
+#include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/message.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
@@ -21,6 +21,43 @@ class TransactionManager;
 class MessageSender;
 class TokenManager;
 class PeerStorage;
+
+/**
+ * @brief A lookup state for peer lookups
+ */
+struct PeerLookupState {
+    InfoHash infoHash;
+    std::vector<std::shared_ptr<Node>> nodes;
+    std::vector<network::EndPoint> peers;
+    std::unordered_set<std::string> queriedNodes;
+    std::unordered_set<std::string> respondedNodes;
+    std::unordered_set<std::string> activeQueries;
+    std::unordered_map<std::string, std::string> nodeTokens;
+    std::unordered_set<std::string> announcedNodes;
+    std::unordered_set<std::string> activeAnnouncements;
+    size_t iteration;
+    uint16_t port;
+    std::function<void(const std::vector<network::EndPoint>&)> lookupCallback;
+    std::function<void(bool)> announceCallback;
+    bool announcing;
+
+    /**
+     * @brief Constructor for a lookup operation
+     * @param infoHash The info hash to look up
+     * @param callback The callback to call with the result
+     */
+    PeerLookupState(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback)
+        : infoHash(infoHash), iteration(0), lookupCallback(callback), announcing(false) {}
+
+    /**
+     * @brief Constructor for an announce operation
+     * @param infoHash The info hash to announce
+     * @param port The port to announce
+     * @param callback The callback to call with the result
+     */
+    PeerLookupState(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback)
+        : infoHash(infoHash), iteration(0), port(port), announceCallback(callback), announcing(true) {}
+};
 
 /**
  * @brief Performs a peer lookup (Singleton)
@@ -155,32 +192,6 @@ private:
     void completeAnnouncement(const std::string& lookupID, bool success);
 
     /**
-     * @brief A lookup state
-     */
-    struct Lookup {
-        InfoHash infoHash;
-        std::vector<std::shared_ptr<Node>> nodes;
-        std::vector<network::EndPoint> peers;
-        std::unordered_set<std::string> queriedNodes;
-        std::unordered_set<std::string> respondedNodes;
-        std::unordered_set<std::string> activeQueries;
-        std::unordered_map<std::string, std::string> nodeTokens;
-        std::unordered_set<std::string> announcedNodes;
-        std::unordered_set<std::string> activeAnnouncements;
-        size_t iteration;
-        uint16_t port;
-        std::function<void(const std::vector<network::EndPoint>&)> lookupCallback;
-        std::function<void(bool)> announceCallback;
-        bool announcing;
-
-        Lookup(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback)
-            : infoHash(infoHash), iteration(0), lookupCallback(callback), announcing(false) {}
-
-        Lookup(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback)
-            : infoHash(infoHash), iteration(0), port(port), announceCallback(callback), announcing(true) {}
-    };
-
-    /**
      * @brief Private constructor for singleton pattern
      */
     PeerLookup(const DHTConfig& config,
@@ -202,8 +213,8 @@ private:
     std::shared_ptr<MessageSender> m_messageSender;
     std::shared_ptr<TokenManager> m_tokenManager;
     std::shared_ptr<PeerStorage> m_peerStorage;
-    std::unordered_map<std::string, Lookup> m_lookups;
-    std::mutex m_mutex;    // Logger removed
+    std::unordered_map<std::string, PeerLookupState> m_lookups;
+    std::mutex m_mutex;
 };
 
 } // namespace dht_hunter::dht

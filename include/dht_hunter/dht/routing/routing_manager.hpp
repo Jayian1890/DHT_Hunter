@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/types/dht_types.hpp"
+#include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/routing/node_verifier.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"

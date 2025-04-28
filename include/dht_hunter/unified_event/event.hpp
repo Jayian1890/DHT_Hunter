@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dht_hunter/unified_event/event_types_adapter.hpp"
 #include <string>
 #include <memory>
 #include <chrono>
@@ -7,60 +8,6 @@
 #include <any>
 
 namespace dht_hunter::unified_event {
-
-/**
- * @brief Event severity levels
- */
-enum class EventSeverity {
-    Debug,      // Detailed information for debugging
-    Info,       // General information about system operation
-    Warning,    // Potential issues that don't affect normal operation
-    Error,      // Errors that affect operation but don't require immediate action
-    Critical    // Critical errors that require immediate attention
-};
-
-/**
- * @brief Event types for the unified event system
- */
-enum class EventType {
-    // System events
-    SystemStarted,
-    SystemStopped,
-    SystemError,
-
-    // Node events
-    NodeDiscovered,
-    NodeAdded,
-    NodeRemoved,
-    NodeUpdated,
-
-    // Routing table events
-    BucketRefreshed,
-    BucketSplit,
-    RoutingTableSaved,
-    RoutingTableLoaded,
-
-    // Message events
-    MessageSent,
-    MessageReceived,
-    MessageError,
-
-    // Lookup events
-    LookupStarted,
-    LookupProgress,
-    LookupCompleted,
-    LookupFailed,
-
-    // Peer events
-    PeerDiscovered,
-    PeerAnnounced,
-
-    // Log events
-    LogMessage,
-
-    // Custom events (for extensions)
-    Custom
-};
 
 /**
  * @brief Base class for all events in the system
@@ -177,20 +124,6 @@ protected:
     std::chrono::system_clock::time_point m_timestamp;
     std::unordered_map<std::string, std::any> m_properties;
 };
-
-/**
- * @brief Converts an EventType to a string
- * @param type The event type
- * @return A string representation of the event type
- */
-std::string eventTypeToString(EventType type);
-
-/**
- * @brief Converts an EventSeverity to a string
- * @param severity The event severity
- * @return A string representation of the event severity
- */
-std::string eventSeverityToString(EventSeverity severity);
 
 /**
  * @brief Converts a string to an EventSeverity

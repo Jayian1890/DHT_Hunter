@@ -1,8 +1,6 @@
 # Define the DHT library
 add_library(dht_hunter_dht
-        # Types components
-        types/dht_types.cpp
-        types/node_id.cpp
+        # Types components have been moved to the types module
 
         # Core components
         core/dht_node.cpp
@@ -21,10 +19,21 @@ add_library(dht_hunter_dht
         network/error_message.cpp
 
         # Routing components
-        routing/node_lookup.cpp
-        routing/peer_lookup.cpp
         routing/routing_manager.cpp
         routing/node_verifier.cpp
+
+        # Node Lookup components
+        node_lookup/node_lookup.cpp
+        node_lookup/node_lookup_query_manager.cpp
+        node_lookup/node_lookup_response_handler.cpp
+        node_lookup/node_lookup_utils.cpp
+
+        # Peer Lookup components
+        peer_lookup/peer_lookup.cpp
+        peer_lookup/peer_lookup_query_manager.cpp
+        peer_lookup/peer_lookup_announce_manager.cpp
+        peer_lookup/peer_lookup_response_handler.cpp
+        peer_lookup/peer_lookup_utils.cpp
 
         # Storage components
         storage/token_manager.cpp
@@ -65,7 +74,7 @@ target_compile_features(dht_hunter_dht
 # Link with the required libraries
 target_link_libraries(dht_hunter_dht
         PUBLIC
-        dht_hunter_logforge
+        dht_hunter_types
         dht_hunter_network
         dht_hunter_unified_event
         dht_hunter_bencode

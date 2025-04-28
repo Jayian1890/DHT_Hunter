@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/types/dht_types.hpp"
+#include "dht_hunter/dht/types.hpp"
 #include <string>
 #include <memory>
 #include <optional>

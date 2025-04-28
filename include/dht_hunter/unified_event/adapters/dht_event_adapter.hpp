@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/unified_event/unified_event.hpp"
-#include "dht_hunter/dht/types/dht_types.hpp"
+#include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/message.hpp"
 #include "dht_hunter/network/network_address.hpp"
 #include <memory>
@@ -11,7 +11,7 @@
 namespace dht_hunter::dht {
 
 // Forward declarations
-class Node;
+// Note: Node is now imported from the Types module
 
 namespace events {
 
@@ -208,7 +208,7 @@ public:
      * @param message The received message
      * @param sender The sender address
      */
-    MessageReceivedEvent(std::shared_ptr<Message> message, const network::NetworkAddress& sender)
+    MessageReceivedEvent(std::shared_ptr<Message> message, const types::NetworkAddress& sender)
         : DHTEvent(DHTEventType::MessageReceived), m_message(message), m_sender(sender) {}
 
     /**
@@ -221,11 +221,11 @@ public:
      * @brief Gets the sender address
      * @return The sender address
      */
-    const network::NetworkAddress& getSender() const { return m_sender; }
+    const types::NetworkAddress& getSender() const { return m_sender; }
 
 private:
     std::shared_ptr<Message> m_message;
-    network::NetworkAddress m_sender;
+    types::NetworkAddress m_sender;
 };
 
 /**
@@ -238,7 +238,7 @@ public:
      * @param message The sent message
      * @param recipient The recipient address
      */
-    MessageSentEvent(std::shared_ptr<Message> message, const network::NetworkAddress& recipient)
+    MessageSentEvent(std::shared_ptr<Message> message, const types::NetworkAddress& recipient)
         : DHTEvent(DHTEventType::MessageSent), m_message(message), m_recipient(recipient) {}
 
     /**
@@ -251,11 +251,11 @@ public:
      * @brief Gets the recipient address
      * @return The recipient address
      */
-    const network::NetworkAddress& getRecipient() const { return m_recipient; }
+    const types::NetworkAddress& getRecipient() const { return m_recipient; }
 
 private:
     std::shared_ptr<Message> m_message;
-    network::NetworkAddress m_recipient;
+    types::NetworkAddress m_recipient;
 };
 
 /**
@@ -268,7 +268,7 @@ public:
      * @param infoHash The info hash
      * @param peer The discovered peer
      */
-    PeerDiscoveredEvent(const InfoHash& infoHash, const network::NetworkAddress& peer)
+    PeerDiscoveredEvent(const InfoHash& infoHash, const types::NetworkAddress& peer)
         : DHTEvent(DHTEventType::PeerDiscovered), m_infoHash(infoHash), m_peer(peer) {}
 
     /**
@@ -281,11 +281,11 @@ public:
      * @brief Gets the discovered peer
      * @return The discovered peer
      */
-    const network::NetworkAddress& getPeer() const { return m_peer; }
+    const types::NetworkAddress& getPeer() const { return m_peer; }
 
 private:
     InfoHash m_infoHash;
-    network::NetworkAddress m_peer;
+    types::NetworkAddress m_peer;
 };
 
 /**

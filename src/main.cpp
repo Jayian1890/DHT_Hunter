@@ -5,11 +5,19 @@
 #include <iostream>
 #include <thread>
 
-// Project includes
+// Project includes - Types module
+#include "dht_hunter/types/node_id.hpp"
+#include "dht_hunter/types/endpoint.hpp"
+#include "dht_hunter/types/event_types.hpp"
+
+// Project includes - DHT module
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/dht_node.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
+
+// Project includes - Network module
 #include "dht_hunter/network/udp_server.hpp"
+
+// Project includes - Unified Event module
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"  // Adapter for old Logger interface
 #include "dht_hunter/unified_event/unified_event.hpp"            // New unified event system
 
@@ -80,16 +88,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Initialize the LogForge singleton with default settings
-    auto& logForge = dht_hunter::logforge::LogForge::getInstance();
-    std::string logFilePath = (configPath / "dht_hunter.log").string();
-    logForge.init(dht_hunter::logforge::LogLevel::INFO,   // Console level
-                  dht_hunter::logforge::LogLevel::TRACE,  // File level
-                  logFilePath,                            // Log file in config directory
-                  true,                                   // Use colors
-                  false                                   // Async logging disabled
-    );
-
     // Initialize the unified event system
     dht_hunter::unified_event::initializeEventSystem(true,  // Enable logging
                                                      true,  // Enable component communication
@@ -98,8 +96,9 @@ int main(int argc, char* argv[]) {
     );
 
     // Configure the logging processor
+    std::string logFilePath = (configPath / "dht_hunter.log").string();
     if (auto loggingProcessor = dht_hunter::unified_event::getLoggingProcessor()) {
-        loggingProcessor->setMinSeverity(dht_hunter::unified_event::EventSeverity::Debug);
+        loggingProcessor->setMinSeverity(dht_hunter::unified_event::EventSeverity::Info);
         loggingProcessor->setFileOutput(true, logFilePath);
     }
 

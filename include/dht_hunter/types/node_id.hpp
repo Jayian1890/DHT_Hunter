@@ -6,7 +6,7 @@
 #include <functional>
 #include <algorithm>
 
-namespace dht_hunter::dht {
+namespace dht_hunter::types {
 
 /**
  * @brief A 160-bit (20-byte) node ID used in the DHT
@@ -192,16 +192,14 @@ struct NodeIDHash {
     }
 };
 
-} // namespace dht_hunter::dht
+} // namespace dht_hunter::types
 
 // Add hash support for NodeID
 namespace std {
     template<>
-    struct hash<dht_hunter::dht::NodeID> {
-        size_t operator()(const dht_hunter::dht::NodeID& nodeID) const {
-            return dht_hunter::dht::NodeIDHash()(nodeID);
+    struct hash<dht_hunter::types::NodeID> {
+        size_t operator()(const dht_hunter::types::NodeID& nodeID) const {
+            return dht_hunter::types::NodeIDHash()(nodeID);
         }
     };
 }
-
-

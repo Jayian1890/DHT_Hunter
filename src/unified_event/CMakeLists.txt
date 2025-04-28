@@ -22,6 +22,7 @@ target_include_directories(dht_hunter_unified_event
 # Link against required libraries
 target_link_libraries(dht_hunter_unified_event
         PUBLIC
+        dht_hunter_types
         dht_hunter_dht
         dht_hunter_network
 )

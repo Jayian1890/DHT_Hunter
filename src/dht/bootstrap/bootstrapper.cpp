@@ -1,7 +1,7 @@
 #include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
 #include "dht_hunter/utils/lock_utils.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
-#include "dht_hunter/dht/routing/node_lookup.hpp"
+#include "dht_hunter/dht/node_lookup/node_lookup.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
 #include <random>
 #include <netdb.h>

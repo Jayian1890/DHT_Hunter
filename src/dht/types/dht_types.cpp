@@ -1,6 +1,5 @@
 #include "dht_hunter/dht/types/dht_types.hpp"
 #include "dht_hunter/dht/types/node_id.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
 
 #include <algorithm>
 #include <array>

@@ -1,7 +1,7 @@
-# Add only the necessary components
-add_subdirectory(logforge)  # Logging component
-add_subdirectory(network)   # Network component
+# Add all components in the correct dependency order
+add_subdirectory(types)     # Types component
 add_subdirectory(util)      # Utility functions
+add_subdirectory(network)   # Network component
 add_subdirectory(bencode)   # Bencode component
 add_subdirectory(dht)       # DHT component
 add_subdirectory(bittorrent) # BitTorrent component
@@ -20,9 +20,9 @@ add_executable(dht_hunter main.cpp)
 # Link with component libraries
 target_link_libraries(dht_hunter
         PRIVATE
-        dht_hunter_logforge
-        dht_hunter_network
+        dht_hunter_types
         dht_hunter_util
+        dht_hunter_network
         dht_hunter_dht
         dht_hunter_bittorrent
         dht_hunter_unified_event

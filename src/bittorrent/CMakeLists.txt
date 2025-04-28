@@ -7,7 +7,7 @@ add_library(dht_hunter_bittorrent
 target_link_libraries(dht_hunter_bittorrent
         PUBLIC
         dht_hunter_core
-        dht_hunter_logforge
+        dht_hunter_types
         dht_hunter_network
         dht_hunter_dht
 )

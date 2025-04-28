@@ -152,7 +152,7 @@ std::string LoggingProcessor::formatEvent(std::shared_ptr<Event> event) const {
     switch (event->getType()) {
         case EventType::MessageReceived: {
             auto message = event->getProperty<std::shared_ptr<dht_hunter::dht::Message>>("message");
-            auto sender = event->getProperty<dht_hunter::network::NetworkAddress>("sender");
+            auto sender = event->getProperty<dht_hunter::types::NetworkAddress>("sender");
 
             if (message && sender) {
                 ss << " - Type: " << messageTypeToString((*message)->getType());
@@ -248,7 +248,7 @@ std::string LoggingProcessor::formatEvent(std::shared_ptr<Event> event) const {
         }
         case EventType::MessageSent: {
             auto message = event->getProperty<std::shared_ptr<dht_hunter::dht::Message>>("message");
-            auto recipient = event->getProperty<dht_hunter::network::NetworkAddress>("recipient");
+            auto recipient = event->getProperty<dht_hunter::types::NetworkAddress>("recipient");
 
             if (message && recipient) {
                 ss << " - Type: " << messageTypeToString((*message)->getType());

@@ -18,12 +18,11 @@ target_compile_features(dht_hunter_network
         cxx_std_20
 )
 
-# Link with the logging and event libraries
+# Link with the event library and types library
 target_link_libraries(dht_hunter_network
         PUBLIC
-        dht_hunter_logforge
-        # dht_hunter_event  # Old event system (removed)
-        dht_hunter_unified_event  # New unified event system
+        dht_hunter_types         # Types module
+        dht_hunter_unified_event  # Unified event system
 )
 
 # Platform-specific libraries

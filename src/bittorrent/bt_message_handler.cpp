@@ -1,7 +1,6 @@
 #include "dht_hunter/bittorrent/bt_message_handler.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/network/network_address.hpp"
-#include "dht_hunter/logforge/logforge.hpp"
 
 namespace dht_hunter::bittorrent {
 
