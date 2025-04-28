@@ -5,6 +5,9 @@
 #include <iostream>
 #include <thread>
 
+// Include thread utilities for the global shutdown flag
+#include "dht_hunter/utility/thread/thread_utils.hpp"
+
 // Project includes - Types module
 #include "dht_hunter/types/node_id.hpp"
 #include "dht_hunter/types/endpoint.hpp"
@@ -34,6 +37,11 @@ std::shared_ptr<dht_hunter::dht::DHTNode> g_dhtNode;
  */
 void signalHandler(int signal) {
     std::cout << "Received signal " << signal << ", shutting down gracefully..." << std::endl;
+
+    // Set the global shutdown flag to prevent new lock acquisitions
+    dht_hunter::utility::thread::g_shuttingDown.store(true, std::memory_order_release);
+
+    // Set the running flag to false to exit the main loop
     g_running = false;
 
     // Don't call stop() here - we'll do it in the main thread
