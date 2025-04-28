@@ -204,7 +204,7 @@ private:
 
     // Static instance for singleton pattern
     static std::shared_ptr<PeerLookup> s_instance;
-    static std::mutex s_instanceMutex;
+    static std::timed_mutex s_instanceMutex;
 
     DHTConfig m_config;
     NodeID m_nodeID;
@@ -214,7 +214,7 @@ private:
     std::shared_ptr<TokenManager> m_tokenManager;
     std::shared_ptr<PeerStorage> m_peerStorage;
     std::unordered_map<std::string, PeerLookupState> m_lookups;
-    std::mutex m_mutex;
+    std::timed_mutex m_mutex;
 };
 
 } // namespace dht_hunter::dht

@@ -17,7 +17,7 @@ namespace dht_hunter::dht {
 
 // Initialize static members
 std::shared_ptr<PeerLookup> PeerLookup::s_instance = nullptr;
-std::mutex PeerLookup::s_instanceMutex;
+std::timed_mutex PeerLookup::s_instanceMutex;
 
 std::shared_ptr<PeerLookup> PeerLookup::getInstance(
     const DHTConfig& config,
