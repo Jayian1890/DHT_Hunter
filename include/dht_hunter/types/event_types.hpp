@@ -8,6 +8,7 @@ namespace dht_hunter::types {
  * @brief Event severity levels
  */
 enum class EventSeverity {
+    Trace,      // Very detailed tracing information
     Debug,      // Detailed information for debugging
     Info,       // General information about system operation
     Warning,    // Potential issues that don't affect normal operation

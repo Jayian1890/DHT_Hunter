@@ -17,7 +17,7 @@ namespace dht_hunter::unified_event {
  */
 struct LoggingProcessorConfig {
     std::string logFilePath;
-    EventSeverity minSeverity = EventSeverity::Debug;
+    EventSeverity minSeverity = EventSeverity::Trace; // Changed from Debug to Trace
     bool consoleOutput = true;
     bool fileOutput = false;
     bool includeTimestamp = true;
@@ -53,6 +53,12 @@ public:
      * @return True if the processor should handle the event, false otherwise
      */
     bool shouldProcess(std::shared_ptr<Event> event) const override;
+
+    /**
+     * @brief Sets the logging configuration
+     * @param config The logging configuration
+     */
+    void setConfig(const LoggingProcessorConfig& config);
 
     /**
      * @brief Processes the event

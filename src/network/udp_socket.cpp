@@ -50,19 +50,26 @@ static WSAInitializer g_wsaInitializer;
 class UDPSocket::Impl {
 public:
     Impl() : m_socket(INVALID_SOCKET), m_running(false) {
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Impl constructor entry");
         // Create the socket
         m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (m_socket == INVALID_SOCKET) {    // Logger initialization removed
+        if (m_socket == INVALID_SOCKET) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Failed to create socket");
+        } else {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Socket created successfully");
         }
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Impl constructor exit");
     }
 
     ~Impl() {
         close();
     }
 
-    bool bind(uint16_t port) {    // Logger initialization removed
+    bool bind(uint16_t port) {
+        unified_event::logTrace("Network.UDPSocket", "TRACE: bind() entry with port " + std::to_string(port));
 
         if (m_socket == INVALID_SOCKET) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Cannot bind - socket is invalid");
             return false;
         }
 
@@ -71,10 +78,13 @@ public:
         addr.sin_addr.s_addr = INADDR_ANY;
         addr.sin_port = htons(port);
 
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Calling ::bind");
         if (::bind(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: ::bind failed with error");
             return false;
         }
 
+        unified_event::logTrace("Network.UDPSocket", "TRACE: bind() successful");
         return true;
     }
 
@@ -145,49 +155,71 @@ public:
         }
     }
 
-    bool startReceiveLoop() {    // Logger initialization removed
+    bool startReceiveLoop() {
+        unified_event::logTrace("Network.UDPSocket", "TRACE: startReceiveLoop() entry");
 
         if (m_socket == INVALID_SOCKET) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Cannot start receive loop - socket is invalid");
             return false;
         }
 
         if (m_running) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Receive loop already running");
             return true;
         }
 
         // Set socket to non-blocking mode
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Setting socket to non-blocking mode");
 #ifdef _WIN32
         u_long mode = 1;
         if (ioctlsocket(m_socket, FIONBIO, &mode) != 0) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Failed to set socket to non-blocking mode");
             return false;
         }
 #else
         int flags = fcntl(m_socket, F_GETFL, 0);
         if (flags == -1) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Failed to get socket flags");
             return false;
         }
         if (fcntl(m_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Failed to set socket to non-blocking mode");
             return false;
         }
 #endif
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Socket set to non-blocking mode");
 
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Setting m_running to true");
         m_running = true;
-        m_receiveThread = std::thread(&UDPSocket::Impl::receiveLoop, this);
 
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Starting receive thread");
+        m_receiveThread = std::thread(&UDPSocket::Impl::receiveLoop, this);
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Receive thread started");
+
+        unified_event::logTrace("Network.UDPSocket", "TRACE: startReceiveLoop() successful");
         return true;
     }
 
-    void stopReceiveLoop() {    // Logger initialization removed
+    void stopReceiveLoop() {
+        unified_event::logTrace("Network.UDPSocket", "TRACE: stopReceiveLoop() entry");
 
         if (!m_running) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Receive loop not running");
             return;
         }
 
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Setting m_running to false");
         m_running = false;
 
         if (m_receiveThread.joinable()) {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Joining receive thread");
             m_receiveThread.join();
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Receive thread joined");
+        } else {
+            unified_event::logTrace("Network.UDPSocket", "TRACE: Receive thread not joinable");
         }
+
+        unified_event::logTrace("Network.UDPSocket", "TRACE: stopReceiveLoop() exit");
     }
 
     bool isValid() const {
@@ -205,33 +237,46 @@ public:
     }
 
 private:
-    void receiveLoop() {    // Logger initialization removed
+    void receiveLoop() {
+        unified_event::logTrace("Network.UDPSocket", "TRACE: receiveLoop() entry");
 
         std::array<uint8_t, 65536> buffer;
+        unified_event::logTrace("Network.UDPSocket", "TRACE: Created receive buffer of size " + std::to_string(buffer.size()));
 
         while (m_running) {
             std::string address;
             uint16_t port = 0;
 
+            // Don't log waiting for data to avoid log spam
             ssize_t bytesReceived = receiveFrom(buffer.data(), buffer.size(), address, port);
 
             if (bytesReceived > 0) {
+                unified_event::logTrace("Network.UDPSocket", "TRACE: Received " + std::to_string(bytesReceived) + " bytes from " + address + ":" + std::to_string(port));
                 std::vector<uint8_t> data(buffer.data(), buffer.data() + bytesReceived);
 
                 try {
+                    unified_event::logTrace("Network.UDPSocket", "TRACE: Acquiring callback mutex");
                     utility::thread::withLock(m_callbackMutex, [this, &data, &address, port]() {
+                        unified_event::logTrace("Network.UDPSocket", "TRACE: Callback mutex acquired");
                         if (m_receiveCallback) {
+                            unified_event::logTrace("Network.UDPSocket", "TRACE: Calling receive callback");
                             try {
                                 m_receiveCallback(data, address, port);
+                                unified_event::logTrace("Network.UDPSocket", "TRACE: Receive callback completed");
                             } catch (const std::exception& e) {
                                 unified_event::logError("Network.UDPSocket", "Exception in receive callback: " + std::string(e.what()));
+                                unified_event::logTrace("Network.UDPSocket", "TRACE: Exception in receive callback: " + std::string(e.what()));
                             }
+                        } else {
+                            unified_event::logTrace("Network.UDPSocket", "TRACE: No receive callback registered");
                         }
                     }, "UDPSocket::m_callbackMutex");
                 } catch (const utility::thread::LockTimeoutException& e) {
                     unified_event::logError("Network.UDPSocket", "Failed to acquire lock in receive loop: " + std::string(e.what()));
+                    unified_event::logTrace("Network.UDPSocket", "TRACE: Lock timeout exception: " + std::string(e.what()));
                 }
             } else if (bytesReceived < 0) {
+                unified_event::logTrace("Network.UDPSocket", "TRACE: Error receiving data, exiting receive loop");
                 // Error occurred
                 break;
             }
@@ -239,6 +284,8 @@ private:
             // Sleep a bit to avoid busy waiting
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+
+        unified_event::logTrace("Network.UDPSocket", "TRACE: receiveLoop() exit");
     }
 
     SOCKET m_socket;

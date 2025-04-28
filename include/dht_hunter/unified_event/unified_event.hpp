@@ -103,6 +103,20 @@ inline std::shared_ptr<LoggingProcessor> getLoggingProcessor() {
 }
 
 /**
+ * @brief Configures the logging processor with the specified configuration
+ * @param config The logging processor configuration
+ * @return True if the configuration was successful, false otherwise
+ */
+inline bool configureLoggingProcessor(const LoggingProcessorConfig& config) {
+    auto loggingProcessor = getLoggingProcessor();
+    if (loggingProcessor) {
+        loggingProcessor->setConfig(config);
+        return true;
+    }
+    return false;
+}
+
+/**
  * @brief Gets the component processor
  * @return The component processor, or nullptr if not found
  */
@@ -121,6 +135,15 @@ inline void logMessage(const std::string& source, EventSeverity severity, const 
     auto eventBus = EventBus::getInstance();
     auto event = std::make_shared<LogMessageEvent>(source, severity, message);
     eventBus->publish(event);
+}
+
+/**
+ * @brief Logs a trace message through the unified event system
+ * @param source The source of the message
+ * @param message The message to log
+ */
+inline void logTrace(const std::string& source, const std::string& message) {
+    logMessage(source, EventSeverity::Trace, message);
 }
 
 /**

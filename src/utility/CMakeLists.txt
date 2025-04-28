@@ -17,6 +17,7 @@ add_library(dht_hunter_utility
 
         # Thread utilities
         thread/thread_pool.cpp
+        thread/thread_utils.cpp
 
         # Process utilities
         process/process_utils.cpp

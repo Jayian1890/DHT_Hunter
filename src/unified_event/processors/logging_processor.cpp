@@ -7,6 +7,7 @@ namespace dht_hunter::unified_event {
 
 // ANSI color codes for console output
 const std::unordered_map<EventSeverity, std::string> LoggingProcessor::SEVERITY_COLORS = {
+    {EventSeverity::Trace, "\033[90m"},     // Dark Gray
     {EventSeverity::Debug, "\033[37m"},     // White
     {EventSeverity::Info, "\033[32m"},      // Green
     {EventSeverity::Warning, "\033[33m"},   // Yellow
@@ -38,6 +39,10 @@ bool LoggingProcessor::shouldProcess(std::shared_ptr<Event> event) const {
 
     // Check if the event severity is at or above the minimum severity
     return event->getSeverity() >= m_config.minSeverity;
+}
+
+void LoggingProcessor::setConfig(const LoggingProcessorConfig& config) {
+    m_config = config;
 }
 
 void LoggingProcessor::process(std::shared_ptr<Event> event) {

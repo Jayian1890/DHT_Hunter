@@ -34,6 +34,16 @@ public:
     }
 
     /**
+     * @brief Logs a trace message
+     * @param format The format string
+     * @param args The format arguments
+     */
+    template<typename... Args>
+    void trace(const std::string& format, Args&&... args) const {
+        log(unified_event::EventSeverity::Trace, format, std::forward<Args>(args)...);
+    }
+
+    /**
      * @brief Logs a debug message
      * @param format The format string
      * @param args The format arguments
@@ -97,6 +107,9 @@ private:
 
         // Log the message using the unified event system
         switch (severity) {
+            case unified_event::EventSeverity::Trace:
+                unified_event::logTrace(m_componentName, message);
+                break;
             case unified_event::EventSeverity::Debug:
                 unified_event::logDebug(m_componentName, message);
                 break;

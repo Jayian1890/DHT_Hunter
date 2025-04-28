@@ -55,6 +55,8 @@ std::string eventTypeToString(EventType type) {
 
 std::string eventSeverityToString(EventSeverity severity) {
     switch (severity) {
+        case EventSeverity::Trace:
+            return "TRACE";
         case EventSeverity::Debug:
             return "DEBUG";
         case EventSeverity::Info:
