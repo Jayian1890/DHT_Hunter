@@ -5,6 +5,7 @@
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/dht/core/dht_constants.hpp"
+#include "dht_hunter/utils/lock_utils.hpp"
 #include <algorithm>
 #include <random>
 
@@ -23,14 +24,18 @@ std::shared_ptr<PeerLookup> PeerLookup::getInstance(
     std::shared_ptr<TokenManager> tokenManager,
     std::shared_ptr<PeerStorage> peerStorage) {
 
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-
-    if (!s_instance) {
-        s_instance = std::shared_ptr<PeerLookup>(new PeerLookup(
-            config, nodeID, routingTable, transactionManager, messageSender, tokenManager, peerStorage));
+    try {
+        return utils::withLock(s_instanceMutex, [&]() {
+            if (!s_instance) {
+                s_instance = std::shared_ptr<PeerLookup>(new PeerLookup(
+                    config, nodeID, routingTable, transactionManager, messageSender, tokenManager, peerStorage));
+            }
+            return s_instance;
+        }, "PeerLookup::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+        return nullptr;
     }
-
-    return s_instance;
 }
 
 PeerLookup::PeerLookup(const DHTConfig& config,
@@ -51,9 +56,14 @@ PeerLookup::PeerLookup(const DHTConfig& config,
 
 PeerLookup::~PeerLookup() {
     // Clear the singleton instance
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-    if (s_instance.get() == this) {
-        s_instance.reset();
+    try {
+        utils::withLock(s_instanceMutex, [this]() {
+            if (s_instance.get() == this) {
+                s_instance.reset();
+            }
+        }, "PeerLookup::s_instanceMutex");
+    } catch (const utils::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
