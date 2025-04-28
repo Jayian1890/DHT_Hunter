@@ -153,21 +153,18 @@ public:
     RecursiveSafeLockGuard(std::recursive_mutex& mutex, const std::string& lockName = "unnamed")
         : m_mutex(&mutex) {
 
-        try {
-            mutex.lock();
-            m_locked = true;
-        } catch (const std::system_error& e) {
-            throw LockTimeoutException("Failed to acquire lock '" + lockName + "': " + e.what());
-        }
+        // Use std::lock_guard directly for recursive mutexes
+        // This is safer and avoids potential issues with direct lock/unlock calls
+        m_guard = std::make_unique<std::lock_guard<std::recursive_mutex>>(mutex);
+        m_locked = true;
     }
 
     /**
      * @brief Destructor that releases the lock
      */
     ~RecursiveSafeLockGuard() {
-        if (m_locked && m_mutex) {
-            m_mutex->unlock();
-        }
+        // The std::lock_guard will be automatically destroyed and release the lock
+        m_guard.reset();
     }
 
     /**
@@ -178,6 +175,7 @@ public:
 
 private:
     std::recursive_mutex* m_mutex;
+    std::unique_ptr<std::lock_guard<std::recursive_mutex>> m_guard;
 };
 
 /**
