@@ -1,4 +1,5 @@
 #include "dht_hunter/dht/core/dht_node.hpp"
+#include "dht_hunter/utils/lock_utils.hpp"
 
 #include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
 #include "dht_hunter/dht/extensions/azureus_dht.hpp"
@@ -62,9 +63,10 @@ DHTNode::~DHTNode() {
 }
 
 bool DHTNode::start() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    if (m_running) {
+    // Check if already running
+    bool expected = false;
+    if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        // Already running
         return true;
     }
 
@@ -163,7 +165,7 @@ bool DHTNode::start() {
         unified_event::logDebug("DHT.Node", "Azureus DHT Extension Initialized");
     }
 
-    m_running = true;
+    // m_running is already set to true by the compare_exchange_strong above
 
     // Subscribe to events
     subscribeToEvents();
@@ -201,9 +203,10 @@ bool DHTNode::start() {
 }
 
 void DHTNode::stop() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    if (!m_running) {
+    // Check if already stopped
+    bool expected = true;
+    if (!m_running.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
+        // Already stopped
         unified_event::logDebug("DHT.Node", "Stop called while not running");
         return;
     }
@@ -263,11 +266,11 @@ void DHTNode::stop() {
     auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.Node");
     m_eventBus->publish(stoppedEvent);
 
-    m_running = false;
+    // m_running is already set to false by the compare_exchange_strong above
 }
 
 bool DHTNode::isRunning() const {
-    return m_running;
+    return m_running.load(std::memory_order_acquire);
 }
 
 const NodeID& DHTNode::getNodeID() const {
