@@ -60,62 +60,75 @@ PeerLookup::PeerLookup(const DHTConfig& config,
 
 PeerLookup::~PeerLookup() {
     // Clear the singleton instance
-    std::lock_guard<std::mutex> lock(s_instanceMutex);
-    if (s_instance.get() == this) {
-        s_instance.reset();
+    try {
+        utility::thread::withLock(s_instanceMutex, [this]() {
+            if (s_instance.get() == this) {
+                s_instance.reset();
+            }
+        }, "PeerLookup::s_instanceMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 void PeerLookup::lookup(const InfoHash& infoHash, std::function<void(const std::vector<network::EndPoint>&)> callback) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &infoHash, &callback]() {
+            // Generate a lookup ID
+            std::string lookupID = peer_lookup_utils::generateLookupID(infoHash);
 
-    // Generate a lookup ID
-    std::string lookupID = peer_lookup_utils::generateLookupID(infoHash);
+            // Check if a lookup with this ID already exists
+            if (m_lookups.find(lookupID) != m_lookups.end()) {
+                return;
+            }
 
-    // Check if a lookup with this ID already exists
-    if (m_lookups.find(lookupID) != m_lookups.end()) {
-        return;
+            // Create a new lookup
+            PeerLookupState lookup(infoHash, callback);
+
+            // Get the closest nodes from the routing table
+            if (m_routingTable) {
+                lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
+            }
+
+            // Add the lookup
+            m_lookups.emplace(lookupID, lookup);
+
+            // Send queries
+            sendQueries(lookupID);
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
-
-    // Create a new lookup
-    PeerLookupState lookup(infoHash, callback);
-
-    // Get the closest nodes from the routing table
-    if (m_routingTable) {
-        lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
-    }
-
-    // Add the lookup
-    m_lookups.emplace(lookupID, lookup);
-
-    // Send queries
-    sendQueries(lookupID);
 }
 
 void PeerLookup::announce(const InfoHash& infoHash, uint16_t port, std::function<void(bool)> callback) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &infoHash, port, &callback]() {
+            // Generate a lookup ID
+            std::string lookupID = peer_lookup_utils::generateLookupID(infoHash);
 
-    // Generate a lookup ID
-    std::string lookupID = peer_lookup_utils::generateLookupID(infoHash);
+            // Check if a lookup with this ID already exists
+            if (m_lookups.find(lookupID) != m_lookups.end()) {
+                return;
+            }
 
-    // Check if a lookup with this ID already exists
-    if (m_lookups.find(lookupID) != m_lookups.end()) {
-        return;
+            // Create a new lookup
+            PeerLookupState lookup(infoHash, port, callback);
+
+            // Get the closest nodes from the routing table
+            if (m_routingTable) {
+                lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
+            }
+
+            // Add the lookup
+            m_lookups.emplace(lookupID, lookup);
+
+            // Send queries
+            sendQueries(lookupID);
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
-
-    // Create a new lookup
-    PeerLookupState lookup(infoHash, port, callback);
-
-    // Get the closest nodes from the routing table
-    if (m_routingTable) {
-        lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
-    }
-
-    // Add the lookup
-    m_lookups.emplace(lookupID, lookup);
-
-    // Send queries
-    sendQueries(lookupID);
 }
 
 void PeerLookup::sendQueries(const std::string& lookupID) {
@@ -187,240 +200,287 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
 }
 
 void PeerLookup::handleResponse(const std::string& lookupID, std::shared_ptr<GetPeersResponse> response, const network::EndPoint& sender) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID, &response, &sender]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
-    }
+            PeerLookupState& lookup = it->second;
 
-    PeerLookupState& lookup = it->second;
+            // Create response handler
+            PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
 
-    // Create response handler
-    PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
+            // Use the response handler to process the response
+            bool shouldSendQueries = responseHandler.handleResponse(lookupID, lookup, response, sender);
 
-    // Use the response handler to process the response
-    bool shouldSendQueries = responseHandler.handleResponse(lookupID, lookup, response, sender);
-
-    // Send more queries if needed
-    if (shouldSendQueries) {
-        sendQueries(lookupID);
+            // Send more queries if needed
+            if (shouldSendQueries) {
+                sendQueries(lookupID);
+            }
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 void PeerLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID, &error, &sender]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
-    }
+            PeerLookupState& lookup = it->second;
 
-    PeerLookupState& lookup = it->second;
+            // Create response handler
+            PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
 
-    // Create response handler
-    PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
+            // Use the response handler to process the error
+            bool shouldSendQueries = responseHandler.handleError(lookup, error, sender);
 
-    // Use the response handler to process the error
-    bool shouldSendQueries = responseHandler.handleError(lookup, error, sender);
-
-    // Send more queries if needed
-    if (shouldSendQueries) {
-        sendQueries(lookupID);
+            // Send more queries if needed
+            if (shouldSendQueries) {
+                sendQueries(lookupID);
+            }
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 void PeerLookup::handleTimeout(const std::string& lookupID, const NodeID& nodeID) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID, &nodeID]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
-    }
+            PeerLookupState& lookup = it->second;
 
-    PeerLookupState& lookup = it->second;
+            // Create response handler
+            PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
 
-    // Create response handler
-    PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
+            // Use the response handler to process the timeout
+            bool shouldSendQueries = responseHandler.handleTimeout(lookup, nodeID);
 
-    // Use the response handler to process the timeout
-    bool shouldSendQueries = responseHandler.handleTimeout(lookup, nodeID);
-
-    // Send more queries if needed
-    if (shouldSendQueries) {
-        sendQueries(lookupID);
+            // Send more queries if needed
+            if (shouldSendQueries) {
+                sendQueries(lookupID);
+            }
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 bool PeerLookup::isLookupComplete(const std::string& lookupID) {
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return true;
+    try {
+        return utility::thread::withLock(m_mutex, [this, &lookupID]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return true;
+            }
+
+            const PeerLookupState& lookup = it->second;
+
+            // Create query manager
+            PeerLookupQueryManager queryManager(m_config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
+
+            // Use the query manager to check if the lookup is complete
+            return queryManager.isLookupComplete(lookup, m_config.getKBucketSize());
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+        return true; // Assume complete on error
     }
-
-    const PeerLookupState& lookup = it->second;
-
-    // Create query manager
-    PeerLookupQueryManager queryManager(m_config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
-
-    // Use the query manager to check if the lookup is complete
-    return queryManager.isLookupComplete(lookup, m_config.getKBucketSize());
 }
 
 void PeerLookup::completeLookup(const std::string& lookupID) {
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
+
+            PeerLookupState& lookup = it->second;
+
+            // Create response handler
+            PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
+
+            // Use the response handler to complete the lookup
+            responseHandler.completeLookup(lookup);
+
+            // Remove the lookup
+            m_lookups.erase(it);
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
-
-    PeerLookupState& lookup = it->second;
-
-    // Create response handler
-    PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
-
-    // Use the response handler to complete the lookup
-    responseHandler.completeLookup(lookup);
-
-    // Remove the lookup
-    m_lookups.erase(it);
 }
 
 void PeerLookup::announceToNodes(const std::string& lookupID) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
-    }
-
-    PeerLookupState& lookup = it->second;
-
-    // Create announce manager
-    PeerLookupAnnounceManager announceManager(m_config, m_nodeID, m_transactionManager, m_messageSender);
-
-    // Use the announce manager to send announcements
-    bool announcementsSent = announceManager.announceToNodes(
-        lookupID,
-        lookup,
-        [this, lookupID](std::shared_ptr<ResponseMessage> response, const network::EndPoint& sender) {
-            auto announcePeerResponse = std::dynamic_pointer_cast<AnnouncePeerResponse>(response);
-            if (announcePeerResponse) {
-                handleAnnounceResponse(lookupID, announcePeerResponse, sender);
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
             }
-        },
-        [this, lookupID](std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
-            handleAnnounceError(lookupID, error, sender);
-        },
-        [this, lookupID](const std::string& nodeIDStr) {
-            // Convert the string to a NodeID
-            NodeID nodeID;
-            if (nodeIDStr.size() == 20) {
-                std::copy(nodeIDStr.begin(), nodeIDStr.end(), nodeID.begin());
-                handleAnnounceTimeout(lookupID, nodeID);
-            } else {
-                // Log error
-                unified_event::logError("DHT.PeerLookup", "Invalid node ID string length: " + std::to_string(nodeIDStr.size()));
-            }
-        });
 
-    // If we didn't send any announcements, complete the announcement
-    if (!announcementsSent) {
-        completeAnnouncement(lookupID, false);
+            PeerLookupState& lookup = it->second;
+
+            // Create announce manager
+            PeerLookupAnnounceManager announceManager(m_config, m_nodeID, m_transactionManager, m_messageSender);
+
+            // Use the announce manager to send announcements
+            bool announcementsSent = announceManager.announceToNodes(
+                lookupID,
+                lookup,
+                [this, lookupID](std::shared_ptr<ResponseMessage> response, const network::EndPoint& sender) {
+                    auto announcePeerResponse = std::dynamic_pointer_cast<AnnouncePeerResponse>(response);
+                    if (announcePeerResponse) {
+                        handleAnnounceResponse(lookupID, announcePeerResponse, sender);
+                    }
+                },
+                [this, lookupID](std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
+                    handleAnnounceError(lookupID, error, sender);
+                },
+                [this, lookupID](const std::string& nodeIDStr) {
+                    // Convert the string to a NodeID
+                    NodeID nodeID;
+                    if (nodeIDStr.size() == 20) {
+                        std::copy(nodeIDStr.begin(), nodeIDStr.end(), nodeID.begin());
+                        handleAnnounceTimeout(lookupID, nodeID);
+                    } else {
+                        // Log error
+                        unified_event::logError("DHT.PeerLookup", "Invalid node ID string length: " + std::to_string(nodeIDStr.size()));
+                    }
+                });
+
+            // If we didn't send any announcements, complete the announcement
+            if (!announcementsSent) {
+                completeAnnouncement(lookupID, false);
+            }
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 void PeerLookup::handleAnnounceResponse(const std::string& lookupID, std::shared_ptr<AnnouncePeerResponse> response, const network::EndPoint& sender) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID, &response, &sender]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
-    }
+            PeerLookupState& lookup = it->second;
 
-    PeerLookupState& lookup = it->second;
+            // Create response handler
+            PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
 
-    // Create response handler
-    PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
+            // Use the response handler to process the response
+            bool isComplete = responseHandler.handleAnnounceResponse(lookup, response, sender);
 
-    // Use the response handler to process the response
-    bool isComplete = responseHandler.handleAnnounceResponse(lookup, response, sender);
-
-    // Complete the announcement if needed
-    if (isComplete) {
-        completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+            // Complete the announcement if needed
+            if (isComplete) {
+                completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+            }
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 void PeerLookup::handleAnnounceError(const std::string& lookupID, std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID, &error, &sender]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
-    }
+            PeerLookupState& lookup = it->second;
 
-    PeerLookupState& lookup = it->second;
+            // Create response handler
+            PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
 
-    // Create response handler
-    PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
+            // Use the response handler to process the error
+            bool isComplete = responseHandler.handleAnnounceError(lookup, error, sender);
 
-    // Use the response handler to process the error
-    bool isComplete = responseHandler.handleAnnounceError(lookup, error, sender);
-
-    // Complete the announcement if needed
-    if (isComplete) {
-        completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+            // Complete the announcement if needed
+            if (isComplete) {
+                completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+            }
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 void PeerLookup::handleAnnounceTimeout(const std::string& lookupID, const NodeID& nodeID) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID, &nodeID]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
 
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
-    }
+            PeerLookupState& lookup = it->second;
 
-    PeerLookupState& lookup = it->second;
+            // Create response handler
+            PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
 
-    // Create response handler
-    PeerLookupResponseHandler responseHandler(m_config, m_nodeID, m_routingTable, m_peerStorage);
+            // Use the response handler to process the timeout
+            bool isComplete = responseHandler.handleAnnounceTimeout(lookup, nodeID);
 
-    // Use the response handler to process the timeout
-    bool isComplete = responseHandler.handleAnnounceTimeout(lookup, nodeID);
-
-    // Complete the announcement if needed
-    if (isComplete) {
-        completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+            // Complete the announcement if needed
+            if (isComplete) {
+                completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+            }
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
 }
 
 void PeerLookup::completeAnnouncement(const std::string& lookupID, bool success) {
-    // Find the lookup
-    auto it = m_lookups.find(lookupID);
-    if (it == m_lookups.end()) {
-        return;
+    try {
+        utility::thread::withLock(m_mutex, [this, &lookupID, success]() {
+            // Find the lookup
+            auto it = m_lookups.find(lookupID);
+            if (it == m_lookups.end()) {
+                return;
+            }
+
+            PeerLookupState& lookup = it->second;
+
+            // Create announce manager
+            PeerLookupAnnounceManager announceManager(m_config, m_nodeID, m_transactionManager, m_messageSender);
+
+            // Use the announce manager to complete the announcement
+            announceManager.completeAnnouncement(lookup, success);
+
+            // Remove the lookup
+            m_lookups.erase(it);
+        }, "PeerLookup::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
     }
-
-    PeerLookupState& lookup = it->second;
-
-    // Create announce manager
-    PeerLookupAnnounceManager announceManager(m_config, m_nodeID, m_transactionManager, m_messageSender);
-
-    // Use the announce manager to complete the announcement
-    announceManager.completeAnnouncement(lookup, success);
-
-    // Remove the lookup
-    m_lookups.erase(it);
 }
 
 } // namespace dht_hunter::dht
