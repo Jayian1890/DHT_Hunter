@@ -20,11 +20,23 @@ public:
 };
 
 /**
+ * @brief Base class for SafeLockGuard implementations
+ */
+class SafeLockGuardBase {
+protected:
+    bool m_locked;
+
+    SafeLockGuardBase() : m_locked(false) {}
+    virtual ~SafeLockGuardBase() {}
+};
+
+/**
  * @brief RAII wrapper for a mutex with timeout
  *
  * This class is similar to std::lock_guard but with a timeout to prevent deadlocks.
+ * Specialized for std::mutex.
  */
-class SafeLockGuard {
+class SafeLockGuard : public SafeLockGuardBase {
 public:
     /**
      * @brief Constructor that acquires the lock with a timeout
@@ -37,7 +49,7 @@ public:
      */
     SafeLockGuard(std::mutex& mutex, const std::string& lockName = "unnamed",
                  unsigned int timeoutMs = 5000, unsigned int maxRetries = 10)
-        : m_mutex(mutex), m_locked(false) {
+        : m_mutex(&mutex) {
 
         // Try to acquire the lock with retries
         for (unsigned int attempt = 0; attempt <= maxRetries; ++attempt) {
@@ -59,24 +71,11 @@ public:
     }
 
     /**
-     * @brief Constructor that acquires the lock immediately without retries
-     *
-     * This overload is provided for compatibility with std::lock_guard.
-     *
-     * @param mutex The mutex to lock
-     */
-    SafeLockGuard(std::mutex& mutex)
-        : m_mutex(mutex), m_locked(false) {
-        mutex.lock();
-        m_locked = true;
-    }
-
-    /**
      * @brief Destructor that releases the lock
      */
     ~SafeLockGuard() {
-        if (m_locked) {
-            m_mutex.unlock();
+        if (m_locked && m_mutex) {
+            m_mutex->unlock();
         }
     }
 
@@ -87,8 +86,94 @@ public:
     SafeLockGuard& operator=(const SafeLockGuard&) = delete;
 
 private:
-    std::mutex& m_mutex;
-    bool m_locked;
+    std::mutex* m_mutex;
+};
+
+/**
+ * @brief RAII wrapper for a timed mutex with timeout
+ *
+ * This class is similar to std::lock_guard but with a timeout to prevent deadlocks.
+ * Specialized for std::timed_mutex.
+ */
+class TimedSafeLockGuard : public SafeLockGuardBase {
+public:
+    /**
+     * @brief Constructor that acquires the lock with a timeout
+     *
+     * @param mutex The mutex to lock
+     * @param lockName The name of the lock (for debugging)
+     * @param timeoutMs The timeout in milliseconds (default: 5000)
+     * @throws LockTimeoutException if the lock cannot be acquired
+     */
+    TimedSafeLockGuard(std::timed_mutex& mutex, const std::string& lockName = "unnamed",
+                      unsigned int timeoutMs = 5000)
+        : m_mutex(&mutex) {
+
+        // Try to acquire the lock with timeout
+        if (mutex.try_lock_for(std::chrono::milliseconds(timeoutMs))) {
+            m_locked = true;
+        } else {
+            throw LockTimeoutException("Failed to acquire lock '" + lockName + "' after " +
+                                     std::to_string(timeoutMs) + " ms");
+        }
+    }
+
+    /**
+     * @brief Destructor that releases the lock
+     */
+    ~TimedSafeLockGuard() {
+        if (m_locked && m_mutex) {
+            m_mutex->unlock();
+        }
+    }
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    TimedSafeLockGuard(const TimedSafeLockGuard&) = delete;
+    TimedSafeLockGuard& operator=(const TimedSafeLockGuard&) = delete;
+
+private:
+    std::timed_mutex* m_mutex;
+};
+
+/**
+ * @brief RAII wrapper for a recursive mutex
+ *
+ * This class is similar to std::lock_guard but specialized for recursive mutexes.
+ */
+class RecursiveSafeLockGuard : public SafeLockGuardBase {
+public:
+    /**
+     * @brief Constructor that acquires the lock
+     *
+     * @param mutex The mutex to lock
+     * @param lockName The name of the lock (for debugging)
+     */
+    RecursiveSafeLockGuard(std::recursive_mutex& mutex, const std::string& lockName = "unnamed")
+        : m_mutex(&mutex) {
+
+        mutex.lock();
+        m_locked = true;
+    }
+
+    /**
+     * @brief Destructor that releases the lock
+     */
+    ~RecursiveSafeLockGuard() {
+        if (m_locked && m_mutex) {
+            m_mutex->unlock();
+        }
+    }
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    RecursiveSafeLockGuard(const RecursiveSafeLockGuard&) = delete;
+    RecursiveSafeLockGuard& operator=(const RecursiveSafeLockGuard&) = delete;
+
+private:
+    std::recursive_mutex* m_mutex;
 };
 
 /**
@@ -103,12 +188,21 @@ private:
  * @throws LockTimeoutException if the lock cannot be acquired after all retries
  * @throws Any exception thrown by the function
  */
-template <typename Func>
-auto withLock(std::mutex& mutex, Func func, const std::string& lockName = "unnamed",
+template <typename Mutex, typename Func>
+auto withLock(Mutex& mutex, Func func, const std::string& lockName = "unnamed",
              unsigned int timeoutMs = 5000, unsigned int maxRetries = 10)
     -> decltype(func()) {
-    SafeLockGuard guard(mutex, lockName, timeoutMs, maxRetries);
-    return func();
+    // Use the appropriate lock guard based on the mutex type
+    if constexpr (std::is_same_v<Mutex, std::timed_mutex>) {
+        TimedSafeLockGuard guard(mutex, lockName, timeoutMs);
+        return func();
+    } else if constexpr (std::is_same_v<Mutex, std::recursive_mutex>) {
+        RecursiveSafeLockGuard guard(mutex, lockName);
+        return func();
+    } else {
+        SafeLockGuard guard(mutex, lockName, timeoutMs, maxRetries);
+        return func();
+    }
 }
 
 /**

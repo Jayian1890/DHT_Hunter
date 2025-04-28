@@ -219,7 +219,7 @@ void KBucket::updateLastChanged() {
 
 // Initialize static members
 std::shared_ptr<RoutingTable> RoutingTable::s_instance = nullptr;
-std::timed_mutex RoutingTable::s_instanceMutex;
+std::recursive_mutex RoutingTable::s_instanceMutex;
 
 std::shared_ptr<RoutingTable> RoutingTable::getInstance(const NodeID& ownID, size_t kBucketSize) {
     try {

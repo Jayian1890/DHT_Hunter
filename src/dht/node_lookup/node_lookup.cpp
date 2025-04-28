@@ -13,7 +13,7 @@ namespace dht_hunter::dht {
 
 // Initialize static members
 std::shared_ptr<NodeLookup> NodeLookup::s_instance = nullptr;
-std::timed_mutex NodeLookup::s_instanceMutex;
+std::recursive_mutex NodeLookup::s_instanceMutex;
 
 std::shared_ptr<NodeLookup> NodeLookup::getInstance(
     const DHTConfig& config,

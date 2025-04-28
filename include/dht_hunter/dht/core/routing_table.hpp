@@ -110,7 +110,7 @@ private:
     size_t m_kSize;
     std::vector<std::shared_ptr<Node>> m_nodes;
     std::chrono::steady_clock::time_point m_lastChanged; // Time when the bucket was last changed
-    mutable std::timed_mutex m_mutex;
+    mutable std::recursive_mutex m_mutex;
 };
 
 /**
@@ -229,7 +229,7 @@ private:
 
     // Static instance for singleton pattern
     static std::shared_ptr<RoutingTable> s_instance;
-    static std::timed_mutex s_instanceMutex;
+    static std::recursive_mutex s_instanceMutex;
 
     /**
      * @brief Gets the appropriate k-bucket for a node ID
@@ -261,7 +261,7 @@ private:
     NodeID m_ownID;
     size_t m_kBucketSize;
     std::vector<KBucket> m_buckets;
-    mutable std::timed_mutex m_mutex;    // Logger removed
+    mutable std::recursive_mutex m_mutex;    // Logger removed
     std::shared_ptr<unified_event::EventBus> m_eventBus;
 };
 
