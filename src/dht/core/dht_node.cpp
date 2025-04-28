@@ -814,4 +814,10 @@ std::shared_ptr<Crawler> DHTNode::getCrawler() const {
     return m_crawler;
 }
 
+std::shared_ptr<RoutingManager> DHTNode::getRoutingManager() const {
+    unified_event::logTrace("DHT.Node", "TRACE: getRoutingManager() called");
+    unified_event::logTrace("DHT.Node", "TRACE: getRoutingManager() returning routing manager instance");
+    return m_routingManager;
+}
+
 }  // namespace dht_hunter::dht

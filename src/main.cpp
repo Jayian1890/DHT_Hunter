@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <iostream>
 #include <thread>
+#include <sstream>
+#include <iomanip>
 
 // Include thread utilities for the global shutdown flag
 #include "dht_hunter/utility/thread/thread_utils.hpp"
@@ -16,6 +18,8 @@
 // Project includes - DHT module
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/dht_node.hpp"
+#include "dht_hunter/dht/services/statistics_service.hpp"
+#include "dht_hunter/dht/routing/routing_manager.hpp"
 
 // Project includes - Network module
 #include "dht_hunter/network/udp_server.hpp"
@@ -135,8 +139,43 @@ int main(int argc, char* argv[]) {
     // Wait for the node to bootstrap
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
+    // Function to update the terminal title with stats
+    auto updateTitle = [&]() {
+        auto statsService = dht_hunter::dht::services::StatisticsService::getInstance();
+        auto routingManager = g_dhtNode->getRoutingManager();
+
+        if (!statsService || !routingManager) {
+            return;
+        }
+
+        size_t nodesDiscovered = statsService->getNodesDiscovered();
+        size_t nodesInTable = routingManager->getNodeCount();
+        size_t peersDiscovered = statsService->getPeersDiscovered();
+        size_t messagesSent = statsService->getMessagesSent();
+        size_t messagesReceived = statsService->getMessagesReceived();
+
+        std::stringstream ss;
+        ss << "\033]0;DHT Hunter - Nodes: " << nodesInTable
+           << "/" << nodesDiscovered
+           << " | Peers: " << peersDiscovered
+           << " | Msgs: " << messagesReceived << "/" << messagesSent
+           << "\007";
+
+        std::cout << ss.str() << std::flush;
+    };
+
     // Main application loop
+    auto lastUpdateTime = std::chrono::steady_clock::now();
     while (g_running) {
+        auto currentTime = std::chrono::steady_clock::now();
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastUpdateTime);
+
+        // Update title every second
+        if (elapsedTime.count() >= 1000) {
+            updateTitle();
+            lastUpdateTime = currentTime;
+        }
+
         // Sleep to avoid busy waiting
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

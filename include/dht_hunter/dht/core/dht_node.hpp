@@ -157,6 +157,12 @@ public:
      */
     std::shared_ptr<Crawler> getCrawler() const;
 
+    /**
+     * @brief Gets the routing manager
+     * @return The routing manager
+     */
+    std::shared_ptr<RoutingManager> getRoutingManager() const;
+
 private:
     /**
      * @brief Saves the routing table periodically
