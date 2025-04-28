@@ -35,17 +35,13 @@ std::shared_ptr<dht_hunter::dht::DHTNode> g_dhtNode;
  * Signal handler for graceful shutdown
  * @param signal The signal received
  */
-void signalHandler(int signal) {
+void signalHandler(const int signal) {
     std::cout << "Received signal " << signal << ", shutting down gracefully..." << std::endl;
 
     // Set the global shutdown flag to prevent new lock acquisitions
     dht_hunter::utility::thread::g_shuttingDown.store(true, std::memory_order_release);
 
-    // Set the running flag to false to exit the main loop
     g_running = false;
-
-    // Don't call stop() here - we'll do it in the main thread
-    // This avoids mutex issues in signal handlers
 }
 
 /**
