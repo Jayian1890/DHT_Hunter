@@ -59,6 +59,19 @@ public:
     }
 
     /**
+     * @brief Constructor that acquires the lock immediately without retries
+     *
+     * This overload is provided for compatibility with std::lock_guard.
+     *
+     * @param mutex The mutex to lock
+     */
+    SafeLockGuard(std::mutex& mutex)
+        : m_mutex(mutex), m_locked(false) {
+        mutex.lock();
+        m_locked = true;
+    }
+
+    /**
      * @brief Destructor that releases the lock
      */
     ~SafeLockGuard() {
