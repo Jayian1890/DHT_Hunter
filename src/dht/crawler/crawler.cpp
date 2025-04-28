@@ -138,8 +138,6 @@ bool Crawler::start() {
                 return true;
             }
 
-            unified_event::logInfo("DHT.Crawler", "Starting crawler");
-
             m_running = true;
             m_crawlThread = std::thread(&Crawler::crawlThread, this);
 
