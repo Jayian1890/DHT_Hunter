@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     // Configure the logging processor
     std::string logFilePath = (configPath / "dht_hunter.log").string();
     if (auto loggingProcessor = dht_hunter::unified_event::getLoggingProcessor()) {
-        loggingProcessor->setMinSeverity(dht_hunter::unified_event::EventSeverity::Trace);
+        loggingProcessor->setMinSeverity(dht_hunter::unified_event::EventSeverity::Info);
         loggingProcessor->setFileOutput(true, logFilePath);
     }
 
@@ -173,8 +173,8 @@ int main(int argc, char* argv[]) {
         size_t messagesReceived = statsService->getMessagesReceived();
 
         std::stringstream ss;
-        ss << "\033]0;DHT Hunter - Nodes: " << nodesInTable
-           << "/" << nodesDiscovered
+        ss << "\033]0;DHT Hunter - Nodes: " << nodesDiscovered
+           << "/" << nodesInTable
            << " | Peers: " << peersDiscovered
            << " | Msgs: " << messagesReceived << "/" << messagesSent
            << "\007";
