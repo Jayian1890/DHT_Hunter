@@ -574,8 +574,7 @@ void RoutingTable::refreshBucket(size_t bucketIndex, std::function<void(const st
     // Update the last changed time for the bucket
     m_buckets[bucketIndex].updateLastChanged();
 
-    // Release the lock before calling the callback to avoid deadlocks
-    lock.~lock_guard();
+    // The lock is automatically released when the withLock lambda returns
 
     // Publish a bucket refresh event
     if (m_eventBus) {
@@ -645,6 +644,7 @@ size_t RoutingTable::getBucketIndex(const NodeID& nodeID) const {
         unified_event::logError("DHT.RoutingTable", e.what());
         return 0; // Return 0 as fallback
     }
+}
 
 NodeID RoutingTable::generateRandomIDInBucket(size_t bucketIndex) const {
     // Generate a random ID in the range of the bucket
