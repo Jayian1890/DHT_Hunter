@@ -189,6 +189,24 @@ size_t dht_hunter::dht::PeerStorage::getTotalPeerCount() const {
     }
 }
 
+std::vector<InfoHash> dht_hunter::dht::PeerStorage::getAllInfoHashes() const {
+    try {
+        return utility::thread::withLock(m_mutex, [this]() {
+            std::vector<InfoHash> infoHashes;
+            infoHashes.reserve(m_peers.size());
+
+            for (const auto& entry : m_peers) {
+                infoHashes.push_back(entry.first);
+            }
+
+            return infoHashes;
+        }, "PeerStorage::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerStorage", e.what());
+        return std::vector<InfoHash>{};
+    }
+}
+
 void dht_hunter::dht::PeerStorage::cleanupExpiredPeers() {
     try {
         utility::thread::withLock(m_mutex, [this]() {

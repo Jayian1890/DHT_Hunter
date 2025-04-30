@@ -418,12 +418,12 @@ std::string DHTNode::getStatistics() const {
     unified_event::logTrace("DHT.Node", "TRACE: getStatistics() called");
     if (m_statisticsService) {
         unified_event::logTrace("DHT.Node", "TRACE: Getting statistics from StatisticsService");
-        std::string stats = m_statisticsService->getStatisticsAsJson();
-        unified_event::logTrace("DHT.Node", "TRACE: getStatistics() returning JSON data");
+        std::string stats = m_statisticsService->getStatisticsAsString();
+        unified_event::logTrace("DHT.Node", "TRACE: getStatistics() returning statistics data");
         return stats;
     }
-    unified_event::logTrace("DHT.Node", "TRACE: StatisticsService not available, returning empty JSON");
-    return "{}";
+    unified_event::logTrace("DHT.Node", "TRACE: StatisticsService not available, returning empty string");
+    return "No statistics available";
 }
 
 bool DHTNode::handlePortMessage(const network::NetworkAddress& peerAddress, const uint8_t* data, size_t length) const {
@@ -769,44 +769,8 @@ void DHTNode::handleSystemErrorEvent(const std::shared_ptr<unified_event::Event>
     unified_event::logTrace("DHT.Node", "TRACE: handleSystemErrorEvent() exit");
 }
 
-void DHTNode::saveRoutingTablePeriodically() {
-    unified_event::logTrace("DHT.Node", "TRACE: saveRoutingTablePeriodically() entry");
-    unified_event::logDebug("DHT.Node", "Starting Routing Table Save Thread");
-
-    while (m_running) {
-        unified_event::logTrace("DHT.Node", "TRACE: Sleeping for " + std::to_string(m_config.getRoutingTableSaveInterval()) + " minutes");
-        // Sleep for the configured interval
-        std::this_thread::sleep_for(std::chrono::minutes(m_config.getRoutingTableSaveInterval()));
-
-        if (!m_running) {
-            unified_event::logTrace("DHT.Node", "TRACE: Node no longer running, exiting save thread");
-            break;
-        }
-
-        // Save the routing table
-        if (m_routingTable) {
-            unified_event::logTrace("DHT.Node", "TRACE: Saving routing table");
-            unified_event::logDebug("DHT.Node", "Saving Routing Table");
-
-            std::string filePath = m_config.getRoutingTablePath();
-            unified_event::logTrace("DHT.Node", "TRACE: Saving to file: " + filePath);
-            bool success = m_routingTable->saveToFile(filePath);
-
-            if (success) {
-                unified_event::logTrace("DHT.Node", "TRACE: Routing table saved successfully");
-                unified_event::logDebug("DHT.Node", "Routing Table Saved to " + filePath);
-            } else {
-                unified_event::logTrace("DHT.Node", "TRACE: Failed to save routing table");
-                unified_event::logError("DHT.Node", "Failed to save routing table to " + filePath);
-            }
-        } else {
-            unified_event::logTrace("DHT.Node", "TRACE: No routing table available to save");
-        }
-    }
-
-    unified_event::logDebug("DHT.Node", "Routing Table Save Thread Ended");
-    unified_event::logTrace("DHT.Node", "TRACE: saveRoutingTablePeriodically() exit");
-}
+// Routing table saving method has been removed
+// This operation is now handled by the PersistenceManager
 
 std::shared_ptr<Crawler> DHTNode::getCrawler() const {
     unified_event::logTrace("DHT.Node", "TRACE: getCrawler() called");

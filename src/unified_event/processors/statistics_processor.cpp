@@ -144,71 +144,48 @@ double StatisticsProcessor::getAverageProcessingTime() const {
     return static_cast<double>(m_totalProcessingTime) / processedCount;
 }
 
-std::string StatisticsProcessor::getStatisticsAsJson() const {
+std::string StatisticsProcessor::getStatisticsAsString() const {
     std::stringstream ss;
 
-    ss << "{\n";
-    ss << "  \"totalEventCount\": " << m_totalEventCount << ",\n";
+    ss << "Event Statistics:\n";
+    ss << "  Total Event Count: " << m_totalEventCount << "\n";
 
     // Add event counts by type
     if (m_config.trackEventCounts) {
-        ss << "  \"eventCounts\": {\n";
+        ss << "  Event Counts:\n";
 
         std::lock_guard<std::mutex> lock(m_statisticsMutex);
-        bool first = true;
         for (const auto& pair : m_eventCounts) {
-            if (!first) {
-                ss << ",\n";
-            }
-            ss << "    \"" << eventTypeToString(pair.first) << "\": " << pair.second;
-            first = false;
+            ss << "    " << eventTypeToString(pair.first) << ": " << pair.second << "\n";
         }
-
-        ss << "\n  },\n";
     }
 
     // Add event counts by severity
     if (m_config.trackSeverityCounts) {
-        ss << "  \"severityCounts\": {\n";
+        ss << "  Severity Counts:\n";
 
         std::lock_guard<std::mutex> lock(m_statisticsMutex);
-        bool first = true;
         for (const auto& pair : m_severityCounts) {
-            if (!first) {
-                ss << ",\n";
-            }
-            ss << "    \"" << eventSeverityToString(pair.first) << "\": " << pair.second;
-            first = false;
+            ss << "    " << eventSeverityToString(pair.first) << ": " << pair.second << "\n";
         }
-
-        ss << "\n  },\n";
     }
 
     // Add event counts by source
     if (m_config.trackSourceCounts) {
-        ss << "  \"sourceCounts\": {\n";
+        ss << "  Source Counts:\n";
 
         std::lock_guard<std::mutex> lock(m_statisticsMutex);
-        bool first = true;
         for (const auto& pair : m_sourceCounts) {
-            if (!first) {
-                ss << ",\n";
-            }
-            ss << "    \"" << pair.first << "\": " << pair.second;
-            first = false;
+            ss << "    " << pair.first << ": " << pair.second << "\n";
         }
-
-        ss << "\n  },\n";
     }
 
     // Add processing time statistics
     if (m_config.trackProcessingTimes) {
-        ss << "  \"averageProcessingTime\": " << std::fixed << std::setprecision(2) << getAverageProcessingTime() << "\n";
+        ss << "  Average Processing Time: " << std::fixed << std::setprecision(2) << getAverageProcessingTime() << " μs\n";
     } else {
-        ss << "  \"averageProcessingTime\": 0.0\n";
+        ss << "  Average Processing Time: 0.0 μs\n";
     }
-
-    ss << "}";
 
     return ss.str();
 }
@@ -234,7 +211,7 @@ void StatisticsProcessor::logStatisticsPeriodically() {
         }
 
         // Log the statistics
-        std::cout << "Event Statistics:\n" << getStatisticsAsJson() << std::endl;
+        std::cout << getStatisticsAsString() << std::endl;
     }
 }
 

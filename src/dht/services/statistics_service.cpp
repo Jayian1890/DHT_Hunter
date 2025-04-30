@@ -101,17 +101,16 @@ size_t StatisticsService::getErrors() const {
     return m_errors;
 }
 
-std::string StatisticsService::getStatisticsAsJson() const {
+std::string StatisticsService::getStatisticsAsString() const {
     std::stringstream ss;
 
-    ss << "{\n";
-    ss << "  \"nodesDiscovered\": " << m_nodesDiscovered << ",\n";
-    ss << "  \"nodesAdded\": " << m_nodesAdded << ",\n";
-    ss << "  \"peersDiscovered\": " << m_peersDiscovered << ",\n";
-    ss << "  \"messagesReceived\": " << m_messagesReceived << ",\n";
-    ss << "  \"messagesSent\": " << m_messagesSent << ",\n";
-    ss << "  \"errors\": " << m_errors << "\n";
-    ss << "}";
+    ss << "Statistics:\n";
+    ss << "  Nodes Discovered: " << m_nodesDiscovered << "\n";
+    ss << "  Nodes Added: " << m_nodesAdded << "\n";
+    ss << "  Peers Discovered: " << m_peersDiscovered << "\n";
+    ss << "  Messages Received: " << m_messagesReceived << "\n";
+    ss << "  Messages Sent: " << m_messagesSent << "\n";
+    ss << "  Errors: " << m_errors << "\n";
 
     return ss.str();
 }

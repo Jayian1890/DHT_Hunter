@@ -9,7 +9,7 @@ DHTConfig::DHTConfig()
       m_alpha(DEFAULT_LOOKUP_ALPHA),
       m_maxResults(DEFAULT_LOOKUP_MAX_RESULTS),
       m_routingTableSaveInterval(ROUTING_TABLE_SAVE_INTERVAL),
-      m_routingTablePath("routing_table.dat"),
+      m_routingTablePath(""), // Empty path - routing table persistence is handled by PersistenceManager
       m_tokenRotationInterval(DEFAULT_TOKEN_ROTATION_INTERVAL),
       m_configDir("config") {
 

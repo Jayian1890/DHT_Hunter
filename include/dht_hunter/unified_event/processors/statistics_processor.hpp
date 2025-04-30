@@ -110,10 +110,10 @@ public:
     double getAverageProcessingTime() const;
 
     /**
-     * @brief Gets all statistics as a JSON string
-     * @return The statistics as a JSON string
+     * @brief Gets all statistics as a formatted string
+     * @return The statistics as a formatted string
      */
-    std::string getStatisticsAsJson() const;
+    std::string getStatisticsAsString() const;
 
     /**
      * @brief Resets all statistics

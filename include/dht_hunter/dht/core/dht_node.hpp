@@ -83,8 +83,8 @@ public:
     uint16_t getPort() const;
 
     /**
-     * @brief Gets the statistics as a JSON string
-     * @return The statistics as a JSON string
+     * @brief Gets the statistics as a formatted string
+     * @return The statistics as a formatted string
      */
     std::string getStatistics() const;
 
@@ -170,10 +170,8 @@ public:
     std::shared_ptr<PeerStorage> getPeerStorage() const;
 
 private:
-    /**
-     * @brief Saves the routing table periodically
-     */
-    void saveRoutingTablePeriodically();
+    // Routing table saving method has been removed
+    // This operation is now handled by the PersistenceManager
 
     /**
      * @brief Subscribes to events
@@ -226,7 +224,7 @@ private:
     std::shared_ptr<extensions::MainlineDHT> m_mainlineDHT;
     std::shared_ptr<extensions::KademliaDHT> m_kademliaDHT;
     std::shared_ptr<extensions::AzureusDHT> m_azureusDHT;
-    std::thread m_saveRoutingTableThread;
+    // Save thread removed - saving is now handled by PersistenceManager
     std::mutex m_mutex;    // Logger removed
 };
 

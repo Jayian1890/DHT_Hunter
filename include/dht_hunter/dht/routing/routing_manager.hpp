@@ -112,25 +112,12 @@ public:
      */
     size_t getNodeCount() const;
 
-    /**
-     * @brief Saves the routing table to a file
-     * @param filePath The path to the file
-     * @return True if the routing table was saved successfully, false otherwise
-     */
-    bool saveRoutingTable(const std::string& filePath) const;
-
-    /**
-     * @brief Loads the routing table from a file
-     * @param filePath The path to the file
-     * @return True if the routing table was loaded successfully, false otherwise
-     */
-    bool loadRoutingTable(const std::string& filePath);
+    // Routing table saving and loading methods have been removed
+    // These operations are now handled by the PersistenceManager
 
 private:
-    /**
-     * @brief Saves the routing table periodically
-     */
-    void saveRoutingTablePeriodically();
+    // Routing table periodic saving has been removed
+    // This operation is now handled by the PersistenceManager
 
     /**
      * @brief Checks and refreshes buckets that need refreshing
@@ -167,7 +154,7 @@ private:
     std::shared_ptr<TransactionManager> m_transactionManager;
     std::shared_ptr<MessageSender> m_messageSender;
     std::atomic<bool> m_running;
-    std::thread m_saveThread;
+    // Save thread removed - saving is now handled by PersistenceManager
     mutable std::mutex m_mutex;
 
     // Bucket refresh thread

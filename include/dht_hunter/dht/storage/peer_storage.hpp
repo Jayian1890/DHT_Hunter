@@ -89,6 +89,12 @@ public:
      */
     size_t getTotalPeerCount() const;
 
+    /**
+     * @brief Gets all info hashes
+     * @return A vector of all info hashes
+     */
+    std::vector<InfoHash> getAllInfoHashes() const;
+
 private:
     /**
      * @brief Cleans up expired peers

@@ -61,12 +61,7 @@ bool RoutingManager::start() {
         return true;
     }
 
-    // Load the routing table
-    if (!m_config.getRoutingTablePath().empty()) {
-        // Use the full path with config directory
-        std::string fullPath = m_config.getFullPath(m_config.getRoutingTablePath());
-        loadRoutingTable(fullPath);
-    }
+    // Routing table loading is now handled by PersistenceManager
 
     // Start the node verifier
     if (m_nodeVerifier) {
@@ -77,8 +72,7 @@ bool RoutingManager::start() {
 
     m_running = true;
 
-    // Start the save thread
-    m_saveThread = std::thread(&RoutingManager::saveRoutingTablePeriodically, this);
+    // Routing table saving is now handled by PersistenceManager
 
     // Start the bucket refresh thread
     startBucketRefreshThread();
@@ -105,20 +99,12 @@ void RoutingManager::stop() {
         m_nodeVerifier->stop();
     }
 
-    // Wait for the save thread to finish
-    if (m_saveThread.joinable()) {
-        m_saveThread.join();
-    }
+    // No save thread to wait for - saving is handled by PersistenceManager
 
     // Stop the bucket refresh thread
     stopBucketRefreshThread();
 
-    // Save the routing table - do this outside the lock
-    if (!m_config.getRoutingTablePath().empty()) {
-        // Use the full path with config directory
-        std::string fullPath = m_config.getFullPath(m_config.getRoutingTablePath());
-        saveRoutingTable(fullPath);
-    }
+    // Routing table saving is now handled by PersistenceManager
 
     // Publish a system stopped event
     auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("DHT.RoutingManager");
@@ -214,83 +200,8 @@ size_t RoutingManager::getNodeCount() const {
     return m_routingTable->getNodeCount();
 }
 
-bool RoutingManager::saveRoutingTable(const std::string& filePath) const {
-    if (!m_routingTable) {
-        return false;
-    }
-
-    if (filePath.empty()) {
-        return false;
-    }
-
-    try {
-        // Check if the parent path is valid & create the directory if it doesn't exist
-        if (const std::filesystem::path path(filePath); !path.parent_path().empty()) {
-            std::filesystem::create_directories(path.parent_path());
-        }
-
-        bool result = m_routingTable->saveToFile(filePath);
-
-        if (result) {
-        } else {
-        }
-
-        return result;
-    } catch (const std::exception& e) {
-        return false;
-    } catch (...) {
-        return false;
-    }
-}
-
-bool RoutingManager::loadRoutingTable(const std::string& filePath) {
-    if (!m_routingTable) {
-        return false;
-    }
-
-    // Check if the file exists
-    if (!std::filesystem::exists(filePath)) {
-        return false;
-    }
-
-    bool result = m_routingTable->loadFromFile(filePath);
-
-    if (result) {
-    } else {
-    }
-
-    return result;
-}
-
-void RoutingManager::saveRoutingTablePeriodically() {
-    try {
-        while (m_running) {
-            // Sleep for 60 seconds (save every minute)
-            std::this_thread::sleep_for(std::chrono::seconds(60));
-
-            // Check if we're still running after the sleep
-            if (!m_running) {
-                break;
-            }
-
-            // Save the routing table
-            try {
-                std::string routingTablePath = m_config.getRoutingTablePath();
-                if (!routingTablePath.empty()) {
-                    // Use the full path with config directory
-                    std::string fullPath = m_config.getFullPath(routingTablePath);
-                    saveRoutingTable(fullPath);
-                }
-            } catch (const std::exception& e) {
-                // Continue running despite the error
-            } catch (...) {
-                // Continue running despite the error
-            }
-        }
-    } catch (const std::exception& e) {
-    } catch (...) {
-    }
-}
+// Routing table saving and loading methods have been removed
+// These operations are now handled by the PersistenceManager
 
 void RoutingManager::startBucketRefreshThread() {
     std::lock_guard<std::mutex> lock(m_bucketRefreshMutex);

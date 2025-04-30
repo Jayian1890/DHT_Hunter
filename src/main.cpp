@@ -73,7 +73,6 @@ int main(int argc, char* argv[]) {
     }
 
     // Parse command line arguments
-    bool verbose = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--config-dir" || arg == "-c") {
@@ -83,9 +82,6 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: --config-dir requires a directory path" << std::endl;
                 return 1;
             }
-        } else if (arg == "--verbose" || arg == "-v") {
-            verbose = true;
-            std::cout << "Verbose mode enabled - trace logs will be displayed" << std::endl;
         }
     }
 
@@ -123,16 +119,13 @@ int main(int argc, char* argv[]) {
     // Create a DHT configuration with the specified config directory
     dht_hunter::dht::DHTConfig dhtConfig(DHT_PORT, configDir);
 
-    // Configure the logging processor to show trace logs if verbose mode is enabled
+    // Configure the logging processor to show Info level and above
     dht_hunter::unified_event::LoggingProcessorConfig loggingConfig;
-    loggingConfig.minSeverity = verbose ? dht_hunter::types::EventSeverity::Trace : dht_hunter::types::EventSeverity::Debug;
+    loggingConfig.minSeverity = dht_hunter::types::EventSeverity::Info;
     dht_hunter::unified_event::configureLoggingProcessor(loggingConfig);
 
     // Initialize the persistence manager
     auto persistenceManager = dht_hunter::dht::PersistenceManager::getInstance(configDir);
-
-    // Set the routing table path to be in the config directory
-    dhtConfig.setRoutingTablePath(dhtConfig.getFullPath("routing_table.dat"));
 
     // Create and start a DHT node
     g_dhtNode = std::make_shared<dht_hunter::dht::DHTNode>(dhtConfig);

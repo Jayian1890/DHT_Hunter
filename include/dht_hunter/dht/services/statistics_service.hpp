@@ -88,10 +88,10 @@ public:
     size_t getErrors() const;
 
     /**
-     * @brief Gets statistics as a JSON string
-     * @return The statistics as a JSON string
+     * @brief Gets statistics as a formatted string
+     * @return The statistics as a formatted string
      */
-    std::string getStatisticsAsJson() const;
+    std::string getStatisticsAsString() const;
 
 private:
     /**
