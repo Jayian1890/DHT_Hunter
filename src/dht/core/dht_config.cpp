@@ -11,6 +11,7 @@ DHTConfig::DHTConfig()
       m_routingTableSaveInterval(ROUTING_TABLE_SAVE_INTERVAL),
       m_routingTablePath(""), // Empty path - routing table persistence is handled by PersistenceManager
       m_tokenRotationInterval(DEFAULT_TOKEN_ROTATION_INTERVAL),
+      m_bucketRefreshInterval(1), // Default to 1 minute
       m_configDir("config") {
 
     // Add default bootstrap nodes
@@ -104,6 +105,14 @@ const std::string& DHTConfig::getConfigDir() const {
 
 void DHTConfig::setConfigDir(const std::string& configDir) {
     m_configDir = configDir;
+}
+
+int DHTConfig::getBucketRefreshInterval() const {
+    return m_bucketRefreshInterval;
+}
+
+void DHTConfig::setBucketRefreshInterval(int interval) {
+    m_bucketRefreshInterval = interval;
 }
 
 std::string DHTConfig::getFullPath(const std::string& relativePath) const {

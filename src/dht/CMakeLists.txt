@@ -21,7 +21,9 @@ add_library(dht_hunter_dht
 
         # Routing components
         routing/routing_manager.cpp
-        routing/node_verifier.cpp
+        routing/components/base_routing_component.cpp
+        routing/components/node_verifier_component.cpp
+        routing/components/bucket_refresh_component.cpp
 
         # Node Lookup components
         node_lookup/node_lookup.cpp

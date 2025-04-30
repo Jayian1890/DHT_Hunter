@@ -3,9 +3,9 @@
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/core/routing_table.hpp"
-#include "dht_hunter/dht/routing/node_verifier.hpp"
+#include "dht_hunter/dht/routing/components/node_verifier_component.hpp"
+#include "dht_hunter/dht/routing/components/bucket_refresh_component.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
-#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include <memory>
 #include <thread>
 #include <atomic>
@@ -120,21 +120,6 @@ private:
     // This operation is now handled by the PersistenceManager
 
     /**
-     * @brief Checks and refreshes buckets that need refreshing
-     */
-    void checkAndRefreshBuckets();
-
-    /**
-     * @brief Starts the bucket refresh thread
-     */
-    void startBucketRefreshThread();
-
-    /**
-     * @brief Stops the bucket refresh thread
-     */
-    void stopBucketRefreshThread();
-
-    /**
      * @brief Private constructor for singleton pattern
      */
     RoutingManager(const DHTConfig& config,
@@ -150,18 +135,12 @@ private:
     DHTConfig m_config;
     NodeID m_nodeID;
     std::shared_ptr<RoutingTable> m_routingTable;
-    std::shared_ptr<NodeVerifier> m_nodeVerifier;
+    std::shared_ptr<routing::NodeVerifierComponent> m_nodeVerifier;
+    std::shared_ptr<routing::BucketRefreshComponent> m_bucketRefresher;
     std::shared_ptr<TransactionManager> m_transactionManager;
     std::shared_ptr<MessageSender> m_messageSender;
     std::atomic<bool> m_running;
-    // Save thread removed - saving is now handled by PersistenceManager
     mutable std::mutex m_mutex;
-
-    // Bucket refresh thread
-    std::thread m_bucketRefreshThread;
-    std::atomic<bool> m_bucketRefreshThreadRunning;
-    std::mutex m_bucketRefreshMutex;
-    std::condition_variable m_bucketRefreshCondition;
 
     // Event bus
     std::shared_ptr<unified_event::EventBus> m_eventBus;    // Logger removed

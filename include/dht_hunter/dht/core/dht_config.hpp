@@ -146,6 +146,18 @@ public:
     void setConfigDir(const std::string& configDir);
 
     /**
+     * @brief Gets the bucket refresh interval
+     * @return The bucket refresh interval in minutes
+     */
+    int getBucketRefreshInterval() const;
+
+    /**
+     * @brief Sets the bucket refresh interval
+     * @param interval The bucket refresh interval in minutes
+     */
+    void setBucketRefreshInterval(int interval);
+
+    /**
      * @brief Gets the full path for a file in the configuration directory
      * @param relativePath The relative path to the file
      * @return The full path to the file
@@ -161,6 +173,7 @@ private:
     int m_routingTableSaveInterval;
     std::string m_routingTablePath;
     int m_tokenRotationInterval;
+    int m_bucketRefreshInterval;
     std::string m_configDir;
 };
 

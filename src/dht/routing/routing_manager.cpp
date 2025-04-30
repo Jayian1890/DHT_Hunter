@@ -37,11 +37,16 @@ RoutingManager::RoutingManager(const DHTConfig& config,
       m_transactionManager(transactionManager),
       m_messageSender(messageSender),
       m_running(false),
-      m_bucketRefreshThreadRunning(false),
       m_eventBus(unified_event::EventBus::getInstance()) {
 
-    // Create the node verifier
-    m_nodeVerifier = std::make_shared<NodeVerifier>(config, nodeID, m_routingTable, transactionManager, messageSender, m_eventBus);
+    // Create the node verifier component
+    m_nodeVerifier = std::make_shared<routing::NodeVerifierComponent>(config, nodeID, m_routingTable, transactionManager, messageSender);
+
+    // Create the bucket refresher component
+    m_bucketRefresher = std::make_shared<routing::BucketRefreshComponent>(config, nodeID, m_routingTable,
+        [this](std::shared_ptr<Node> node) {
+            this->addNode(node);
+        });
 }
 
 RoutingManager::~RoutingManager() {
@@ -63,9 +68,28 @@ bool RoutingManager::start() {
 
     // Routing table loading is now handled by PersistenceManager
 
-    // Start the node verifier
+    // Initialize and start the node verifier component
     if (m_nodeVerifier) {
+        if (!m_nodeVerifier->initialize()) {
+            unified_event::logError("DHT.RoutingManager", "Failed to initialize node verifier component");
+            return false;
+        }
+
         if (!m_nodeVerifier->start()) {
+            unified_event::logError("DHT.RoutingManager", "Failed to start node verifier component");
+            return false;
+        }
+    }
+
+    // Initialize and start the bucket refresher component
+    if (m_bucketRefresher) {
+        if (!m_bucketRefresher->initialize()) {
+            unified_event::logError("DHT.RoutingManager", "Failed to initialize bucket refresher component");
+            return false;
+        }
+
+        if (!m_bucketRefresher->start()) {
+            unified_event::logError("DHT.RoutingManager", "Failed to start bucket refresher component");
             return false;
         }
     }
@@ -73,9 +97,6 @@ bool RoutingManager::start() {
     m_running = true;
 
     // Routing table saving is now handled by PersistenceManager
-
-    // Start the bucket refresh thread
-    startBucketRefreshThread();
 
     // Publish a system started event
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("DHT.RoutingManager");
@@ -92,17 +113,17 @@ void RoutingManager::stop() {
         }
 
         m_running = false;
-    } // Release the lock before joining the thread
+    } // Release the lock before stopping components
 
-    // Stop the node verifier
+    // Stop the node verifier component
     if (m_nodeVerifier) {
         m_nodeVerifier->stop();
     }
 
-    // No save thread to wait for - saving is handled by PersistenceManager
-
-    // Stop the bucket refresh thread
-    stopBucketRefreshThread();
+    // Stop the bucket refresher component
+    if (m_bucketRefresher) {
+        m_bucketRefresher->stop();
+    }
 
     // Routing table saving is now handled by PersistenceManager
 
@@ -145,7 +166,6 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
             // Publish a node added event
             auto addedEvent = std::make_shared<unified_event::NodeAddedEvent>("DHT.RoutingManager", node, addedBucketIndex);
             m_eventBus->publish(addedEvent);
-        } else {
         }
     }, bucketIndex);
 }
@@ -202,78 +222,5 @@ size_t RoutingManager::getNodeCount() const {
 
 // Routing table saving and loading methods have been removed
 // These operations are now handled by the PersistenceManager
-
-void RoutingManager::startBucketRefreshThread() {
-    std::lock_guard<std::mutex> lock(m_bucketRefreshMutex);
-
-    if (m_bucketRefreshThreadRunning) {
-        return;
-    }
-
-    m_bucketRefreshThreadRunning = true;
-    m_bucketRefreshThread = std::thread(&RoutingManager::checkAndRefreshBuckets, this);
-}
-
-void RoutingManager::stopBucketRefreshThread() {
-    {
-        std::lock_guard<std::mutex> lock(m_bucketRefreshMutex);
-
-        if (!m_bucketRefreshThreadRunning) {
-            return;
-        }
-
-        m_bucketRefreshThreadRunning = false;
-        m_bucketRefreshCondition.notify_all();
-    } // Release the lock before joining the thread
-
-    // Wait for the thread to finish
-    if (m_bucketRefreshThread.joinable()) {
-        m_bucketRefreshThread.join();
-    }
-}
-
-void RoutingManager::checkAndRefreshBuckets() {
-    try {
-        while (m_bucketRefreshThreadRunning) {
-            // Sleep for 1 minute
-            {
-                std::unique_lock<std::mutex> lock(m_bucketRefreshMutex);
-                m_bucketRefreshCondition.wait_for(lock, std::chrono::minutes(1),
-                    [this] { return !m_bucketRefreshThreadRunning; });
-
-                if (!m_bucketRefreshThreadRunning) {
-                    break;
-                }
-            }
-
-            // Check if we're still running
-            if (!m_running || !m_bucketRefreshThreadRunning) {
-                break;
-            }
-
-            // Check all buckets
-            if (m_routingTable) {
-                size_t bucketCount = m_routingTable->getBucketCount();
-
-                for (size_t i = 0; i < bucketCount; ++i) {
-                    // Check if the bucket needs refreshing
-                    if (m_routingTable->needsRefresh(i)) {
-
-                        // Refresh the bucket
-                        m_routingTable->refreshBucket(i, [this](const std::vector<std::shared_ptr<Node>>& nodes) {
-
-                            // Add the nodes to the routing table
-                            for (const auto& node : nodes) {
-                                addNode(node);
-                            }
-                        });
-                    }
-                }
-            }
-        }
-    } catch (const std::exception& e) {
-    } catch (...) {
-    }
-}
 
 } // namespace dht_hunter::dht
