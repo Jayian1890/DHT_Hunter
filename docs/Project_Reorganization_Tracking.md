@@ -63,7 +63,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
 - [x] Implement Routing Table as singleton
 - [x] Reorganize DHT network message handling
 - [x] Reorganize node lookup functionality
-- [ ] Reorganize peer lookup functionality
+- [x] Reorganize peer lookup functionality
 - [ ] Reorganize bootstrap functionality
 - [ ] Reorganize crawler functionality
 - [x] Reorganize storage functionality
@@ -124,6 +124,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
    - Implemented interfaces for routing components
    - Reorganized DHT network message handling
    - Reorganized node lookup functionality with modular components
+   - Reorganized peer lookup functionality with modular components
 
 5. Refactored the Unified Event module
    - Created event_types_adapter.hpp to use the Types module
@@ -154,6 +155,7 @@ We've successfully reorganized the project into modular components:
    - Implemented interfaces for routing components
    - Reorganized DHT network message handling
    - Reorganized node lookup functionality with modular components
+   - Reorganized peer lookup functionality with modular components
 5. **Unified Event Module**: Refactored to use the Types module
    - Updated to use string formatting instead of JSON
 6. **Main Application**: Updated to use the new modular structure
