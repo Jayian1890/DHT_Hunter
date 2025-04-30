@@ -68,7 +68,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
 - [x] Reorganize crawler functionality
 - [x] Reorganize storage functionality
 - [x] Implement binary format for persistence
-- [ ] Reorganize transaction management
+- [x] Reorganize transaction management
 - [x] Update CMakeLists.txt for DHT module
 - [ ] Update include paths in affected files
 
@@ -160,6 +160,7 @@ We've successfully reorganized the project into modular components:
    - Reorganized peer lookup functionality with modular components
    - Reorganized bootstrap functionality with modular components
    - Reorganized crawler functionality with modular components
+   - Reorganized transaction management with modular components
 5. **Unified Event Module**: Refactored to use the Types module
    - Updated to use string formatting instead of JSON
 6. **Main Application**: Updated to use the new modular structure
