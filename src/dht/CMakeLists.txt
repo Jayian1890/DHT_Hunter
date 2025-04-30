@@ -54,6 +54,8 @@ add_library(dht_hunter_dht
 
         # Bootstrap components
         bootstrap/bootstrapper.cpp
+        bootstrap/components/base_bootstrap_component.cpp
+        bootstrap/components/bootstrap_manager.cpp
 
         # Crawler components
         crawler/crawler.cpp
