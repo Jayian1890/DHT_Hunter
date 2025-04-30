@@ -61,7 +61,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
 - [x] Reorganize routing functionality
 - [x] Implement Routing Manager as singleton
 - [x] Implement Routing Table as singleton
-- [ ] Reorganize DHT network message handling
+- [ ] Reorganize DHT network message handling (in progress)
 - [ ] Reorganize node lookup functionality
 - [ ] Reorganize peer lookup functionality
 - [ ] Reorganize bootstrap functionality
