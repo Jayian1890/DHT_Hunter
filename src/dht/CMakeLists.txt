@@ -51,6 +51,9 @@ add_library(dht_hunter_dht
 
         # Transaction components
         transactions/transaction_manager.cpp
+        transactions/components/base_transaction_component.cpp
+        transactions/components/transaction.cpp
+        transactions/components/transaction_manager.cpp
 
         # Bootstrap components
         bootstrap/bootstrapper.cpp

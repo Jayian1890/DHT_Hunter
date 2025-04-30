@@ -1,173 +1,30 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/types.hpp"
-#include "dht_hunter/dht/network/message.hpp"
-#include "dht_hunter/dht/network/query_message.hpp"
-#include "dht_hunter/dht/network/response_message.hpp"
-#include "dht_hunter/dht/network/error_message.hpp"
-#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
-#include <unordered_map>
-#include <functional>
-#include <mutex>
-#include <chrono>
-#include <thread>
-#include <atomic>
-#include <random>
+#include "dht_hunter/dht/transactions/components/transaction_manager.hpp"
+#include "dht_hunter/dht/transactions/components/transaction.hpp"
 
 namespace dht_hunter::dht {
 
-/**
- * @brief Callback for a transaction response
- */
-using TransactionResponseCallback = std::function<void(std::shared_ptr<ResponseMessage>, const network::EndPoint&)>;
-
-/**
- * @brief Callback for a transaction error
- */
-using TransactionErrorCallback = std::function<void(std::shared_ptr<ErrorMessage>, const network::EndPoint&)>;
-
-/**
- * @brief Callback for a transaction timeout
- */
-using TransactionTimeoutCallback = std::function<void()>;
-
-/**
- * @brief A transaction
- */
-struct Transaction {
-    std::string id;
-    std::shared_ptr<QueryMessage> query;
-    network::EndPoint endpoint;
-    std::chrono::steady_clock::time_point timestamp;
-    TransactionResponseCallback responseCallback;
-    TransactionErrorCallback errorCallback;
-    TransactionTimeoutCallback timeoutCallback;
-
-    Transaction(const std::string& id,
-               std::shared_ptr<QueryMessage> query,
-               const network::EndPoint& endpoint,
-               TransactionResponseCallback responseCallback,
-               TransactionErrorCallback errorCallback,
-               TransactionTimeoutCallback timeoutCallback)
-        : id(id),
-          query(query),
-          endpoint(endpoint),
-          timestamp(std::chrono::steady_clock::now()),
-          responseCallback(responseCallback),
-          errorCallback(errorCallback),
-          timeoutCallback(timeoutCallback) {}
-};
+// Type aliases for backward compatibility
+using TransactionResponseCallback = transactions::TransactionResponseCallback;
+using TransactionErrorCallback = transactions::TransactionErrorCallback;
+using TransactionTimeoutCallback = transactions::TransactionTimeoutCallback;
+using Transaction = transactions::Transaction;
 
 /**
  * @brief Manages DHT transactions (Singleton)
  */
-class TransactionManager {
+class TransactionManager : public transactions::TransactionManager {
 public:
     /**
      * @brief Gets the singleton instance of the transaction manager
      * @param config The DHT configuration (only used if instance doesn't exist yet)
      * @return The singleton instance
      */
-    static std::shared_ptr<TransactionManager> getInstance(const DHTConfig& config);
-
-    /**
-     * @brief Destructor
-     */
-    ~TransactionManager();
-
-    /**
-     * @brief Delete copy constructor and assignment operator
-     */
-    TransactionManager(const TransactionManager&) = delete;
-    TransactionManager& operator=(const TransactionManager&) = delete;
-    TransactionManager(TransactionManager&&) = delete;
-    TransactionManager& operator=(TransactionManager&&) = delete;
-
-    /**
-     * @brief Starts the transaction manager
-     * @return True if the transaction manager was started successfully, false otherwise
-     */
-    bool start();
-
-    /**
-     * @brief Stops the transaction manager
-     */
-    void stop();
-
-    /**
-     * @brief Checks if the transaction manager is running
-     * @return True if the transaction manager is running, false otherwise
-     */
-    bool isRunning() const;
-
-    /**
-     * @brief Creates a transaction
-     * @param query The query message
-     * @param endpoint The endpoint
-     * @param responseCallback The response callback
-     * @param errorCallback The error callback
-     * @param timeoutCallback The timeout callback
-     * @return The transaction ID
-     */
-    std::string createTransaction(std::shared_ptr<QueryMessage> query,
-                                 const network::EndPoint& endpoint,
-                                 TransactionResponseCallback responseCallback,
-                                 TransactionErrorCallback errorCallback,
-                                 TransactionTimeoutCallback timeoutCallback);
-
-    /**
-     * @brief Handles a response message
-     * @param response The response message
-     * @param sender The sender
-     */
-    void handleResponse(std::shared_ptr<ResponseMessage> response, const network::EndPoint& sender);
-
-    /**
-     * @brief Handles an error message
-     * @param error The error message
-     * @param sender The sender
-     */
-    void handleError(std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender);
-
-    /**
-     * @brief Gets the number of active transactions
-     * @return The number of active transactions
-     */
-    size_t getTransactionCount() const;
-
-private:
-    /**
-     * @brief Generates a random transaction ID
-     * @return The transaction ID
-     */
-    std::string generateTransactionID();
-
-    /**
-     * @brief Checks for timed out transactions
-     */
-    void checkTimeouts();
-
-    /**
-     * @brief Checks for timed out transactions periodically
-     */
-    void checkTimeoutsPeriodically();
-
-    /**
-     * @brief Private constructor for singleton pattern
-     */
-    explicit TransactionManager(const DHTConfig& config);
-
-    // Static instance for singleton pattern
-    static std::shared_ptr<TransactionManager> s_instance;
-    static std::mutex s_instanceMutex;
-
-    DHTConfig m_config;
-    std::unordered_map<std::string, Transaction> m_transactions;
-    std::atomic<bool> m_running;
-    std::thread m_timeoutThread;
-    mutable std::mutex m_mutex;
-    std::mt19937 m_rng;    // Logger removed
+    static std::shared_ptr<TransactionManager> getInstance(const DHTConfig& config) {
+        auto instance = transactions::TransactionManager::getInstance(config, NodeID());
+        return std::static_pointer_cast<TransactionManager>(instance);
+    }
 };
 
 } // namespace dht_hunter::dht
