@@ -42,6 +42,8 @@ add_library(dht_hunter_dht
         peer_lookup/peer_lookup_response_handler.cpp
         # peer_lookup_utils.cpp is now empty as implementation moved to util/node_utils.cpp
         peer_lookup/peer_lookup_utils.cpp
+        peer_lookup/components/base_peer_lookup_component.cpp
+        peer_lookup/components/peer_lookup_state.cpp
 
         # Storage components
         storage/token_manager.cpp
