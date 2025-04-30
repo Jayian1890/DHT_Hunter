@@ -65,7 +65,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
 - [x] Reorganize node lookup functionality
 - [x] Reorganize peer lookup functionality
 - [x] Reorganize bootstrap functionality
-- [ ] Reorganize crawler functionality
+- [x] Reorganize crawler functionality
 - [x] Reorganize storage functionality
 - [x] Implement binary format for persistence
 - [ ] Reorganize transaction management
@@ -126,6 +126,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
    - Reorganized node lookup functionality with modular components
    - Reorganized peer lookup functionality with modular components
    - Reorganized bootstrap functionality with modular components
+   - Reorganized crawler functionality with modular components
 
 5. Refactored the Unified Event module
    - Created event_types_adapter.hpp to use the Types module
@@ -158,6 +159,7 @@ We've successfully reorganized the project into modular components:
    - Reorganized node lookup functionality with modular components
    - Reorganized peer lookup functionality with modular components
    - Reorganized bootstrap functionality with modular components
+   - Reorganized crawler functionality with modular components
 5. **Unified Event Module**: Refactored to use the Types module
    - Updated to use string formatting instead of JSON
 6. **Main Application**: Updated to use the new modular structure
