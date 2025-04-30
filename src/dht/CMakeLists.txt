@@ -57,9 +57,10 @@ add_library(dht_hunter_dht
         services/statistics_service.cpp
 
         # Extension components
-        extensions/mainline_dht.cpp
-        extensions/kademlia_dht.cpp
-        extensions/azureus_dht.cpp
+        extensions/factory/extension_factory.cpp
+        extensions/implementations/mainline_dht.cpp
+        extensions/implementations/kademlia_dht.cpp
+        extensions/implementations/azureus_dht.cpp
 )
 
 # Set include directories

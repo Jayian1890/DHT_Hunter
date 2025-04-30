@@ -2,9 +2,7 @@
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 
 #include "dht_hunter/dht/bootstrap/bootstrapper.hpp"
-#include "dht_hunter/dht/extensions/azureus_dht.hpp"
-#include "dht_hunter/dht/extensions/kademlia_dht.hpp"
-#include "dht_hunter/dht/extensions/mainline_dht.hpp"
+#include "dht_hunter/dht/extensions/factory/extension_factory.hpp"
 #include "dht_hunter/dht/network/message_handler.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
 #include "dht_hunter/dht/network/socket_manager.hpp"
@@ -74,15 +72,19 @@ DHTNode::DHTNode(const DHTConfig& config) : m_nodeID(generateRandomNodeID()), m_
     unified_event::logTrace("DHT.Node", "TRACE: Getting StatisticsService instance");
     m_statisticsService = services::StatisticsService::getInstance();
 
+    // Get the extension factory
+    unified_event::logTrace("DHT.Node", "TRACE: Getting ExtensionFactory instance");
+    m_extensionFactory = extensions::ExtensionFactory::getInstance();
+
     // Create DHT extensions
-    unified_event::logTrace("DHT.Node", "TRACE: Creating MainlineDHT extension");
-    m_mainlineDHT = std::make_shared<extensions::MainlineDHT>(config, m_nodeID, m_routingTable);
-
-    unified_event::logTrace("DHT.Node", "TRACE: Creating KademliaDHT extension");
-    m_kademliaDHT = std::make_shared<extensions::KademliaDHT>(config, m_nodeID, m_routingTable);
-
-    unified_event::logTrace("DHT.Node", "TRACE: Creating AzureusDHT extension");
-    m_azureusDHT = std::make_shared<extensions::AzureusDHT>(config, m_nodeID, m_routingTable);
+    std::vector<std::string> extensionNames = {"mainline", "kademlia", "azureus"};
+    for (const auto& name : extensionNames) {
+        unified_event::logTrace("DHT.Node", "TRACE: Creating " + name + " extension");
+        auto extension = m_extensionFactory->createExtension(name, config, m_nodeID, m_routingTable);
+        if (extension) {
+            m_extensions[name] = extension;
+        }
+    }
 
     // Create the crawler
     unified_event::logTrace("DHT.Node", "TRACE: Getting Crawler instance");
@@ -210,40 +212,23 @@ bool DHTNode::start() {
     unified_event::logTrace("DHT.Node", "TRACE: RoutingManager started successfully");
 
     // Initialize DHT extensions
-    unified_event::logDebug("DHT.Node", "Initializing Mainline DHT Extension");
-    unified_event::logTrace("DHT.Node", "TRACE: Initializing MainlineDHT extension");
+    unified_event::logDebug("DHT.Node", "Initializing DHT Extensions");
+    unified_event::logTrace("DHT.Node", "TRACE: Initializing DHT extensions");
 
-    if (m_mainlineDHT && !m_mainlineDHT->initialize()) {
-        unified_event::logError("DHT.Node", "Failed to initialize Mainline DHT extension");
-        unified_event::logTrace("DHT.Node", "TRACE: MainlineDHT initialization failed, resetting");
-        m_mainlineDHT.reset();
-    } else if (m_mainlineDHT) {
-        unified_event::logDebug("DHT.Node", "Mainline DHT Extension Initialized");
-        unified_event::logTrace("DHT.Node", "TRACE: MainlineDHT initialized successfully");
-    }
+    // Make a copy of the extensions map to avoid iterator invalidation
+    auto extensionsCopy = m_extensions;
+    for (const auto& [name, extension] : extensionsCopy) {
+        unified_event::logDebug("DHT.Node", "Initializing " + extension->getName() + " Extension");
+        unified_event::logTrace("DHT.Node", "TRACE: Initializing " + name + " extension");
 
-    unified_event::logDebug("DHT.Node", "Initializing Kademlia DHT Extension");
-    unified_event::logTrace("DHT.Node", "TRACE: Initializing KademliaDHT extension");
-
-    if (m_kademliaDHT && !m_kademliaDHT->initialize()) {
-        unified_event::logError("DHT.Node", "Failed to initialize Kademlia DHT extension");
-        unified_event::logTrace("DHT.Node", "TRACE: KademliaDHT initialization failed, resetting");
-        m_kademliaDHT.reset();
-    } else if (m_kademliaDHT) {
-        unified_event::logDebug("DHT.Node", "Kademlia DHT Extension Initialized");
-        unified_event::logTrace("DHT.Node", "TRACE: KademliaDHT initialized successfully");
-    }
-
-    unified_event::logDebug("DHT.Node", "Initializing Azureus DHT Extension");
-    unified_event::logTrace("DHT.Node", "TRACE: Initializing AzureusDHT extension");
-
-    if (m_azureusDHT && !m_azureusDHT->initialize()) {
-        unified_event::logError("DHT.Node", "Failed to initialize Azureus DHT extension");
-        unified_event::logTrace("DHT.Node", "TRACE: AzureusDHT initialization failed, resetting");
-        m_azureusDHT.reset();
-    } else if (m_azureusDHT) {
-        unified_event::logDebug("DHT.Node", "Azureus DHT Extension Initialized");
-        unified_event::logTrace("DHT.Node", "TRACE: AzureusDHT initialized successfully");
+        if (!extension->initialize()) {
+            unified_event::logError("DHT.Node", "Failed to initialize " + extension->getName() + " extension");
+            unified_event::logTrace("DHT.Node", "TRACE: " + name + " initialization failed, removing from extensions");
+            m_extensions.erase(name);
+        } else {
+            unified_event::logDebug("DHT.Node", extension->getName() + " Extension Initialized");
+            unified_event::logTrace("DHT.Node", "TRACE: " + name + " initialized successfully");
+        }
     }
 
     // m_running is already set to true by the compare_exchange_strong above
@@ -315,24 +300,16 @@ void DHTNode::stop() {
     unified_event::logDebug("DHT.Node", "Stopping DHT Extensions");
     unified_event::logTrace("DHT.Node", "TRACE: Stopping DHT extensions");
 
-    if (m_azureusDHT) {
-        unified_event::logDebug("DHT.Node", "Stopping Azureus DHT");
-        unified_event::logTrace("DHT.Node", "TRACE: Stopping AzureusDHT");
-        m_azureusDHT->shutdown();
-        unified_event::logTrace("DHT.Node", "TRACE: AzureusDHT stopped");
+    // Shutdown all extensions
+    for (auto& [name, extension] : m_extensions) {
+        if (extension) {
+            unified_event::logDebug("DHT.Node", "Stopping " + extension->getName());
+            unified_event::logTrace("DHT.Node", "TRACE: Stopping " + name + " extension");
+            extension->shutdown();
+            unified_event::logTrace("DHT.Node", "TRACE: " + name + " extension stopped");
+        }
     }
-    if (m_kademliaDHT) {
-        unified_event::logDebug("DHT.Node", "Stopping Kademlia DHT");
-        unified_event::logTrace("DHT.Node", "TRACE: Stopping KademliaDHT");
-        m_kademliaDHT->shutdown();
-        unified_event::logTrace("DHT.Node", "TRACE: KademliaDHT stopped");
-    }
-    if (m_mainlineDHT) {
-        unified_event::logDebug("DHT.Node", "Stopping Mainline DHT");
-        unified_event::logTrace("DHT.Node", "TRACE: Stopping MainlineDHT");
-        m_mainlineDHT->shutdown();
-        unified_event::logTrace("DHT.Node", "TRACE: MainlineDHT stopped");
-    }
+    m_extensions.clear();
 
     // Stop the components in reverse order
     unified_event::logDebug("DHT.Node", "Stopping Components");

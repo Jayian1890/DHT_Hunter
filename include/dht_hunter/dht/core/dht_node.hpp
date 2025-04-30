@@ -32,9 +32,7 @@ class Crawler;
 
 namespace extensions {
     class DHTExtension;
-    class MainlineDHT;
-    class KademliaDHT;
-    class AzureusDHT;
+    class ExtensionFactory;
 }
 
 /**
@@ -221,9 +219,8 @@ private:
     std::shared_ptr<services::StatisticsService> m_statisticsService;
 
     // DHT extensions
-    std::shared_ptr<extensions::MainlineDHT> m_mainlineDHT;
-    std::shared_ptr<extensions::KademliaDHT> m_kademliaDHT;
-    std::shared_ptr<extensions::AzureusDHT> m_azureusDHT;
+    std::shared_ptr<extensions::ExtensionFactory> m_extensionFactory;
+    std::unordered_map<std::string, std::shared_ptr<extensions::DHTExtension>> m_extensions;
     // Save thread removed - saving is now handled by PersistenceManager
     std::mutex m_mutex;    // Logger removed
 };
