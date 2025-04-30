@@ -3,6 +3,7 @@ add_library(dht_hunter_network
         udp_socket.cpp
         udp_server.cpp
         udp_client.cpp
+        tcp_client.cpp
         network_address.cpp
         http_server.cpp
 )

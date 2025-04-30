@@ -1,0 +1,327 @@
+#include "dht_hunter/bittorrent/metadata/metadata_acquisition_manager.hpp"
+#include "dht_hunter/utility/metadata/metadata_utils.hpp"
+#include "dht_hunter/utility/thread/thread_utils.hpp"
+
+namespace dht_hunter::bittorrent::metadata {
+
+// Initialize static members
+std::shared_ptr<MetadataAcquisitionManager> MetadataAcquisitionManager::s_instance = nullptr;
+std::mutex MetadataAcquisitionManager::s_instanceMutex;
+
+std::shared_ptr<MetadataAcquisitionManager> MetadataAcquisitionManager::getInstance(
+    std::shared_ptr<dht::PeerStorage> peerStorage) {
+
+    try {
+        return utility::thread::withLock(s_instanceMutex, [&peerStorage]() {
+            if (!s_instance) {
+                s_instance = std::shared_ptr<MetadataAcquisitionManager>(new MetadataAcquisitionManager(peerStorage));
+            } else if (peerStorage && !s_instance->m_peerStorage) {
+                // Update the peer storage if it wasn't set before
+                s_instance->m_peerStorage = peerStorage;
+            }
+            return s_instance;
+        }, "MetadataAcquisitionManager::s_instanceMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+        return nullptr;
+    }
+}
+
+MetadataAcquisitionManager::MetadataAcquisitionManager(std::shared_ptr<dht::PeerStorage> peerStorage)
+    : m_peerStorage(peerStorage),
+      m_metadataExchange(std::make_shared<MetadataExchange>()),
+      m_eventBus(unified_event::EventBus::getInstance()) {
+}
+
+MetadataAcquisitionManager::~MetadataAcquisitionManager() {
+    stop();
+
+    // Clear the singleton instance
+    try {
+        utility::thread::withLock(s_instanceMutex, [this]() {
+            if (s_instance.get() == this) {
+                s_instance.reset();
+            }
+        }, "MetadataAcquisitionManager::s_instanceMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+    }
+}
+
+bool MetadataAcquisitionManager::start() {
+    // Check if already running
+    bool expected = false;
+    if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        // Already running
+        return true;
+    }
+
+    // Subscribe to InfoHashDiscoveredEvent
+    m_infoHashDiscoveredSubscription = m_eventBus->subscribe(
+        unified_event::EventType::Custom,
+        [this](const std::shared_ptr<unified_event::Event>& event) {
+            if (event->getName() == "InfoHashDiscovered") {
+                auto infoHashEvent = std::dynamic_pointer_cast<unified_event::InfoHashDiscoveredEvent>(event);
+                if (infoHashEvent) {
+                    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Received InfoHashDiscoveredEvent for " +
+                                          types::infoHashToString(infoHashEvent->getInfoHash()));
+                    handleInfoHashDiscoveredEvent(infoHashEvent);
+                }
+            }
+        });
+
+    // Start the processing thread
+    m_processingThread = std::thread(&MetadataAcquisitionManager::processAcquisitionQueuePeriodically, this);
+
+    // Publish a system started event
+    auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("BitTorrent.MetadataAcquisitionManager");
+    m_eventBus->publish(startedEvent);
+
+    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Started metadata acquisition manager");
+    return true;
+}
+
+void MetadataAcquisitionManager::stop() {
+    // Check if already stopped
+    bool expected = true;
+    if (!m_running.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
+        // Already stopped
+        return;
+    }
+
+    // Unsubscribe from events
+    if (m_infoHashDiscoveredSubscription > 0) {
+        m_eventBus->unsubscribe(m_infoHashDiscoveredSubscription);
+        m_infoHashDiscoveredSubscription = 0;
+    }
+
+    // Stop the processing thread
+    m_processingCondition.notify_all();
+    if (m_processingThread.joinable()) {
+        m_processingThread.join();
+    }
+
+    // Publish a system stopped event
+    auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("BitTorrent.MetadataAcquisitionManager");
+    m_eventBus->publish(stoppedEvent);
+
+    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Stopped metadata acquisition manager");
+}
+
+bool MetadataAcquisitionManager::isRunning() const {
+    return m_running.load(std::memory_order_acquire);
+}
+
+bool MetadataAcquisitionManager::acquireMetadata(const types::InfoHash& infoHash) {
+    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Attempting to acquire metadata for info hash: " + types::infoHashToString(infoHash));
+
+    // Check if we already have metadata for this info hash
+    auto metadata = utility::metadata::MetadataUtils::getInfoHashMetadata(infoHash);
+    if (metadata && !metadata->getName().empty() && metadata->getTotalSize() > 0) {
+        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Already have metadata for info hash: " + types::infoHashToString(infoHash));
+        return true;
+    }
+
+    // Check if acquisition is already in progress
+    if (isAcquisitionInProgress(infoHash)) {
+        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition already in progress for info hash: " + types::infoHashToString(infoHash));
+        return true;
+    }
+
+    // Add to the acquisition queue
+    try {
+        utility::thread::withLock(m_queueMutex, [this, &infoHash]() {
+            m_acquisitionQueue.insert(infoHash);
+            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Added info hash to acquisition queue: " +
+                                 types::infoHashToString(infoHash) +
+                                 ", queue size: " +
+                                 std::to_string(m_acquisitionQueue.size()));
+        }, "MetadataAcquisitionManager::m_queueMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+        return false;
+    }
+
+    // Notify the processing thread
+    m_processingCondition.notify_one();
+    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Notified processing thread for info hash: " + types::infoHashToString(infoHash));
+    return true;
+}
+
+bool MetadataAcquisitionManager::isAcquisitionInProgress(const types::InfoHash& infoHash) const {
+    try {
+        return utility::thread::withLock(m_activeAcquisitionsMutex, [this, &infoHash]() {
+            return m_activeAcquisitions.find(infoHash) != m_activeAcquisitions.end();
+        }, "MetadataAcquisitionManager::m_activeAcquisitionsMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+        return false;
+    }
+}
+
+size_t MetadataAcquisitionManager::getActiveAcquisitionCount() const {
+    try {
+        return utility::thread::withLock(m_activeAcquisitionsMutex, [this]() {
+            return m_activeAcquisitions.size();
+        }, "MetadataAcquisitionManager::m_activeAcquisitionsMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+        return 0;
+    }
+}
+
+void MetadataAcquisitionManager::processAcquisitionQueue() {
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Processing acquisition queue");
+
+    // Clean up timed out acquisitions
+    try {
+        utility::thread::withLock(m_activeAcquisitionsMutex, [this]() {
+            auto now = std::chrono::steady_clock::now();
+
+            for (auto it = m_activeAcquisitions.begin(); it != m_activeAcquisitions.end();) {
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
+
+                if (elapsed > ACQUISITION_TIMEOUT_SECONDS) {
+                    unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition timed out for info hash: " + types::infoHashToString(it->first));
+                    it = m_activeAcquisitions.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+
+            unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Active acquisitions: " + std::to_string(m_activeAcquisitions.size()));
+        }, "MetadataAcquisitionManager::m_activeAcquisitionsMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+    }
+
+    // Process the queue if we have capacity
+    size_t activeCount = getActiveAcquisitionCount();
+    if (activeCount >= MAX_CONCURRENT_ACQUISITIONS) {
+        unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Maximum concurrent acquisitions reached: " +
+                              std::to_string(activeCount) +
+                              "/" +
+                              std::to_string(MAX_CONCURRENT_ACQUISITIONS));
+        return;
+    }
+
+    // Get the next info hash from the queue
+    types::InfoHash infoHash;
+    bool hasNext = false;
+
+    try {
+        utility::thread::withLock(m_queueMutex, [this, &infoHash, &hasNext]() {
+            if (!m_acquisitionQueue.empty()) {
+                auto it = m_acquisitionQueue.begin();
+                infoHash = *it;
+                m_acquisitionQueue.erase(it);
+                hasNext = true;
+
+                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Dequeued info hash for metadata acquisition: " +
+                                     types::infoHashToString(infoHash) +
+                                     ", queue size: " +
+                                     std::to_string(m_acquisitionQueue.size()));
+            } else {
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Acquisition queue is empty");
+            }
+        }, "MetadataAcquisitionManager::m_queueMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+        return;
+    }
+
+    if (!hasNext) {
+        return;
+    }
+
+    // Check if we have peers for this info hash
+    if (!m_peerStorage) {
+        unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Peer storage not available");
+        return;
+    }
+
+    std::vector<network::EndPoint> peers = m_peerStorage->getPeers(infoHash);
+    if (peers.empty()) {
+        unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "No peers available for info hash: " + types::infoHashToString(infoHash));
+        return;
+    }
+
+    // Add to active acquisitions
+    try {
+        utility::thread::withLock(m_activeAcquisitionsMutex, [this, &infoHash]() {
+            m_activeAcquisitions[infoHash] = std::chrono::steady_clock::now();
+        }, "MetadataAcquisitionManager::m_activeAcquisitionsMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+        return;
+    }
+
+    // Start the acquisition
+    m_metadataExchange->acquireMetadata(infoHash, peers, [this, infoHash](bool success) {
+        // Remove from active acquisitions
+        try {
+            utility::thread::withLock(m_activeAcquisitionsMutex, [this, &infoHash]() {
+                m_activeAcquisitions.erase(infoHash);
+            }, "MetadataAcquisitionManager::m_activeAcquisitionsMutex");
+        } catch (const utility::thread::LockTimeoutException& e) {
+            unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
+        }
+
+        if (success) {
+            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Successfully acquired metadata for info hash: " + types::infoHashToString(infoHash));
+
+            // Publish a metadata acquired event
+            auto metadata = utility::metadata::MetadataUtils::getInfoHashMetadata(infoHash);
+            if (metadata) {
+                auto event = std::make_shared<unified_event::InfoHashMetadataAcquiredEvent>(
+                    "BitTorrent.MetadataAcquisitionManager",
+                    infoHash,
+                    metadata->getName(),
+                    metadata->getTotalSize(),
+                    metadata->getFiles().size()
+                );
+                m_eventBus->publish(event);
+            }
+        } else {
+            unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to acquire metadata for info hash: " + types::infoHashToString(infoHash));
+        }
+
+        // Notify the processing thread to continue
+        m_processingCondition.notify_one();
+    });
+}
+
+void MetadataAcquisitionManager::processAcquisitionQueuePeriodically() {
+    while (m_running) {
+        // Wait for the processing interval or until we're notified
+        std::unique_lock<std::mutex> lock(m_processingMutex);
+        m_processingCondition.wait_for(lock, std::chrono::seconds(PROCESSING_INTERVAL_SECONDS), [this]() {
+            return !m_running || !m_acquisitionQueue.empty();
+        });
+
+        if (!m_running) {
+            break;
+        }
+
+        // Process the queue
+        processAcquisitionQueue();
+    }
+}
+
+void MetadataAcquisitionManager::handleInfoHashDiscoveredEvent(const std::shared_ptr<unified_event::InfoHashDiscoveredEvent>& event) {
+    if (!event) {
+        unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Received null InfoHashDiscoveredEvent");
+        return;
+    }
+
+    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Processing InfoHashDiscoveredEvent for " +
+                         types::infoHashToString(event->getInfoHash()));
+
+    // Automatically acquire metadata for newly discovered info hashes
+    bool result = acquireMetadata(event->getInfoHash());
+
+    std::string resultStr = result ? "started" : "failed";
+    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition " + resultStr + " for " + types::infoHashToString(event->getInfoHash()));
+}
+
+} // namespace dht_hunter::bittorrent::metadata

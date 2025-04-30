@@ -22,6 +22,7 @@ WebServer::WebServer(
     m_statisticsService(statisticsService),
     m_routingManager(routingManager),
     m_peerStorage(peerStorage),
+    m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
     m_startTime(std::chrono::steady_clock::now()) {
 }
 
@@ -281,7 +282,8 @@ network::HttpResponse WebServer::handleInfoHashesRequest(const network::HttpRequ
             auto peers = m_peerStorage->getPeers(infoHash);
 
             auto infoHashObj = Json::createObject();
-            infoHashObj->set("hash", dht_hunter::types::infoHashToString(infoHash));
+            std::string infoHashStr = dht_hunter::types::infoHashToString(infoHash);
+            infoHashObj->set("hash", infoHashStr);
             infoHashObj->set("peers", static_cast<long long>(peers.size()));
 
             // Use current time as a placeholder for first seen
@@ -289,6 +291,46 @@ network::HttpResponse WebServer::handleInfoHashesRequest(const network::HttpRequ
             infoHashObj->set("firstSeen", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()
             ).count()));
+
+            // Add metadata if available
+            if (m_metadataRegistry) {
+                auto metadata = m_metadataRegistry->getMetadata(infoHash);
+                if (metadata) {
+                    // Add name if available
+                    const std::string& name = metadata->getName();
+                    if (!name.empty()) {
+                        infoHashObj->set("name", name);
+                    }
+
+                    // Add total size if available
+                    uint64_t totalSize = metadata->getTotalSize();
+                    if (totalSize > 0) {
+                        infoHashObj->set("size", static_cast<long long>(totalSize));
+                    }
+
+                    // Add file count if available
+                    const auto& files = metadata->getFiles();
+                    if (!files.empty()) {
+                        infoHashObj->set("fileCount", static_cast<long long>(files.size()));
+                    }
+                } else {
+                    // Try to get metadata using utility
+                    std::string name = utility::metadata::MetadataUtils::getInfoHashName(infoHash);
+                    if (!name.empty()) {
+                        infoHashObj->set("name", name);
+                    }
+
+                    uint64_t totalSize = utility::metadata::MetadataUtils::getInfoHashTotalSize(infoHash);
+                    if (totalSize > 0) {
+                        infoHashObj->set("size", static_cast<long long>(totalSize));
+                    }
+
+                    auto files = utility::metadata::MetadataUtils::getInfoHashFiles(infoHash);
+                    if (!files.empty()) {
+                        infoHashObj->set("fileCount", static_cast<long long>(files.size()));
+                    }
+                }
+            }
 
             infoHashesArray->add(JsonValue(infoHashObj));
         }

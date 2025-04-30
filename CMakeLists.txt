@@ -57,6 +57,9 @@ target_include_directories(dht_hunter_core INTERFACE
 add_subdirectory(src)
 add_subdirectory(examples)
 
+# Copy web directory to build directory
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/web DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 # Tests have been removed from the project
 # TODO: Consider implementing a new testing framework in the future if needed
 

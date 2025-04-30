@@ -10,6 +10,7 @@
 #include "dht_hunter/unified_event/events/node_events.hpp"
 #include "dht_hunter/unified_event/events/peer_events.hpp"
 #include "dht_hunter/unified_event/events/message_events.hpp"
+#include "dht_hunter/unified_event/events/custom_events.hpp"
 #include <algorithm>
 #include <random>
 
@@ -605,6 +606,9 @@ void Crawler::monitorInfoHashes() {
                     utility::thread::withLock(m_mutex, [this, &peers, &randomInfoHash, &randomInfoHashStr]() {
                         // Only add the info hash if we found peers
                         if (!peers.empty()) {
+                            // Check if this is a new info hash
+                            bool isNewInfoHash = m_discoveredInfoHashes.find(randomInfoHashStr) == m_discoveredInfoHashes.end();
+
                             // Add the info hash to our discovered info hashes
                             m_discoveredInfoHashes[randomInfoHashStr] = randomInfoHash;
 
@@ -612,6 +616,12 @@ void Crawler::monitorInfoHashes() {
                             auto& peerSet = m_infoHashPeers[randomInfoHashStr];
                             for (const auto& peer : peers) {
                                 peerSet.insert(peer.toString());
+                            }
+
+                            // Publish an InfoHashDiscoveredEvent if this is a new info hash
+                            if (isNewInfoHash && m_eventBus) {
+                                auto event = std::make_shared<unified_event::InfoHashDiscoveredEvent>("DHT.Crawler", randomInfoHash);
+                                m_eventBus->publish(event);
                             }
 
                             // Update statistics
@@ -783,6 +793,12 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
             if (isNewInfoHash) {
                 std::string logMessage = "New info hash discovered - Hash: " + infoHashStr;
                 unified_event::logInfo("DHT.Crawler", logMessage);
+
+                // Publish an InfoHashDiscoveredEvent
+                if (m_eventBus) {
+                    auto event = std::make_shared<unified_event::InfoHashDiscoveredEvent>("DHT.Crawler", infoHash);
+                    m_eventBus->publish(event);
+                }
             }
 
             if (isNewPeer) {

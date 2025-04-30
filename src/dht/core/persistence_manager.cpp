@@ -506,7 +506,13 @@ bool PersistenceManager::loadFromDisk() {
                 }
 
                 // Read the entire file into a buffer
-                std::vector<uint8_t> buffer(fileSize);
+                if (fileSize <= 0) {
+                    unified_event::logError("DHT.PersistenceManager", "Invalid file size: " + std::to_string(fileSize));
+                    file.close();
+                    return false;
+                }
+
+                std::vector<uint8_t> buffer(static_cast<size_t>(fileSize));
                 if (!file.read(reinterpret_cast<char*>(buffer.data()), fileSize)) {
                     unified_event::logError("DHT.PersistenceManager", "Failed to read metadata file");
                     file.close();

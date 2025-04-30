@@ -15,11 +15,11 @@ const networkActivityData = {
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize charts
     initCharts();
-    
+
     // Start data polling
     fetchData();
     setInterval(fetchData, 1000);
-    
+
     // Update uptime
     updateUptime();
     setInterval(updateUptime, 1000);
@@ -72,7 +72,7 @@ function initCharts() {
             }
         }
     });
-    
+
     // Node Distribution Chart
     const nodeCtx = document.getElementById('node-distribution-chart').getContext('2d');
     nodeDistributionChart = new Chart(nodeCtx, {
@@ -121,7 +121,7 @@ function fetchData() {
             console.error('Error fetching statistics:', error);
             updateStatus(false);
         });
-    
+
     // Fetch nodes
     fetch('/api/nodes?limit=10')
         .then(response => response.json())
@@ -131,7 +131,7 @@ function fetchData() {
         .catch(error => {
             console.error('Error fetching nodes:', error);
         });
-    
+
     // Fetch info hashes
     fetch('/api/infohashes?limit=10')
         .then(response => response.json())
@@ -151,29 +151,29 @@ function updateStatistics(data) {
     document.getElementById('messages-received').textContent = data.messagesReceived.toLocaleString();
     document.getElementById('messages-sent').textContent = data.messagesSent.toLocaleString();
     document.getElementById('info-hashes').textContent = data.infoHashes.toLocaleString();
-    
+
     updateStatus(true);
 }
 
 // Update network activity chart
 function updateNetworkActivityChart(data) {
     const now = new Date();
-    const timeLabel = now.getHours().toString().padStart(2, '0') + ':' + 
-                     now.getMinutes().toString().padStart(2, '0') + ':' + 
+    const timeLabel = now.getHours().toString().padStart(2, '0') + ':' +
+                     now.getMinutes().toString().padStart(2, '0') + ':' +
                      now.getSeconds().toString().padStart(2, '0');
-    
+
     // Add new data
     networkActivityData.labels.push(timeLabel);
     networkActivityData.messagesReceived.push(data.messagesReceived);
     networkActivityData.messagesSent.push(data.messagesSent);
-    
+
     // Keep only the last 30 data points
     if (networkActivityData.labels.length > 30) {
         networkActivityData.labels.shift();
         networkActivityData.messagesReceived.shift();
         networkActivityData.messagesSent.shift();
     }
-    
+
     // Update chart
     networkActivityChart.data.labels = networkActivityData.labels;
     networkActivityChart.data.datasets[0].data = networkActivityData.messagesReceived;
@@ -194,26 +194,26 @@ function updateNodeDistributionChart(data) {
 function updateNodesTable(nodes) {
     const tbody = document.querySelector('#nodes-table tbody');
     tbody.innerHTML = '';
-    
+
     nodes.forEach(node => {
         const tr = document.createElement('tr');
-        
+
         const nodeIdTd = document.createElement('td');
         nodeIdTd.textContent = formatNodeId(node.nodeId);
         tr.appendChild(nodeIdTd);
-        
+
         const ipTd = document.createElement('td');
         ipTd.textContent = node.ip;
         tr.appendChild(ipTd);
-        
+
         const portTd = document.createElement('td');
         portTd.textContent = node.port;
         tr.appendChild(portTd);
-        
+
         const lastSeenTd = document.createElement('td');
         lastSeenTd.textContent = formatTimeAgo(node.lastSeen);
         tr.appendChild(lastSeenTd);
-        
+
         tbody.appendChild(tr);
     });
 }
@@ -222,22 +222,40 @@ function updateNodesTable(nodes) {
 function updateInfoHashesTable(infoHashes) {
     const tbody = document.querySelector('#info-hashes-table tbody');
     tbody.innerHTML = '';
-    
+
     infoHashes.forEach(infoHash => {
         const tr = document.createElement('tr');
-        
+
+        // Info Hash
         const hashTd = document.createElement('td');
         hashTd.textContent = formatInfoHash(infoHash.hash);
         tr.appendChild(hashTd);
-        
+
+        // Name
+        const nameTd = document.createElement('td');
+        nameTd.textContent = infoHash.name || 'Unknown';
+        tr.appendChild(nameTd);
+
+        // Peers
         const peersTd = document.createElement('td');
         peersTd.textContent = infoHash.peers.toLocaleString();
         tr.appendChild(peersTd);
-        
+
+        // Size
+        const sizeTd = document.createElement('td');
+        sizeTd.textContent = infoHash.size ? formatSize(infoHash.size) : 'Unknown';
+        tr.appendChild(sizeTd);
+
+        // Files
+        const filesTd = document.createElement('td');
+        filesTd.textContent = infoHash.fileCount ? infoHash.fileCount.toLocaleString() : 'Unknown';
+        tr.appendChild(filesTd);
+
+        // First Seen
         const firstSeenTd = document.createElement('td');
         firstSeenTd.textContent = formatTimeAgo(infoHash.firstSeen);
         tr.appendChild(firstSeenTd);
-        
+
         tbody.appendChild(tr);
     });
 }
@@ -246,7 +264,7 @@ function updateInfoHashesTable(infoHashes) {
 function updateStatus(isActive) {
     const indicator = document.getElementById('status-indicator');
     const text = document.getElementById('status-text');
-    
+
     if (isActive) {
         indicator.className = 'status-active';
         text.textContent = 'Active';
@@ -266,8 +284,8 @@ function updateUptime() {
             const hours = Math.floor((uptime % 86400) / 3600);
             const minutes = Math.floor((uptime % 3600) / 60);
             const seconds = Math.floor(uptime % 60);
-            
-            document.getElementById('uptime').textContent = 
+
+            document.getElementById('uptime').textContent =
                 `Uptime: ${days}d ${hours}h ${minutes}m ${seconds}s`;
         })
         .catch(error => {
@@ -291,11 +309,22 @@ function formatInfoHash(hash) {
     return hash;
 }
 
+// Helper function to format file size
+function formatSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 // Helper function to format time ago
 function formatTimeAgo(timestamp) {
     const now = Date.now();
     const diff = now - timestamp;
-    
+
     if (diff < 60000) {
         return 'Just now';
     } else if (diff < 3600000) {

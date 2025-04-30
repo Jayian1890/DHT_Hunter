@@ -27,6 +27,9 @@ add_library(dht_hunter_utility
 
         # JSON utilities
         json/json.cpp
+
+        # Metadata utilities
+        metadata/metadata_utils.cpp
 )
 
 # Set include directories

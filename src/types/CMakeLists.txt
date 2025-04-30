@@ -6,6 +6,7 @@ add_library(dht_hunter_types
     dht_types.cpp
     message_types.cpp
     event_types.cpp
+    info_hash_metadata.cpp
 )
 
 # Set include directories

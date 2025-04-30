@@ -16,7 +16,7 @@
                 <span id="status-text">Active</span>
             </div>
         </header>
-        
+
         <div class="dashboard">
             <div class="stats-container">
                 <div class="stats-card">
@@ -33,7 +33,7 @@
                         <div class="stats-label">Discovered / In Table</div>
                     </div>
                 </div>
-                
+
                 <div class="stats-card">
                     <div class="stats-icon">
                         <i class="fas fa-users"></i>
@@ -44,7 +44,7 @@
                         <div class="stats-label">Discovered</div>
                     </div>
                 </div>
-                
+
                 <div class="stats-card">
                     <div class="stats-icon">
                         <i class="fas fa-exchange-alt"></i>
@@ -59,7 +59,7 @@
                         <div class="stats-label">Received / Sent</div>
                     </div>
                 </div>
-                
+
                 <div class="stats-card">
                     <div class="stats-icon">
                         <i class="fas fa-hashtag"></i>
@@ -71,19 +71,19 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="charts-container">
                 <div class="chart-card">
                     <h3>Network Activity</h3>
                     <canvas id="network-activity-chart"></canvas>
                 </div>
-                
+
                 <div class="chart-card">
                     <h3>Node Distribution</h3>
                     <canvas id="node-distribution-chart"></canvas>
                 </div>
             </div>
-            
+
             <div class="tables-container">
                 <div class="table-card">
                     <h3>Recent Nodes</h3>
@@ -103,7 +103,7 @@
                         </table>
                     </div>
                 </div>
-                
+
                 <div class="table-card">
                     <h3>Recent Info Hashes</h3>
                     <div class="table-responsive">
@@ -111,7 +111,10 @@
                             <thead>
                                 <tr>
                                     <th>Info Hash</th>
+                                    <th>Name</th>
                                     <th>Peers</th>
+                                    <th>Size</th>
+                                    <th>Files</th>
                                     <th>First Seen</th>
                                 </tr>
                             </thead>
@@ -123,12 +126,12 @@
                 </div>
             </div>
         </div>
-        
+
         <footer>
             <p>&copy; 2023 DHT Hunter - <span id="uptime">Uptime: 0d 0h 0m 0s</span></p>
         </footer>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/dashboard.js"></script>
 </body>

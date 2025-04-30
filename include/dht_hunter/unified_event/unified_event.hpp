@@ -16,6 +16,7 @@
 #include "dht_hunter/unified_event/events/node_events.hpp"
 #include "dht_hunter/unified_event/events/message_events.hpp"
 #include "dht_hunter/unified_event/events/peer_events.hpp"
+#include "dht_hunter/unified_event/events/custom_events.hpp"
 
 namespace dht_hunter::unified_event {
 

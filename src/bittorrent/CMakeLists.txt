@@ -1,6 +1,8 @@
 # Define the BitTorrent library
 add_library(dht_hunter_bittorrent
         bt_message_handler.cpp
+        metadata/metadata_exchange.cpp
+        metadata/metadata_acquisition_manager.cpp
 )
 
 # Link with other libraries
@@ -11,6 +13,8 @@ target_link_libraries(dht_hunter_bittorrent
         dht_hunter_utility
         dht_hunter_network
         dht_hunter_dht
+        dht_hunter_bencode
+        dht_hunter_unified_event
 )
 
 # Set include directories

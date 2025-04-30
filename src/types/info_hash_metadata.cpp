@@ -98,7 +98,9 @@ size_t InfoHashMetadata::deserialize(const std::vector<uint8_t>& data, size_t of
     }
 
     // Read the info hash
-    std::copy(data.begin() + offset, data.begin() + offset + 20, m_infoHash.begin());
+    std::copy(data.begin() + static_cast<std::ptrdiff_t>(offset),
+              data.begin() + static_cast<std::ptrdiff_t>(offset + 20),
+              m_infoHash.begin());
     offset += 20;
 
     // Check if there's enough data for the name length
@@ -117,7 +119,7 @@ size_t InfoHashMetadata::deserialize(const std::vector<uint8_t>& data, size_t of
     }
 
     // Read the name
-    m_name.assign(reinterpret_cast<const char*>(data.data() + offset), nameLength);
+    m_name.assign(reinterpret_cast<const char*>(data.data() + offset), static_cast<size_t>(nameLength));
     offset += nameLength;
 
     // Check if there's enough data for the file count
@@ -151,7 +153,7 @@ size_t InfoHashMetadata::deserialize(const std::vector<uint8_t>& data, size_t of
         }
 
         // Read the path
-        std::string path(reinterpret_cast<const char*>(data.data() + offset), pathLength);
+        std::string path(reinterpret_cast<const char*>(data.data() + offset), static_cast<size_t>(pathLength));
         offset += pathLength;
 
         // Check if there's enough data for the file size
@@ -260,13 +262,13 @@ std::vector<uint8_t> InfoHashMetadataRegistry::serializeAll() const {
             // Write each metadata entry
             for (const auto& metadata : allMetadata) {
                 auto serialized = metadata->serialize();
-                
+
                 // Write the size of the serialized data
                 uint32_t dataSize = static_cast<uint32_t>(serialized.size());
                 size_t oldSize = result.size();
                 result.resize(oldSize + sizeof(dataSize));
                 std::memcpy(result.data() + oldSize, &dataSize, sizeof(dataSize));
-                
+
                 // Write the serialized data
                 result.insert(result.end(), serialized.begin(), serialized.end());
             }
@@ -314,16 +316,16 @@ bool InfoHashMetadataRegistry::deserializeAll(const std::vector<uint8_t>& data) 
 
                 // Create a new metadata object
                 auto metadata = std::make_shared<InfoHashMetadata>();
-                
+
                 // Deserialize the metadata
                 size_t bytesRead = metadata->deserialize(data, offset);
                 if (bytesRead == 0) {
                     return false;
                 }
-                
+
                 // Add the metadata to the registry
                 m_metadata[metadata->getInfoHash()] = metadata;
-                
+
                 // Update the offset
                 offset += dataSize;
             }

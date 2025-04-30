@@ -4,6 +4,8 @@
 #include "dht_hunter/dht/services/statistics_service.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
+#include "dht_hunter/types/info_hash_metadata.hpp"
+#include "dht_hunter/utility/metadata/metadata_utils.hpp"
 #include <memory>
 #include <string>
 #include <chrono>
@@ -64,6 +66,7 @@ private:
     std::shared_ptr<dht::services::StatisticsService> m_statisticsService;
     std::shared_ptr<dht::RoutingManager> m_routingManager;
     std::shared_ptr<dht::PeerStorage> m_peerStorage;
+    std::shared_ptr<types::InfoHashMetadataRegistry> m_metadataRegistry;
     std::chrono::steady_clock::time_point m_startTime;
 
     /**

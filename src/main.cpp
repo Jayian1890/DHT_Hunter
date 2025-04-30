@@ -28,6 +28,9 @@
 // Project includes - Web module
 #include "dht_hunter/web/web_server.hpp"
 
+// Project includes - BitTorrent module
+#include "dht_hunter/bittorrent/metadata/metadata_acquisition_manager.hpp"
+
 /**
  * Global variables for signal handling and application state
  */
@@ -35,6 +38,7 @@ std::atomic<bool> g_running(true);
 std::shared_ptr<dht_hunter::network::UDPServer> g_server;
 std::shared_ptr<dht_hunter::dht::DHTNode> g_dhtNode;
 std::shared_ptr<dht_hunter::web::WebServer> g_webServer;
+std::shared_ptr<dht_hunter::bittorrent::metadata::MetadataAcquisitionManager> g_metadataManager;
 
 /**
  * Signal handler for graceful shutdown
@@ -169,6 +173,24 @@ int main(int argc, char* argv[]) {
     auto routingManager = g_dhtNode->getRoutingManager();
     auto peerStorage = g_dhtNode->getPeerStorage();
 
+    // Start the metadata acquisition manager
+    g_metadataManager = dht_hunter::bittorrent::metadata::MetadataAcquisitionManager::getInstance(peerStorage);
+    if (!g_metadataManager->start()) {
+        dht_hunter::unified_event::logError("Main", "Failed to start metadata acquisition manager");
+    } else {
+        dht_hunter::unified_event::logInfo("Main", "Metadata acquisition manager started");
+
+        // Trigger metadata acquisition for existing InfoHashes
+        if (peerStorage) {
+            auto infoHashes = peerStorage->getAllInfoHashes();
+            dht_hunter::unified_event::logInfo("Main", "Triggering metadata acquisition for " + std::to_string(infoHashes.size()) + " existing InfoHashes");
+
+            for (const auto& infoHash : infoHashes) {
+                g_metadataManager->acquireMetadata(infoHash);
+            }
+        }
+    }
+
     g_webServer = std::make_shared<dht_hunter::web::WebServer>(
         webRoot,
         webPort,
@@ -225,6 +247,11 @@ int main(int argc, char* argv[]) {
     if (g_webServer) {
         g_webServer->stop();
         g_webServer.reset();
+    }
+
+    if (g_metadataManager) {
+        g_metadataManager->stop();
+        g_metadataManager.reset();
     }
 
     if (persistenceManager) {
