@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHT Hunter Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-network-wired"></i> DHT Hunter Dashboard</h1>
+            <div class="status">
+                <span id="status-indicator" class="status-active"></span>
+                <span id="status-text">Active</span>
+            </div>
+        </header>
+        
+        <div class="dashboard">
+            <div class="stats-container">
+                <div class="stats-card">
+                    <div class="stats-icon">
+                        <i class="fas fa-server"></i>
+                    </div>
+                    <div class="stats-content">
+                        <h3>Nodes</h3>
+                        <div class="stats-value">
+                            <span id="nodes-discovered">0</span>
+                            <span class="separator">/</span>
+                            <span id="nodes-in-table">0</span>
+                        </div>
+                        <div class="stats-label">Discovered / In Table</div>
+                    </div>
+                </div>
+                
+                <div class="stats-card">
+                    <div class="stats-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stats-content">
+                        <h3>Peers</h3>
+                        <div class="stats-value" id="peers-discovered">0</div>
+                        <div class="stats-label">Discovered</div>
+                    </div>
+                </div>
+                
+                <div class="stats-card">
+                    <div class="stats-icon">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <div class="stats-content">
+                        <h3>Messages</h3>
+                        <div class="stats-value">
+                            <span id="messages-received">0</span>
+                            <span class="separator">/</span>
+                            <span id="messages-sent">0</span>
+                        </div>
+                        <div class="stats-label">Received / Sent</div>
+                    </div>
+                </div>
+                
+                <div class="stats-card">
+                    <div class="stats-icon">
+                        <i class="fas fa-hashtag"></i>
+                    </div>
+                    <div class="stats-content">
+                        <h3>Info Hashes</h3>
+                        <div class="stats-value" id="info-hashes">0</div>
+                        <div class="stats-label">Discovered</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="charts-container">
+                <div class="chart-card">
+                    <h3>Network Activity</h3>
+                    <canvas id="network-activity-chart"></canvas>
+                </div>
+                
+                <div class="chart-card">
+                    <h3>Node Distribution</h3>
+                    <canvas id="node-distribution-chart"></canvas>
+                </div>
+            </div>
+            
+            <div class="tables-container">
+                <div class="table-card">
+                    <h3>Recent Nodes</h3>
+                    <div class="table-responsive">
+                        <table id="nodes-table">
+                            <thead>
+                                <tr>
+                                    <th>Node ID</th>
+                                    <th>IP Address</th>
+                                    <th>Port</th>
+                                    <th>Last Seen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Nodes will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="table-card">
+                    <h3>Recent Info Hashes</h3>
+                    <div class="table-responsive">
+                        <table id="info-hashes-table">
+                            <thead>
+                                <tr>
+                                    <th>Info Hash</th>
+                                    <th>Peers</th>
+                                    <th>First Seen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Info hashes will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>&copy; 2023 DHT Hunter - <span id="uptime">Uptime: 0d 0h 0m 0s</span></p>
+        </footer>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

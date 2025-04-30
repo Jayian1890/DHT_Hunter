@@ -6,6 +6,7 @@ add_subdirectory(bencode)   # Bencode component
 add_subdirectory(dht)       # DHT component
 add_subdirectory(bittorrent) # BitTorrent component
 add_subdirectory(unified_event) # Unified event system
+add_subdirectory(web)       # Web UI component
 
 # Removed components:
 # - crawler (not used in the build)
@@ -26,6 +27,7 @@ target_link_libraries(dht_hunter
         dht_hunter_dht
         dht_hunter_bittorrent
         dht_hunter_unified_event
+        dht_hunter_web
 )
 
 # Set include directories

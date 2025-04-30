@@ -12,6 +12,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find required packages
 find_package(fmt REQUIRED)
 
+# JSON utility is part of the utility library
+
 # Add compiler warnings
 if(MSVC)
   add_compile_options(/W4 /WX /wd4100 /wd4101 /wd4189)

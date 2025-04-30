@@ -4,6 +4,7 @@ add_library(dht_hunter_network
         udp_server.cpp
         udp_client.cpp
         network_address.cpp
+        http_server.cpp
 )
 
 # Set include directories

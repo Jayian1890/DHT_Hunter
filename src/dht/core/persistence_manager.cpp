@@ -33,11 +33,15 @@ PersistenceManager::PersistenceManager(const std::string& configDir)
     : m_configDir(configDir),
       m_routingTablePath(configDir + "/routing_table.dat"),
       m_peerStoragePath(configDir + "/peer_storage.dat"),
+      m_metadataPath(configDir + "/metadata.dat"),
       m_running(false),
       m_saveInterval(1) { // Save every 1 minute
 
     unified_event::logDebug("DHT.PersistenceManager", "Initializing with config directory: " + configDir);
     createConfigDir();
+
+    // Initialize the metadata registry
+    m_metadataRegistry = types::InfoHashMetadataRegistry::getInstance();
 }
 
 PersistenceManager::~PersistenceManager() {
@@ -151,14 +155,18 @@ bool PersistenceManager::saveNow() {
     // First, check if we have valid objects to save
     std::shared_ptr<RoutingTable> routingTable;
     std::shared_ptr<PeerStorage> peerStorage;
+    std::shared_ptr<types::InfoHashMetadataRegistry> metadataRegistry;
     std::string routingTablePath;
+    std::string metadataPath;
 
     try {
-        utility::thread::withLock(m_mutex, [this, &routingTable, &peerStorage, &routingTablePath]() {
+        utility::thread::withLock(m_mutex, [this, &routingTable, &peerStorage, &metadataRegistry, &routingTablePath, &metadataPath]() {
             // Make local copies of the shared pointers while holding the lock
             routingTable = m_routingTable;
             peerStorage = m_peerStorage;
+            metadataRegistry = m_metadataRegistry;
             routingTablePath = m_routingTablePath;
+            metadataPath = m_metadataPath;
         }, "PersistenceManager::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PersistenceManager", e.what());
@@ -166,8 +174,8 @@ bool PersistenceManager::saveNow() {
     }
 
     // Check if we have valid objects to save (outside the lock)
-    if (!routingTable || !peerStorage) {
-        unified_event::logError("DHT.PersistenceManager", "Cannot save: routing table or peer storage is null");
+    if (!routingTable || !peerStorage || !metadataRegistry) {
+        unified_event::logError("DHT.PersistenceManager", "Cannot save: routing table, peer storage, or metadata registry is null");
         return false;
     }
 
@@ -267,6 +275,46 @@ bool PersistenceManager::saveNow() {
         success = false;
     }
 
+    // Save metadata (outside the lock)
+    try {
+        // Get all metadata
+        auto allMetadata = metadataRegistry->getAllMetadata();
+        size_t metadataCount = allMetadata.size();
+
+        unified_event::logInfo("DHT.PersistenceManager", "Saving " + std::to_string(metadataCount) + " metadata entries to " + metadataPath);
+
+        // Serialize all metadata
+        auto serializedData = metadataRegistry->serializeAll();
+
+        // Open file for binary writing
+        std::ofstream file(metadataPath, std::ios::binary);
+        if (file.is_open()) {
+            // Write the serialized data
+            file.write(reinterpret_cast<const char*>(serializedData.data()), static_cast<std::streamsize>(serializedData.size()));
+            file.close();
+
+            // Log success with details
+            if (serializedData.empty()) {
+                unified_event::logInfo("DHT.PersistenceManager", "Saved empty metadata to " + metadataPath);
+            } else {
+                // Get file size
+                std::ifstream checkFile(metadataPath, std::ios::binary | std::ios::ate);
+                std::streamsize fileSize = checkFile.tellg();
+                checkFile.close();
+
+                unified_event::logInfo("DHT.PersistenceManager", "Successfully saved " + std::to_string(metadataCount) +
+                                      " metadata entries to " + metadataPath +
+                                      " (" + std::to_string(fileSize) + " bytes)");
+            }
+        } else {
+            unified_event::logError("DHT.PersistenceManager", "Failed to open file for writing: " + metadataPath);
+            success = false;
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PersistenceManager", "Exception while saving metadata: " + std::string(e.what()));
+        success = false;
+    }
+
     return success;
 }
 
@@ -274,14 +322,18 @@ bool PersistenceManager::loadFromDisk() {
     // First, check if we have valid objects to load into
     std::shared_ptr<RoutingTable> routingTable;
     std::shared_ptr<PeerStorage> peerStorage;
+    std::shared_ptr<types::InfoHashMetadataRegistry> metadataRegistry;
     std::string routingTablePath;
+    std::string metadataPath;
 
     try {
-        utility::thread::withLock(m_mutex, [this, &routingTable, &peerStorage, &routingTablePath]() {
+        utility::thread::withLock(m_mutex, [this, &routingTable, &peerStorage, &metadataRegistry, &routingTablePath, &metadataPath]() {
             // Make local copies of the shared pointers while holding the lock
             routingTable = m_routingTable;
             peerStorage = m_peerStorage;
+            metadataRegistry = m_metadataRegistry;
             routingTablePath = m_routingTablePath;
+            metadataPath = m_metadataPath;
         }, "PersistenceManager::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PersistenceManager", e.what());
@@ -289,8 +341,8 @@ bool PersistenceManager::loadFromDisk() {
     }
 
     // Check if we have valid objects to load into (outside the lock)
-    if (!routingTable || !peerStorage) {
-        unified_event::logError("DHT.PersistenceManager", "Cannot load: routing table or peer storage is null");
+    if (!routingTable || !peerStorage || !metadataRegistry) {
+        unified_event::logError("DHT.PersistenceManager", "Cannot load: routing table, peer storage, or metadata registry is null");
         return false;
     }
 
@@ -434,6 +486,57 @@ bool PersistenceManager::loadFromDisk() {
         }
     } else {
         unified_event::logDebug("DHT.PersistenceManager", "Peer storage file does not exist: " + peerStoragePath);
+    }
+
+    // Load metadata (outside the lock)
+    if (fs::exists(metadataPath)) {
+        try {
+            // Open file for binary reading
+            std::ifstream file(metadataPath, std::ios::binary);
+            if (file.is_open()) {
+                // Get file size
+                file.seekg(0, std::ios::end);
+                std::streamsize fileSize = file.tellg();
+                file.seekg(0, std::ios::beg);
+
+                if (fileSize == 0) {
+                    unified_event::logInfo("DHT.PersistenceManager", "Metadata file is empty");
+                    file.close();
+                    return success;
+                }
+
+                // Read the entire file into a buffer
+                std::vector<uint8_t> buffer(fileSize);
+                if (!file.read(reinterpret_cast<char*>(buffer.data()), fileSize)) {
+                    unified_event::logError("DHT.PersistenceManager", "Failed to read metadata file");
+                    file.close();
+                    return false;
+                }
+
+                file.close();
+
+                // Deserialize the metadata
+                if (metadataRegistry->deserializeAll(buffer)) {
+                    // Get the number of metadata entries
+                    auto allMetadata = metadataRegistry->getAllMetadata();
+                    size_t metadataCount = allMetadata.size();
+
+                    unified_event::logInfo("DHT.PersistenceManager", "Successfully loaded metadata from " + metadataPath +
+                                          " with " + std::to_string(metadataCount) + " entries");
+                } else {
+                    unified_event::logError("DHT.PersistenceManager", "Failed to deserialize metadata from " + metadataPath);
+                    success = false;
+                }
+            } else {
+                unified_event::logError("DHT.PersistenceManager", "Failed to open file for reading: " + metadataPath);
+                success = false;
+            }
+        } catch (const std::exception& e) {
+            unified_event::logError("DHT.PersistenceManager", "Exception while loading metadata: " + std::string(e.what()));
+            success = false;
+        }
+    } else {
+        unified_event::logDebug("DHT.PersistenceManager", "Metadata file does not exist: " + metadataPath);
     }
 
     return success;

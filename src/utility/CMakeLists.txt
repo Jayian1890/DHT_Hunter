@@ -25,7 +25,8 @@ add_library(dht_hunter_utility
         # System utilities
         system/memory_utils.cpp
 
-
+        # JSON utilities
+        json/json.cpp
 )
 
 # Set include directories

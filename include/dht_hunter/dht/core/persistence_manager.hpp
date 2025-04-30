@@ -2,6 +2,7 @@
 
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
+#include "dht_hunter/types/info_hash_metadata.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include <string>
 #include <memory>
@@ -92,11 +93,13 @@ private:
     std::string m_configDir;
     std::string m_routingTablePath;
     std::string m_peerStoragePath;
+    std::string m_metadataPath;
     std::atomic<bool> m_running;
     std::thread m_saveThread;
     mutable std::mutex m_mutex;
     std::shared_ptr<RoutingTable> m_routingTable;
     std::shared_ptr<PeerStorage> m_peerStorage;
+    std::shared_ptr<types::InfoHashMetadataRegistry> m_metadataRegistry;
     std::chrono::minutes m_saveInterval;
 };
 

@@ -5,14 +5,11 @@
 #include <iostream>
 #include <thread>
 #include <sstream>
-#include <iomanip>
 
 // Include thread utilities for the global shutdown flag
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 
 // Project includes - Types module
-#include "dht_hunter/types/node_id.hpp"
-#include "dht_hunter/types/endpoint.hpp"
 #include "dht_hunter/types/event_types.hpp"
 
 // Project includes - DHT module
@@ -26,8 +23,10 @@
 #include "dht_hunter/network/udp_server.hpp"
 
 // Project includes - Unified Event module
-#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"  // Adapter for old Logger interface
 #include "dht_hunter/unified_event/unified_event.hpp"            // New unified event system
+
+// Project includes - Web module
+#include "dht_hunter/web/web_server.hpp"
 
 /**
  * Global variables for signal handling and application state
@@ -35,6 +34,7 @@
 std::atomic<bool> g_running(true);
 std::shared_ptr<dht_hunter::network::UDPServer> g_server;
 std::shared_ptr<dht_hunter::dht::DHTNode> g_dhtNode;
+std::shared_ptr<dht_hunter::web::WebServer> g_webServer;
 
 /**
  * Signal handler for graceful shutdown
@@ -57,6 +57,8 @@ void signalHandler(const int signal) {
  */
 int main(int argc, char* argv[]) {
     std::string configDir;
+    std::string webRoot = "web";
+    uint16_t webPort = 8080;
 
 #ifdef _WIN32
     // Windows
@@ -80,6 +82,25 @@ int main(int argc, char* argv[]) {
                 configDir = argv[++i];
             } else {
                 std::cerr << "Error: --config-dir requires a directory path" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--web-root" || arg == "-w") {
+            if (i + 1 < argc) {
+                webRoot = argv[++i];
+            } else {
+                std::cerr << "Error: --web-root requires a directory path" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--web-port" || arg == "-p") {
+            if (i + 1 < argc) {
+                try {
+                    webPort = static_cast<uint16_t>(std::stoi(argv[++i]));
+                } catch (const std::exception& e) {
+                    std::cerr << "Error: --web-port requires a valid port number" << std::endl;
+                    return 1;
+                }
+            } else {
+                std::cerr << "Error: --web-port requires a port number" << std::endl;
                 return 1;
             }
         }
@@ -134,22 +155,36 @@ int main(int argc, char* argv[]) {
         auto routingTable = g_dhtNode->getRoutingTable();
         auto peerStorage = g_dhtNode->getPeerStorage();
         if (!persistenceManager->start(routingTable, peerStorage)) {
-            std::cerr << "Warning: Failed to start persistence manager" << std::endl;
-        } else {
-            std::cout << "Persistence manager started" << std::endl;
+            dht_hunter::unified_event::logError("DHT.PersistenceManager", "Failed to start persistence manager");
         }
     } else {
-        std::cerr << "Warning: Failed to get persistence manager instance" << std::endl;
+        dht_hunter::unified_event::logCritical("DHT.PersistenceManager", "Persistence manager is null");
     }
 
     // Wait for the node to bootstrap
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
+    // Start the web server
+    auto statsService = dht_hunter::dht::services::StatisticsService::getInstance();
+    auto routingManager = g_dhtNode->getRoutingManager();
+    auto peerStorage = g_dhtNode->getPeerStorage();
+
+    g_webServer = std::make_shared<dht_hunter::web::WebServer>(
+        webRoot,
+        webPort,
+        statsService,
+        routingManager,
+        peerStorage
+    );
+
+    if (!g_webServer->start()) {
+        dht_hunter::unified_event::logError("Main", "Failed to start web server");
+    } else {
+        dht_hunter::unified_event::logInfo("Main", "Web UI available at http://localhost:" + std::to_string(webPort));
+    }
+
     // Function to update the terminal title with stats
     auto updateTitle = [&]() {
-        auto statsService = dht_hunter::dht::services::StatisticsService::getInstance();
-        auto routingManager = g_dhtNode->getRoutingManager();
-
         if (!statsService || !routingManager) {
             return;
         }
@@ -187,6 +222,11 @@ int main(int argc, char* argv[]) {
     }
 
     // Clean up resources
+    if (g_webServer) {
+        g_webServer->stop();
+        g_webServer.reset();
+    }
+
     if (persistenceManager) {
         persistenceManager->stop();
     }
