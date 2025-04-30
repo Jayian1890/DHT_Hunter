@@ -27,11 +27,6 @@ TransactionManager::TransactionManager(const DHTConfig& config, const NodeID& no
     : BaseTransactionComponent("TransactionManager", config, nodeID),
       m_rng(std::random_device{}()),
       m_maxTransactions(calculateMaxTransactions()) {
-
-    // Log the maximum number of transactions
-    unified_event::logInfo("DHT.Transactions." + m_name,
-        "Maximum transactions set to " + std::to_string(m_maxTransactions) +
-        " based on available memory");
 }
 
 TransactionManager::~TransactionManager() {

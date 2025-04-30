@@ -34,7 +34,7 @@ bool BaseTransactionComponent::initialize() {
     }
 
     m_initialized = true;
-    unified_event::logInfo("DHT.Transactions." + m_name, "Initialized");
+    unified_event::logTrace("DHT.Transactions." + m_name, "Initialized");
     return true;
 }
 
@@ -60,7 +60,7 @@ bool BaseTransactionComponent::start() {
     }
 
     m_running = true;
-    unified_event::logInfo("DHT.Transactions." + m_name, "Started");
+    unified_event::logTrace("DHT.Transactions." + m_name, "Started");
     return true;
 }
 

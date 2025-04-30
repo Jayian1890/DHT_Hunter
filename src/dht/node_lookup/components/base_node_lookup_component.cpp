@@ -41,7 +41,7 @@ bool BaseNodeLookupComponent::initialize() {
     }
 
     m_initialized = true;
-    unified_event::logInfo("DHT.NodeLookup." + m_name, "Initialized");
+    unified_event::logTrace("DHT.NodeLookup." + m_name, "Initialized");
     return true;
 }
 
@@ -63,7 +63,7 @@ bool BaseNodeLookupComponent::start() {
     }
 
     m_running = true;
-    unified_event::logInfo("DHT.NodeLookup." + m_name, "Started");
+    unified_event::logTrace("DHT.NodeLookup." + m_name, "Started");
     return true;
 }
 

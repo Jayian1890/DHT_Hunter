@@ -41,7 +41,7 @@ bool BasePeerLookupComponent::initialize() {
     }
 
     m_initialized = true;
-    unified_event::logInfo("DHT.PeerLookup." + m_name, "Initialized");
+    unified_event::logTrace("DHT.PeerLookup." + m_name, "Initialized");
     return true;
 }
 
@@ -63,7 +63,7 @@ bool BasePeerLookupComponent::start() {
     }
 
     m_running = true;
-    unified_event::logInfo("DHT.PeerLookup." + m_name, "Started");
+    unified_event::logTrace("DHT.PeerLookup." + m_name, "Started");
     return true;
 }
 

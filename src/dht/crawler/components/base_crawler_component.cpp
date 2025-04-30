@@ -34,7 +34,7 @@ bool BaseCrawlerComponent::initialize() {
     }
 
     m_initialized = true;
-    unified_event::logInfo("DHT.Crawler." + m_name, "Initialized");
+    unified_event::logTrace("DHT.Crawler." + m_name, "Initialized");
     return true;
 }
 
@@ -56,7 +56,7 @@ bool BaseCrawlerComponent::start() {
     }
 
     m_running = true;
-    unified_event::logInfo("DHT.Crawler." + m_name, "Started");
+    unified_event::logTrace("DHT.Crawler." + m_name, "Started");
     return true;
 }
 

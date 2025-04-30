@@ -41,7 +41,7 @@ bool BaseRoutingComponent::initialize() {
     }
 
     m_initialized = true;
-    unified_event::logInfo("DHT.Routing." + m_name, "Initialized");
+    unified_event::logTrace("DHT.Routing." + m_name, "Initialized");
     return true;
 }
 
@@ -63,7 +63,7 @@ bool BaseRoutingComponent::start() {
     }
 
     m_running = true;
-    unified_event::logInfo("DHT.Routing." + m_name, "Started");
+    unified_event::logTrace("DHT.Routing." + m_name, "Started");
     return true;
 }
 

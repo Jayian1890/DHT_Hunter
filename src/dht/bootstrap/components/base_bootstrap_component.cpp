@@ -34,7 +34,7 @@ bool BaseBootstrapComponent::initialize() {
     }
 
     m_initialized = true;
-    unified_event::logInfo("DHT.Bootstrap." + m_name, "Initialized");
+    unified_event::logTrace("DHT.Bootstrap." + m_name, "Initialized");
     return true;
 }
 
@@ -56,7 +56,7 @@ bool BaseBootstrapComponent::start() {
     }
 
     m_running = true;
-    unified_event::logInfo("DHT.Bootstrap." + m_name, "Started");
+    unified_event::logTrace("DHT.Bootstrap." + m_name, "Started");
     return true;
 }
 
