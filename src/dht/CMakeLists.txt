@@ -31,6 +31,9 @@ add_library(dht_hunter_dht
         node_lookup/node_lookup_response_handler.cpp
         # node_lookup_utils.cpp is now empty as implementation moved to util/node_utils.cpp
         node_lookup/node_lookup_utils.cpp
+        node_lookup/components/base_node_lookup_component.cpp
+        node_lookup/components/node_lookup_state.cpp
+        node_lookup/components/node_lookup_manager.cpp
 
         # Peer Lookup components
         peer_lookup/peer_lookup.cpp

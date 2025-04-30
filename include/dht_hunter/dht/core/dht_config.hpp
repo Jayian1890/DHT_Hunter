@@ -158,6 +158,30 @@ public:
     void setBucketRefreshInterval(int interval);
 
     /**
+     * @brief Gets the maximum number of iterations for node lookups
+     * @return The maximum number of iterations
+     */
+    size_t getMaxIterations() const;
+
+    /**
+     * @brief Sets the maximum number of iterations for node lookups
+     * @param iterations The maximum number of iterations
+     */
+    void setMaxIterations(size_t iterations);
+
+    /**
+     * @brief Gets the maximum number of queries for node lookups
+     * @return The maximum number of queries
+     */
+    size_t getMaxQueries() const;
+
+    /**
+     * @brief Sets the maximum number of queries for node lookups
+     * @param queries The maximum number of queries
+     */
+    void setMaxQueries(size_t queries);
+
+    /**
      * @brief Gets the full path for a file in the configuration directory
      * @param relativePath The relative path to the file
      * @return The full path to the file
@@ -174,6 +198,8 @@ private:
     std::string m_routingTablePath;
     int m_tokenRotationInterval;
     int m_bucketRefreshInterval;
+    size_t m_maxIterations;
+    size_t m_maxQueries;
     std::string m_configDir;
 };
 

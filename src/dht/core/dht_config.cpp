@@ -12,6 +12,8 @@ DHTConfig::DHTConfig()
       m_routingTablePath(""), // Empty path - routing table persistence is handled by PersistenceManager
       m_tokenRotationInterval(DEFAULT_TOKEN_ROTATION_INTERVAL),
       m_bucketRefreshInterval(1), // Default to 1 minute
+      m_maxIterations(10), // Default to 10 iterations
+      m_maxQueries(100), // Default to 100 queries
       m_configDir("config") {
 
     // Add default bootstrap nodes
@@ -113,6 +115,22 @@ int DHTConfig::getBucketRefreshInterval() const {
 
 void DHTConfig::setBucketRefreshInterval(int interval) {
     m_bucketRefreshInterval = interval;
+}
+
+size_t DHTConfig::getMaxIterations() const {
+    return m_maxIterations;
+}
+
+void DHTConfig::setMaxIterations(size_t iterations) {
+    m_maxIterations = iterations;
+}
+
+size_t DHTConfig::getMaxQueries() const {
+    return m_maxQueries;
+}
+
+void DHTConfig::setMaxQueries(size_t queries) {
+    m_maxQueries = queries;
 }
 
 std::string DHTConfig::getFullPath(const std::string& relativePath) const {
