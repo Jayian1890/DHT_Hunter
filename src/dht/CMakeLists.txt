@@ -59,6 +59,10 @@ add_library(dht_hunter_dht
 
         # Crawler components
         crawler/crawler.cpp
+        crawler/components/base_crawler_component.cpp
+        crawler/components/crawler_config.cpp
+        crawler/components/crawler_statistics.cpp
+        crawler/components/crawler_manager.cpp
 
         # Event components have been moved to the unified event system
 
