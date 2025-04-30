@@ -48,7 +48,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
 ### 3. Refactor the BitTorrent Module
 
 - [x] Reorganize BitTorrent message handling
-- [ ] Reorganize Bencode encoding/decoding
+- [x] Reorganize Bencode encoding/decoding
 - [x] Implement as singleton pattern
 - [x] Create clear interfaces for other modules
 - [x] Update CMakeLists.txt for BitTorrent module
@@ -66,7 +66,8 @@ The task is to reorganize the existing codebase into a more modular structure wi
 - [ ] Reorganize peer lookup functionality
 - [ ] Reorganize bootstrap functionality
 - [ ] Reorganize crawler functionality
-- [ ] Reorganize storage functionality
+- [x] Reorganize storage functionality
+- [x] Implement binary format for persistence
 - [ ] Reorganize transaction management
 - [x] Update CMakeLists.txt for DHT module
 - [ ] Update include paths in affected files
@@ -85,6 +86,8 @@ The task is to reorganize the existing codebase into a more modular structure wi
 
 - [x] Update main.cpp to use the new modular structure
 - [x] Test the application with the new structure
+- [x] Set log severity level to Info
+- [x] Remove verbose mode flag
 
 ## Completed Tasks
 
@@ -106,20 +109,27 @@ The task is to reorganize the existing codebase into a more modular structure wi
 3. Refactored the BitTorrent module
    - Updated bt_message_handler.hpp to use the Types module
    - Updated CMakeLists.txt for BitTorrent module to link with Types module
+   - Reorganized Bencode encoding/decoding
 
-4. Started refactoring the DHT module
+4. Refactored the DHT module
    - Created dht_types_adapter.hpp to use the Types module
    - Updated CMakeLists.txt for DHT module to link with Types module
    - Removed types components from DHT module
+   - Implemented binary format for persistence
+   - Removed JSON utilities and functions
+   - Reorganized storage functionality
 
-5. Started refactoring the Unified Event module
+5. Refactored the Unified Event module
    - Created event_types_adapter.hpp to use the Types module
    - Updated event.hpp to use the Types module
    - Updated event.cpp to use the Types module
    - Updated CMakeLists.txt for Unified Event module to link with Types module
+   - Updated to use string formatting instead of JSON
 
 6. Updated the main application
    - Updated main.cpp to use the new modular structure with proper includes
+   - Set log severity level to Info
+   - Removed verbose mode flag
 
 ## Current Status
 
@@ -129,8 +139,14 @@ We've successfully reorganized the project into modular components:
 2. **Network Module**: Refactored to use the Types module
 3. **BitTorrent Module**: Refactored to use the Types module
 4. **DHT Module**: Refactored to use the Types module
+   - Implemented binary format for persistence
+   - Removed JSON utilities and functions
+   - Reorganized storage functionality
 5. **Unified Event Module**: Refactored to use the Types module
+   - Updated to use string formatting instead of JSON
 6. **Main Application**: Updated to use the new modular structure
+   - Set log severity level to Info
+   - Removed verbose mode flag
 
 The project now builds successfully with the new modular structure.
 
@@ -168,8 +184,14 @@ In this reorganization effort, we've successfully:
 2. Refactored the Network module to use the Types module
 3. Refactored the BitTorrent module to use the Types module
 4. Refactored the DHT module to use the Types module
+   - Implemented binary format for persistence
+   - Removed JSON utilities and functions
+   - Reorganized storage functionality
 5. Refactored the Unified Event module to use the Types module
+   - Updated to use string formatting instead of JSON
 6. Updated the main application to use the new modular structure
+   - Set log severity level to Info
+   - Removed verbose mode flag
 7. Resolved type conflicts and ensured the project builds successfully
 
 We've achieved our goal of having a clean, modular codebase with clear separation of concerns between the five main components: Types, Network, BitTorrent, DHT, and Unified Event. This new structure will make the codebase more maintainable, with better defined interfaces between components and a more logical organization of code.
