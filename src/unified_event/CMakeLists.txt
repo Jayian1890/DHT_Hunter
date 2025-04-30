@@ -2,14 +2,19 @@
 add_library(dht_hunter_unified_event
         # Core components
         event.cpp
-        event_bus.cpp
+
+        # Event bus components
+        components/base_event_bus.cpp
+        components/event_bus.cpp
 
         # Processors
+        processors/components/base_event_processor.cpp
         processors/logging_processor.cpp
         processors/component_processor.cpp
         processors/statistics_processor.cpp
 
         # Adapters
+        adapters/components/base_event_adapter.cpp
         adapters/dht_event_adapter.cpp
 )
 

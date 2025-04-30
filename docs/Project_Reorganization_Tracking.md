@@ -75,12 +75,12 @@ The task is to reorganize the existing codebase into a more modular structure wi
 ### 5. Refactor the Unified Event Module
 
 - [x] Reorganize event base classes
-- [ ] Reorganize event bus implementation
-- [ ] Reorganize event processors
+- [x] Reorganize event bus implementation
+- [x] Reorganize event processors
 - [x] Reorganize event definitions
-- [ ] Reorganize adapters for legacy systems
+- [x] Reorganize adapters for legacy systems
 - [x] Update CMakeLists.txt for Unified Event module
-- [ ] Update include paths in affected files
+- [x] Update include paths in affected files
 
 ### 6. Update Main Application
 

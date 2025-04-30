@@ -3,7 +3,7 @@
 // Core event system
 #include "dht_hunter/unified_event/event.hpp"
 #include "dht_hunter/unified_event/event_processor.hpp"
-#include "dht_hunter/unified_event/event_bus.hpp"
+#include "dht_hunter/unified_event/components/event_bus.hpp"
 
 // Event processors
 #include "dht_hunter/unified_event/processors/logging_processor.hpp"
