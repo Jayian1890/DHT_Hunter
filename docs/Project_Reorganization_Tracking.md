@@ -57,7 +57,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
 ### 4. Refactor the DHT Module
 
 - [x] Reorganize core DHT functionality
-- [ ] Reorganize DHT extensions
+- [x] Reorganize DHT extensions
 - [ ] Reorganize routing functionality
 - [x] Implement Routing Manager as singleton
 - [x] Implement Routing Table as singleton
@@ -118,6 +118,8 @@ The task is to reorganize the existing codebase into a more modular structure wi
    - Implemented binary format for persistence
    - Removed JSON utilities and functions
    - Reorganized storage functionality
+   - Reorganized DHT extensions with factory pattern
+   - Implemented proper directory structure for extensions
 
 5. Refactored the Unified Event module
    - Created event_types_adapter.hpp to use the Types module
@@ -142,6 +144,8 @@ We've successfully reorganized the project into modular components:
    - Implemented binary format for persistence
    - Removed JSON utilities and functions
    - Reorganized storage functionality
+   - Reorganized DHT extensions with factory pattern
+   - Implemented proper directory structure for extensions
 5. **Unified Event Module**: Refactored to use the Types module
    - Updated to use string formatting instead of JSON
 6. **Main Application**: Updated to use the new modular structure
