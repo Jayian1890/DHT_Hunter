@@ -70,7 +70,7 @@ The task is to reorganize the existing codebase into a more modular structure wi
 - [x] Implement binary format for persistence
 - [x] Reorganize transaction management
 - [x] Update CMakeLists.txt for DHT module
-- [ ] Update include paths in affected files
+- [x] Update include paths in affected files
 
 ### 5. Refactor the Unified Event Module
 
