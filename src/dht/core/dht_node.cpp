@@ -28,24 +28,39 @@ DHTNode::DHTNode(const DHTConfig& config) : m_nodeID(generateRandomNodeID()), m_
     // Log node initialization
     unified_event::logDebug("DHT.Node", "Initializing node with ID: " + nodeIDToString(m_nodeID));
 
-    // Create the components
-    unified_event::logTrace("DHT.Node", "TRACE: Getting RoutingTable instance");
-    m_routingTable = RoutingTable::getInstance(m_nodeID, config.getKBucketSize());
+    // Create the components in dependency order
 
+    // 1. Core services that don't depend on other components
+    unified_event::logTrace("DHT.Node", "TRACE: Getting EventBus instance");
+    m_eventBus = unified_event::EventBus::getInstance();
+
+    unified_event::logTrace("DHT.Node", "TRACE: Getting StatisticsService instance");
+    m_statisticsService = services::StatisticsService::getInstance();
+
+    unified_event::logTrace("DHT.Node", "TRACE: Getting ExtensionFactory instance");
+    m_extensionFactory = extensions::ExtensionFactory::getInstance();
+
+    // 2. Basic network and storage components
     unified_event::logTrace("DHT.Node", "TRACE: Getting SocketManager instance");
     m_socketManager = SocketManager::getInstance(config);
-
-    unified_event::logTrace("DHT.Node", "TRACE: Getting MessageSender instance");
-    m_messageSender = MessageSender::getInstance(config, m_socketManager);
 
     unified_event::logTrace("DHT.Node", "TRACE: Getting TokenManager instance");
     m_tokenManager = TokenManager::getInstance(config);
 
     unified_event::logTrace("DHT.Node", "TRACE: Getting PeerStorage instance");
     m_peerStorage = PeerStorage::getInstance(config);
+
+    unified_event::logTrace("DHT.Node", "TRACE: Getting RoutingTable instance");
+    m_routingTable = RoutingTable::getInstance(m_nodeID, config.getKBucketSize());
+
+    // 3. Components that depend on basic components
+    unified_event::logTrace("DHT.Node", "TRACE: Getting MessageSender instance");
+    m_messageSender = MessageSender::getInstance(config, m_socketManager);
+
     unified_event::logTrace("DHT.Node", "TRACE: Getting TransactionManager instance");
     m_transactionManager = TransactionManager::getInstance(config);
 
+    // 4. Higher-level components that depend on multiple other components
     unified_event::logTrace("DHT.Node", "TRACE: Getting RoutingManager instance");
     m_routingManager = RoutingManager::getInstance(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
 
@@ -55,26 +70,15 @@ DHTNode::DHTNode(const DHTConfig& config) : m_nodeID(generateRandomNodeID()), m_
     unified_event::logTrace("DHT.Node", "TRACE: Getting PeerLookup instance");
     m_peerLookup = PeerLookup::getInstance(config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender, m_tokenManager, m_peerStorage);
 
-    unified_event::logTrace("DHT.Node", "TRACE: Getting Bootstrapper instance");
-    m_bootstrapper = Bootstrapper::getInstance(config, m_nodeID, m_routingManager, m_nodeLookup);
-
+    // 5. Components that depend on higher-level components
     unified_event::logTrace("DHT.Node", "TRACE: Getting MessageHandler instance");
     m_messageHandler = MessageHandler::getInstance(config, m_nodeID, m_messageSender, m_routingTable, m_tokenManager, m_peerStorage, m_transactionManager);
 
     unified_event::logTrace("DHT.Node", "TRACE: Getting BTMessageHandler instance");
     m_btMessageHandler = bittorrent::BTMessageHandler::getInstance(m_routingManager);
 
-    // Get the event bus
-    unified_event::logTrace("DHT.Node", "TRACE: Getting EventBus instance");
-    m_eventBus = unified_event::EventBus::getInstance();
-
-    // Get the statistics service
-    unified_event::logTrace("DHT.Node", "TRACE: Getting StatisticsService instance");
-    m_statisticsService = services::StatisticsService::getInstance();
-
-    // Get the extension factory
-    unified_event::logTrace("DHT.Node", "TRACE: Getting ExtensionFactory instance");
-    m_extensionFactory = extensions::ExtensionFactory::getInstance();
+    unified_event::logTrace("DHT.Node", "TRACE: Getting Bootstrapper instance");
+    m_bootstrapper = Bootstrapper::getInstance(config, m_nodeID, m_routingManager, m_nodeLookup);
 
     // Create DHT extensions
     std::vector<std::string> extensionNames = {"mainline", "kademlia", "azureus"};
