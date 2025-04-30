@@ -5,12 +5,13 @@
 #include <unordered_map>
 #include <thread>
 #include <random>
+#include "dht_hunter/utility/system/memory_utils.hpp"
 
 namespace dht_hunter::dht::transactions {
 
 /**
  * @brief Manager for DHT transactions
- * 
+ *
  * This component manages DHT transactions, including creating, tracking, and timing out transactions.
  */
 class TransactionManager : public BaseTransactionComponent {
@@ -120,7 +121,21 @@ private:
 
     // Constants
     static constexpr int TRANSACTION_TIMEOUT = 30; // seconds
-    static constexpr size_t MAX_TRANSACTIONS = 1000;
+
+    // Maximum number of transactions is dynamically calculated based on available memory
+    // This is just a fallback value if memory detection fails
+    static constexpr size_t DEFAULT_MAX_TRANSACTIONS = 100000;
+
+    // Calculate the maximum number of transactions based on available memory
+    // Uses 25% of available memory by default
+    size_t getMaxTransactions() const {
+        return utility::system::calculateMaxTransactions(
+            0.25,                  // Use 25% of available memory
+            350,                   // Estimated bytes per transaction
+            1000,                  // Minimum transactions
+            1000000                // Maximum transactions
+        );
+    }
 };
 
 } // namespace dht_hunter::dht::transactions

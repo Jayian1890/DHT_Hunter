@@ -119,11 +119,6 @@ int main(int argc, char* argv[]) {
     // Create a DHT configuration with the specified config directory
     dht_hunter::dht::DHTConfig dhtConfig(DHT_PORT, configDir);
 
-    // Configure the logging processor to show Info level and above
-    dht_hunter::unified_event::LoggingProcessorConfig loggingConfig;
-    loggingConfig.minSeverity = dht_hunter::types::EventSeverity::Info;
-    dht_hunter::unified_event::configureLoggingProcessor(loggingConfig);
-
     // Initialize the persistence manager
     auto persistenceManager = dht_hunter::dht::PersistenceManager::getInstance(configDir);
 

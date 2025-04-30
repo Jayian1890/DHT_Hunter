@@ -78,8 +78,11 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
     try {
         return utility::thread::withLock(m_mutex, [this, &query, &endpoint, &responseCallback, &errorCallback, &timeoutCallback]() {
             // Check if we have too many transactions
-            if (m_transactions.size() >= MAX_TRANSACTIONS) {
-                unified_event::logWarning("DHT.Transactions." + m_name, "Too many transactions, dropping new transaction");
+            size_t maxTransactions = getMaxTransactions();
+            if (m_transactions.size() >= maxTransactions) {
+                unified_event::logWarning("DHT.Transactions." + m_name,
+                    "Too many transactions (" + std::to_string(m_transactions.size()) + "/" +
+                    std::to_string(maxTransactions) + "), dropping new transaction");
                 return std::string("");
             }
 

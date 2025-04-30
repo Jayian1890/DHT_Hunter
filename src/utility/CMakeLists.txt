@@ -22,6 +22,9 @@ add_library(dht_hunter_utility
         # Process utilities
         process/process_utils.cpp
 
+        # System utilities
+        system/memory_utils.cpp
+
 
 )
 

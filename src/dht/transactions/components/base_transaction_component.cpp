@@ -39,6 +39,10 @@ bool BaseTransactionComponent::initialize() {
 }
 
 bool BaseTransactionComponent::start() {
+    if (!initialize()) {
+        return false;
+    }
+
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (!m_initialized) {
