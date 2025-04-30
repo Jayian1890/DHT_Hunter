@@ -119,6 +119,9 @@ private:
     // Random number generator
     std::mt19937 m_rng;
 
+    // Maximum number of transactions (calculated once during initialization)
+    size_t m_maxTransactions;
+
     // Constants
     static constexpr int TRANSACTION_TIMEOUT = 30; // seconds
 
@@ -128,7 +131,7 @@ private:
 
     // Calculate the maximum number of transactions based on available memory
     // Uses 25% of available memory by default
-    size_t getMaxTransactions() const {
+    static size_t calculateMaxTransactions() {
         return utility::system::calculateMaxTransactions(
             0.25,                  // Use 25% of available memory
             350,                   // Estimated bytes per transaction

@@ -25,7 +25,13 @@ std::shared_ptr<TransactionManager> TransactionManager::getInstance(const DHTCon
 
 TransactionManager::TransactionManager(const DHTConfig& config, const NodeID& nodeID)
     : BaseTransactionComponent("TransactionManager", config, nodeID),
-      m_rng(std::random_device{}()) {
+      m_rng(std::random_device{}()),
+      m_maxTransactions(calculateMaxTransactions()) {
+
+    // Log the maximum number of transactions
+    unified_event::logInfo("DHT.Transactions." + m_name,
+        "Maximum transactions set to " + std::to_string(m_maxTransactions) +
+        " based on available memory");
 }
 
 TransactionManager::~TransactionManager() {
@@ -78,11 +84,10 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
     try {
         return utility::thread::withLock(m_mutex, [this, &query, &endpoint, &responseCallback, &errorCallback, &timeoutCallback]() {
             // Check if we have too many transactions
-            size_t maxTransactions = getMaxTransactions();
-            if (m_transactions.size() >= maxTransactions) {
+            if (m_transactions.size() >= m_maxTransactions) {
                 unified_event::logWarning("DHT.Transactions." + m_name,
                     "Too many transactions (" + std::to_string(m_transactions.size()) + "/" +
-                    std::to_string(maxTransactions) + "), dropping new transaction");
+                    std::to_string(m_maxTransactions) + "), dropping new transaction");
                 return std::string("");
             }
 
