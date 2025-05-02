@@ -204,22 +204,22 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         // General settings
         json::JsonValue generalConfig(json::JsonValue::createObject());
         auto& generalObj = generalConfig.getObject();
-        generalObj.m_values["configDir"] = json::JsonValue("~/dht-hunter");
-        generalObj.m_values["logFile"] = json::JsonValue("dht_hunter.log");
-        generalObj.m_values["logLevel"] = json::JsonValue("info");
-        config.getObject().m_values["general"] = generalConfig;
+        generalObj.set("configDir", json::JsonValue("~/dht-hunter"));
+        generalObj.set("logFile", json::JsonValue("dht_hunter.log"));
+        generalObj.set("logLevel", json::JsonValue("info"));
+        config.getObject().set("general", generalConfig);
 
         // DHT settings
         json::JsonValue dhtConfig(json::JsonValue::createObject());
         auto& dhtObj = dhtConfig.getObject();
-        dhtObj.m_values["port"] = json::JsonValue(6881);
-        dhtObj.m_values["kBucketSize"] = json::JsonValue(16);
-        dhtObj.m_values["alpha"] = json::JsonValue(3);
-        dhtObj.m_values["maxResults"] = json::JsonValue(8);
-        dhtObj.m_values["tokenRotationInterval"] = json::JsonValue(300);
-        dhtObj.m_values["bucketRefreshInterval"] = json::JsonValue(60);
-        dhtObj.m_values["maxIterations"] = json::JsonValue(10);
-        dhtObj.m_values["maxQueries"] = json::JsonValue(100);
+        dhtObj.set("port", json::JsonValue(6881));
+        dhtObj.set("kBucketSize", json::JsonValue(16));
+        dhtObj.set("alpha", json::JsonValue(3));
+        dhtObj.set("maxResults", json::JsonValue(8));
+        dhtObj.set("tokenRotationInterval", json::JsonValue(300));
+        dhtObj.set("bucketRefreshInterval", json::JsonValue(60));
+        dhtObj.set("maxIterations", json::JsonValue(10));
+        dhtObj.set("maxQueries", json::JsonValue(100));
 
         // Bootstrap nodes
         json::JsonValue bootstrapNodes(json::JsonValue::createArray());
@@ -228,75 +228,75 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         bootstrapArray.add(json::JsonValue("dht.transmissionbt.com:6881"));
         bootstrapArray.add(json::JsonValue("dht.libtorrent.org:25401"));
         bootstrapArray.add(json::JsonValue("router.utorrent.com:6881"));
-        dhtObj.m_values["bootstrapNodes"] = bootstrapNodes;
+        dhtObj.set("bootstrapNodes", bootstrapNodes);
 
-        config.getObject().m_values["dht"] = dhtConfig;
+        config.getObject().set("dht", dhtConfig);
 
         // Network settings
         json::JsonValue networkConfig(json::JsonValue::createObject());
         auto& networkObj = networkConfig.getObject();
-        networkObj.m_values["transactionTimeout"] = json::JsonValue(30);
-        networkObj.m_values["maxTransactions"] = json::JsonValue(1024);
-        networkObj.m_values["mtuSize"] = json::JsonValue(1400);
-        config.getObject().m_values["network"] = networkConfig;
+        networkObj.set("transactionTimeout", json::JsonValue(30));
+        networkObj.set("maxTransactions", json::JsonValue(1024));
+        networkObj.set("mtuSize", json::JsonValue(1400));
+        config.getObject().set("network", networkConfig);
 
         // Web interface settings
         json::JsonValue webConfig(json::JsonValue::createObject());
         auto& webObj = webConfig.getObject();
-        webObj.m_values["port"] = json::JsonValue(8080);
-        webObj.m_values["webRoot"] = json::JsonValue("web");
-        config.getObject().m_values["web"] = webConfig;
+        webObj.set("port", json::JsonValue(8080));
+        webObj.set("webRoot", json::JsonValue("web"));
+        config.getObject().set("web", webConfig);
 
         // Persistence settings
         json::JsonValue persistenceConfig(json::JsonValue::createObject());
         auto& persistenceObj = persistenceConfig.getObject();
-        persistenceObj.m_values["saveInterval"] = json::JsonValue(60); // In minutes
-        persistenceObj.m_values["routingTablePath"] = json::JsonValue("routing_table.dat");
-        persistenceObj.m_values["peerStoragePath"] = json::JsonValue("peer_storage.dat");
-        persistenceObj.m_values["metadataPath"] = json::JsonValue("metadata.dat");
-        persistenceObj.m_values["nodeIDPath"] = json::JsonValue("node_id.dat");
-        config.getObject().m_values["persistence"] = persistenceConfig;
+        persistenceObj.set("saveInterval", json::JsonValue(60)); // In minutes
+        persistenceObj.set("routingTablePath", json::JsonValue("routing_table.dat"));
+        persistenceObj.set("peerStoragePath", json::JsonValue("peer_storage.dat"));
+        persistenceObj.set("metadataPath", json::JsonValue("metadata.dat"));
+        persistenceObj.set("nodeIDPath", json::JsonValue("node_id.dat"));
+        config.getObject().set("persistence", persistenceConfig);
 
         // Crawler settings
         json::JsonValue crawlerConfig(json::JsonValue::createObject());
         auto& crawlerObj = crawlerConfig.getObject();
-        crawlerObj.m_values["parallelCrawls"] = json::JsonValue(10);
-        crawlerObj.m_values["refreshInterval"] = json::JsonValue(15);
-        crawlerObj.m_values["maxNodes"] = json::JsonValue(1000000);
-        crawlerObj.m_values["maxInfoHashes"] = json::JsonValue(1000000);
-        crawlerObj.m_values["autoStart"] = json::JsonValue(true);
-        config.getObject().m_values["crawler"] = crawlerConfig;
+        crawlerObj.set("parallelCrawls", json::JsonValue(10));
+        crawlerObj.set("refreshInterval", json::JsonValue(15));
+        crawlerObj.set("maxNodes", json::JsonValue(1000000));
+        crawlerObj.set("maxInfoHashes", json::JsonValue(1000000));
+        crawlerObj.set("autoStart", json::JsonValue(true));
+        config.getObject().set("crawler", crawlerConfig);
 
         // Metadata acquisition settings
         json::JsonValue metadataConfig(json::JsonValue::createObject());
         auto& metadataObj = metadataConfig.getObject();
-        metadataObj.m_values["processingInterval"] = json::JsonValue(5);
-        metadataObj.m_values["maxConcurrentAcquisitions"] = json::JsonValue(5);
-        metadataObj.m_values["acquisitionTimeout"] = json::JsonValue(60);
-        metadataObj.m_values["maxRetryCount"] = json::JsonValue(3);
-        metadataObj.m_values["retryDelayBase"] = json::JsonValue(300);
-        config.getObject().m_values["metadata"] = metadataConfig;
+        metadataObj.set("processingInterval", json::JsonValue(5));
+        metadataObj.set("maxConcurrentAcquisitions", json::JsonValue(5));
+        metadataObj.set("acquisitionTimeout", json::JsonValue(60));
+        metadataObj.set("maxRetryCount", json::JsonValue(3));
+        metadataObj.set("retryDelayBase", json::JsonValue(300));
+        config.getObject().set("metadata", metadataConfig);
 
         // Event system settings
         json::JsonValue eventConfig(json::JsonValue::createObject());
         auto& eventObj = eventConfig.getObject();
-        eventObj.m_values["enableLogging"] = json::JsonValue(true);
-        eventObj.m_values["enableComponent"] = json::JsonValue(true);
-        eventObj.m_values["enableStatistics"] = json::JsonValue(true);
-        eventObj.m_values["asyncProcessing"] = json::JsonValue(false);
-        eventObj.m_values["eventQueueSize"] = json::JsonValue(1000);
-        eventObj.m_values["processingThreads"] = json::JsonValue(1);
-        config.getObject().m_values["event"] = eventConfig;
+        eventObj.set("enableLogging", json::JsonValue(true));
+        eventObj.set("enableComponent", json::JsonValue(true));
+        eventObj.set("enableStatistics", json::JsonValue(true));
+        eventObj.set("asyncProcessing", json::JsonValue(false));
+        eventObj.set("eventQueueSize", json::JsonValue(1000));
+        eventObj.set("processingThreads", json::JsonValue(1));
+        config.getObject().set("event", eventConfig);
 
         // Logging settings
         json::JsonValue loggingConfig(json::JsonValue::createObject());
         auto& loggingObj = loggingConfig.getObject();
-        loggingObj.m_values["consoleOutput"] = json::JsonValue(true);
-        loggingObj.m_values["fileOutput"] = json::JsonValue(true);
-        loggingObj.m_values["includeTimestamp"] = json::JsonValue(true);
-        loggingObj.m_values["includeSeverity"] = json::JsonValue(true);
-        loggingObj.m_values["includeSource"] = json::JsonValue(true);
-        config.getObject().m_values["logging"] = loggingConfig;
+        loggingObj.set("consoleOutput", json::JsonValue(true));
+        loggingObj.set("fileOutput", json::JsonValue(true));
+        loggingObj.set("includeTimestamp", json::JsonValue(true));
+        loggingObj.set("includeSeverity", json::JsonValue(true));
+        loggingObj.set("includeSource", json::JsonValue(true));
+        config.getObject().set("logging", loggingConfig);
 
         // Convert to JSON string
         std::string jsonStr = json::Json::stringify(config, true); // Pretty print
