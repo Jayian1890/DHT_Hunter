@@ -134,9 +134,9 @@ int main(int argc, char* argv[]) {
     // Ensure the config directory exists
     std::filesystem::path configPath(configDir);
     if (!std::filesystem::exists(configPath)) {
-        std::cout << "Creating configuration directory: " << configDir << std::endl;
+        dht_hunter::unified_event::logInfo("Main", "Creating configuration directory: " + configDir);
         if (!std::filesystem::create_directories(configPath)) {
-            std::cerr << "Error: Failed to create configuration directory: " << configDir << std::endl;
+            dht_hunter::unified_event::logError("Main", "Failed to create configuration directory");
             return 1;
         }
     }
@@ -159,6 +159,13 @@ int main(int argc, char* argv[]) {
     if (!configManager) {
         std::cerr << "Error: Failed to initialize configuration manager" << std::endl;
         return 1;
+    }
+
+    // Enable hot-reloading of the configuration file
+    if (!configManager->enableHotReloading(true, 1000)) { // Check every second
+        std::cerr << "Warning: Failed to enable hot-reloading of configuration file" << std::endl;
+    } else {
+        std::cout << "Hot-reloading of configuration file enabled" << std::endl;
     }
 
     // If the config file exists, load settings from it

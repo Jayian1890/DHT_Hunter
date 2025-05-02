@@ -8,12 +8,22 @@
 #include <any>
 #include <optional>
 #include <filesystem>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
+#include <chrono>
 
 namespace dht_hunter::utility::config {
 
 /**
+ * @brief Callback function type for configuration change events
+ * @param key The key of the changed configuration value (empty string for any change)
+ */
+using ConfigChangeCallback = std::function<void(const std::string&)>;
+
+/**
  * @brief Manager for application configuration
- * 
+ *
  * This class is responsible for loading, parsing, and providing access to
  * application configuration settings from a JSON file.
  */
@@ -173,6 +183,29 @@ public:
      */
     bool validateConfiguration() const;
 
+    /**
+     * @brief Enables hot-reloading of the configuration file
+     * @param enabled Whether to enable hot-reloading
+     * @param checkIntervalMs The interval in milliseconds to check for file changes
+     * @return True if hot-reloading was enabled successfully, false otherwise
+     */
+    bool enableHotReloading(bool enabled, int checkIntervalMs = 1000);
+
+    /**
+     * @brief Registers a callback for configuration change events
+     * @param callback The callback function to register
+     * @param key The key to watch for changes (empty string for any change)
+     * @return A unique identifier for the callback registration
+     */
+    int registerChangeCallback(const ConfigChangeCallback& callback, const std::string& key = "");
+
+    /**
+     * @brief Unregisters a callback for configuration change events
+     * @param callbackId The unique identifier returned by registerChangeCallback
+     * @return True if the callback was unregistered successfully, false otherwise
+     */
+    bool unregisterChangeCallback(int callbackId);
+
 private:
     /**
      * @brief Private constructor for singleton pattern
@@ -206,11 +239,40 @@ private:
     static std::shared_ptr<ConfigurationManager> s_instance;
     static std::mutex s_instanceMutex;
 
+    /**
+     * @brief Notifies all registered callbacks of a configuration change
+     * @param key The key of the changed configuration value (empty string for any change)
+     */
+    void notifyChangeCallbacks(const std::string& key = "");
+
+    /**
+     * @brief File watcher thread function
+     */
+    void fileWatcherThread();
+
     // Configuration data
     std::any m_configRoot;
     std::string m_configFilePath;
     mutable std::mutex m_configMutex;
     bool m_configLoaded;
+
+    // Hot-reloading
+    std::atomic<bool> m_hotReloadingEnabled;
+    std::atomic<bool> m_fileWatcherRunning;
+    std::thread m_fileWatcherThread;
+    std::condition_variable m_fileWatcherCondition;
+    std::mutex m_fileWatcherMutex;
+    int m_fileWatcherIntervalMs;
+    std::filesystem::file_time_type m_lastModifiedTime;
+
+    // Change callbacks
+    struct CallbackInfo {
+        ConfigChangeCallback callback;
+        std::string key;
+    };
+    std::unordered_map<int, CallbackInfo> m_changeCallbacks;
+    std::mutex m_callbacksMutex;
+    int m_nextCallbackId;
 };
 
 } // namespace dht_hunter::utility::config

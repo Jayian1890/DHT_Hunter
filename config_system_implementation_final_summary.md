@@ -54,16 +54,16 @@ A key user-friendly feature is the automatic generation of a default configurati
     - Created developer documentation for the configuration system architecture
     - Included examples and best practices
 
-## Remaining Optional Tasks
+## Completed Optional Tasks
 
-1. **Implement Hot-Reloading** ⬜
-   - Add file watching for the configuration file
-   - Implement safe reloading of configuration values
-   - Add events for configuration changes
+1. **Implement Hot-Reloading** ✅
+   - Added file watching for the configuration file
+   - Implemented safe reloading of configuration values
+   - Added events for configuration changes
 
-2. **Add Configuration API Endpoints** ⬜
-   - Create API endpoints to view current configuration
-   - Add endpoints to modify configuration (if applicable)
+2. **Add Configuration API Endpoints** ✅
+   - Created API endpoints to view current configuration
+   - Added endpoints to modify configuration
 
 ## Implementation Details
 
@@ -106,6 +106,8 @@ Components have been updated to use the configuration system in the following wa
 5. **CrawlerConfig**: Added a new constructor that loads settings from configuration.
 6. **CrawlerManager**: Updated to use the configuration-based CrawlerConfig.
 7. **MetadataAcquisitionManager**: Added configuration for processing interval, concurrent acquisitions, timeout, retry count, and retry delay.
+8. **ConfigurationManager**: Added hot-reloading capability with file watching and change notifications.
+9. **ConfigApiHandler**: Added API endpoints for viewing and modifying configuration values.
 
 ### Documentation
 
@@ -125,6 +127,8 @@ Comprehensive documentation has been created for both users and developers:
 - `config_system_implementation_plan.md`
 - `config_system_implementation_progress.md`
 - `config_system_implementation_final_summary.md`
+- `include/dht_hunter/web/api/config_api_handler.hpp`
+- `src/web/api/config_api_handler.cpp`
 
 ### Modified Files
 - `src/main.cpp`
@@ -146,4 +150,8 @@ Comprehensive documentation has been created for both users and developers:
 
 The configuration system has been successfully implemented, allowing users to customize all aspects of the DHT Hunter application through a single JSON configuration file. The system is modular, well-documented, and follows best practices for configuration management in C++ applications.
 
-All core components have been updated to use the configuration system, and comprehensive documentation has been created for both users and developers. The remaining optional tasks (hot-reloading and API endpoints) can be implemented in the future if desired.
+All core components have been updated to use the configuration system, and comprehensive documentation has been created for both users and developers. The optional tasks (hot-reloading and API endpoints) have also been implemented, providing a complete and robust configuration system.
+
+The hot-reloading feature allows the application to detect changes to the configuration file and automatically reload it without requiring a restart. This is particularly useful for long-running applications where downtime should be minimized.
+
+The API endpoints provide a way for users to view and modify the configuration through the web interface, making it easier to manage the application's settings without having to edit the configuration file directly.

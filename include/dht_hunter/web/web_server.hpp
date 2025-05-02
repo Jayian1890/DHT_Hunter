@@ -8,6 +8,7 @@
 #include "dht_hunter/utility/metadata/metadata_utils.hpp"
 #include "dht_hunter/bittorrent/metadata/metadata_acquisition_manager.hpp"
 #include "dht_hunter/utility/config/configuration_manager.hpp"
+#include "dht_hunter/web/api/config_api_handler.hpp"
 #include <memory>
 #include <string>
 #include <chrono>
@@ -84,6 +85,7 @@ private:
     std::shared_ptr<dht::PeerStorage> m_peerStorage;
     std::shared_ptr<types::InfoHashMetadataRegistry> m_metadataRegistry;
     std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> m_metadataManager;
+    std::shared_ptr<api::ConfigApiHandler> m_configApiHandler;
     std::chrono::steady_clock::time_point m_startTime;
 
     /**

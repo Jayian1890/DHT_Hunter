@@ -11,38 +11,28 @@ namespace dht_hunter::web {
 using Json = utility::json::Json;
 using JsonValue = utility::json::JsonValue;
 
-WebServer::WebServer(
-    const std::string& webRoot,
-    uint16_t port,
-    std::shared_ptr<dht::services::StatisticsService> statisticsService,
-    std::shared_ptr<dht::RoutingManager> routingManager,
-    std::shared_ptr<dht::PeerStorage> peerStorage,
-    std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager
-) : m_webRoot(webRoot),
-    m_port(port),
-    m_httpServer(std::make_shared<network::HttpServer>()),
-    m_statisticsService(statisticsService),
-    m_routingManager(routingManager),
-    m_peerStorage(peerStorage),
-    m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
-    m_metadataManager(metadataManager),
-    m_startTime(std::chrono::steady_clock::now()) {
+WebServer::WebServer(const std::string& webRoot, uint16_t port, std::shared_ptr<dht::services::StatisticsService> statisticsService, std::shared_ptr<dht::RoutingManager> routingManager, std::shared_ptr<dht::PeerStorage> peerStorage,
+                     std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager)
+    : m_webRoot(webRoot),
+      m_port(port),
+      m_httpServer(std::make_shared<network::HttpServer>()),
+      m_statisticsService(statisticsService),
+      m_routingManager(routingManager),
+      m_peerStorage(peerStorage),
+      m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
+      m_metadataManager(metadataManager),
+      m_startTime(std::chrono::steady_clock::now()) {
     unified_event::logDebug("Web.Server", "WebServer initialized with webRoot: " + webRoot + ", port: " + std::to_string(port));
 }
 
-WebServer::WebServer(
-    std::shared_ptr<dht::services::StatisticsService> statisticsService,
-    std::shared_ptr<dht::RoutingManager> routingManager,
-    std::shared_ptr<dht::PeerStorage> peerStorage,
-    std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager
-) : m_httpServer(std::make_shared<network::HttpServer>()),
-    m_statisticsService(statisticsService),
-    m_routingManager(routingManager),
-    m_peerStorage(peerStorage),
-    m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
-    m_metadataManager(metadataManager),
-    m_startTime(std::chrono::steady_clock::now()) {
-
+WebServer::WebServer(std::shared_ptr<dht::services::StatisticsService> statisticsService, std::shared_ptr<dht::RoutingManager> routingManager, std::shared_ptr<dht::PeerStorage> peerStorage, std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager)
+    : m_httpServer(std::make_shared<network::HttpServer>()),
+      m_statisticsService(statisticsService),
+      m_routingManager(routingManager),
+      m_peerStorage(peerStorage),
+      m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
+      m_metadataManager(metadataManager),
+      m_startTime(std::chrono::steady_clock::now()) {
     // Get settings from configuration
     auto configManager = utility::config::ConfigurationManager::getInstance();
     m_webRoot = configManager->getString("web.webRoot", "web");
@@ -51,6 +41,8 @@ WebServer::WebServer(
     unified_event::logDebug("Web.Server", "WebServer initialized from configuration with webRoot: " + m_webRoot + ", port: " + std::to_string(m_port));
 }
 }
+
+using dht_hunter::web::WebServer;
 
 WebServer::~WebServer() {
     stop();
@@ -138,6 +130,9 @@ void WebServer::registerApiRoutes() {
             return handleMetadataStatusRequest(request);
         }
     );
+
+    // Initialize the configuration API handler
+    m_configApiHandler = std::make_shared<api::ConfigApiHandler>(m_httpServer);
 }
 
 void WebServer::registerStaticRoutes() {

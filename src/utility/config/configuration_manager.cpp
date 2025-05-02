@@ -35,18 +35,34 @@ std::shared_ptr<ConfigurationManager> ConfigurationManager::getInstance(const st
 
 ConfigurationManager::ConfigurationManager(const std::string& configFilePath)
     : m_configFilePath(configFilePath),
-      m_configLoaded(false) {
-    
+      m_configLoaded(false),
+      m_hotReloadingEnabled(false),
+      m_fileWatcherRunning(false),
+      m_fileWatcherIntervalMs(1000),
+      m_nextCallbackId(1) {
+
     // Create an empty JSON object as the root
     m_configRoot = json::JsonValue::createObject();
 
     // If a config file path was provided, try to load it
     if (!configFilePath.empty()) {
         loadConfiguration(configFilePath);
+
+        // Store the last modified time of the file
+        try {
+            if (fs::exists(configFilePath)) {
+                m_lastModifiedTime = fs::last_write_time(configFilePath);
+            }
+        } catch (const std::exception& e) {
+            unified_event::logWarning("ConfigurationManager", "Failed to get last modified time of configuration file: " + std::string(e.what()));
+        }
     }
 }
 
 ConfigurationManager::~ConfigurationManager() {
+    // Stop the file watcher thread if it's running
+    enableHotReloading(false);
+
     // Clear the singleton instance
     try {
         utility::thread::withLock(s_instanceMutex, [this]() {
@@ -94,9 +110,22 @@ bool ConfigurationManager::loadConfiguration(const std::string& configFilePath) 
             }
 
             // Store the configuration
+            auto oldRoot = m_configRoot;
             m_configRoot = jsonValue;
             m_configFilePath = configFilePath;
             m_configLoaded = true;
+
+            // Update the last modified time
+            try {
+                m_lastModifiedTime = fs::last_write_time(configFilePath);
+            } catch (const std::exception& e) {
+                unified_event::logWarning("ConfigurationManager", "Failed to get last modified time of configuration file: " + std::string(e.what()));
+            }
+
+            // Notify callbacks if this is a reload (not the initial load)
+            if (oldRoot.has_value()) {
+                notifyChangeCallbacks();
+            }
 
             unified_event::logInfo("ConfigurationManager", "Successfully loaded configuration from " + configFilePath);
             return true;
@@ -690,6 +719,154 @@ std::vector<std::string> ConfigurationManager::splitKeyPath(const std::string& k
 
     result.push_back(key.substr(start));
     return result;
+}
+
+bool ConfigurationManager::enableHotReloading(bool enabled, int checkIntervalMs) {
+    try {
+        // If we're already in the desired state, do nothing
+        if (m_hotReloadingEnabled.load() == enabled) {
+            return true;
+        }
+
+        if (enabled) {
+            // Check if the configuration file exists
+            if (m_configFilePath.empty() || !fs::exists(m_configFilePath)) {
+                unified_event::logError("ConfigurationManager", "Cannot enable hot-reloading: Configuration file does not exist");
+                return false;
+            }
+
+            // Set the interval
+            m_fileWatcherIntervalMs = checkIntervalMs;
+
+            // Start the file watcher thread
+            m_fileWatcherRunning = true;
+            m_hotReloadingEnabled = true;
+
+            // Create the thread
+            m_fileWatcherThread = std::thread(&ConfigurationManager::fileWatcherThread, this);
+
+            unified_event::logInfo("ConfigurationManager", "Hot-reloading enabled with interval " + std::to_string(checkIntervalMs) + " ms");
+            return true;
+        } else {
+            // Stop the file watcher thread
+            if (m_fileWatcherRunning.load()) {
+                m_fileWatcherRunning = false;
+
+                // Notify the thread to wake up and exit
+                m_fileWatcherCondition.notify_one();
+
+                // Wait for the thread to exit
+                if (m_fileWatcherThread.joinable()) {
+                    m_fileWatcherThread.join();
+                }
+            }
+
+            m_hotReloadingEnabled = false;
+            unified_event::logInfo("ConfigurationManager", "Hot-reloading disabled");
+            return true;
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("ConfigurationManager", "Exception while enabling/disabling hot-reloading: " + std::string(e.what()));
+        return false;
+    }
+}
+
+int ConfigurationManager::registerChangeCallback(const ConfigChangeCallback& callback, const std::string& key) {
+    try {
+        return utility::thread::withLock(m_callbacksMutex, [this, &callback, &key]() {
+            int callbackId = m_nextCallbackId++;
+            m_changeCallbacks[callbackId] = {callback, key};
+            unified_event::logDebug("ConfigurationManager", "Registered change callback with ID " + std::to_string(callbackId) + " for key '" + key + "'");
+            return callbackId;
+        }, "ConfigurationManager::m_callbacksMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("ConfigurationManager", e.what());
+        return -1;
+    }
+}
+
+bool ConfigurationManager::unregisterChangeCallback(int callbackId) {
+    try {
+        return utility::thread::withLock(m_callbacksMutex, [this, callbackId]() {
+            auto it = m_changeCallbacks.find(callbackId);
+            if (it != m_changeCallbacks.end()) {
+                m_changeCallbacks.erase(it);
+                unified_event::logDebug("ConfigurationManager", "Unregistered change callback with ID " + std::to_string(callbackId));
+                return true;
+            }
+            unified_event::logWarning("ConfigurationManager", "Failed to unregister change callback with ID " + std::to_string(callbackId) + ": Not found");
+            return false;
+        }, "ConfigurationManager::m_callbacksMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("ConfigurationManager", e.what());
+        return false;
+    }
+}
+
+void ConfigurationManager::notifyChangeCallbacks(const std::string& key) {
+    try {
+        // Make a copy of the callbacks to avoid holding the lock while calling them
+        std::vector<std::pair<int, CallbackInfo>> callbacks;
+        utility::thread::withLock(m_callbacksMutex, [this, &callbacks]() {
+            callbacks.reserve(m_changeCallbacks.size());
+            for (const auto& pair : m_changeCallbacks) {
+                callbacks.push_back(pair);
+            }
+        }, "ConfigurationManager::m_callbacksMutex");
+
+        // Call the callbacks
+        for (const auto& pair : callbacks) {
+            const auto& callbackInfo = pair.second;
+
+            // If the callback is for a specific key, only call it if the key matches
+            if (callbackInfo.key.empty() || key.empty() || key == callbackInfo.key) {
+                try {
+                    callbackInfo.callback(key);
+                } catch (const std::exception& e) {
+                    unified_event::logError("ConfigurationManager", "Exception in change callback: " + std::string(e.what()));
+                }
+            }
+        }
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("ConfigurationManager", e.what());
+    }
+}
+
+void ConfigurationManager::fileWatcherThread() {
+    unified_event::logInfo("ConfigurationManager", "File watcher thread started");
+
+    while (m_fileWatcherRunning.load()) {
+        try {
+            // Wait for the specified interval or until we're notified to exit
+            std::unique_lock<std::mutex> lock(m_fileWatcherMutex);
+            m_fileWatcherCondition.wait_for(lock, std::chrono::milliseconds(m_fileWatcherIntervalMs), [this]() {
+                return !m_fileWatcherRunning.load();
+            });
+
+            // If we're not running anymore, exit
+            if (!m_fileWatcherRunning.load()) {
+                break;
+            }
+
+            // Check if the file has been modified
+            if (!m_configFilePath.empty() && fs::exists(m_configFilePath)) {
+                auto lastModifiedTime = fs::last_write_time(m_configFilePath);
+
+                if (lastModifiedTime != m_lastModifiedTime) {
+                    unified_event::logInfo("ConfigurationManager", "Configuration file has been modified, reloading");
+
+                    // Reload the configuration
+                    if (reloadConfiguration()) {
+                        m_lastModifiedTime = lastModifiedTime;
+                    }
+                }
+            }
+        } catch (const std::exception& e) {
+            unified_event::logError("ConfigurationManager", "Exception in file watcher thread: " + std::string(e.what()));
+        }
+    }
+
+    unified_event::logInfo("ConfigurationManager", "File watcher thread stopped");
 }
 
 } // namespace dht_hunter::utility::config
