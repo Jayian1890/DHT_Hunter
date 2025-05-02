@@ -1,6 +1,6 @@
 #include "dht_hunter/utility/config/configuration_manager.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
-#include "dht_hunter/utility/json/json_value.hpp"
+#include "dht_hunter/utility/json/json.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 
 #include <fstream>

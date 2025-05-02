@@ -4,7 +4,7 @@
 
 namespace dht_hunter::web::api {
 
-namespace Json = utility::json;
+namespace json = utility::json;
 
 ConfigApiHandler::ConfigApiHandler(std::shared_ptr<network::HttpServer> httpServer)
     : m_httpServer(httpServer),
@@ -85,8 +85,8 @@ network::HttpResponse ConfigApiHandler::handleGetConfig(const network::HttpReque
     network::HttpResponse response;
     
     if (!m_configManager) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", "Configuration manager is not initialized"}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
         return response;
     }
     
@@ -94,17 +94,17 @@ network::HttpResponse ConfigApiHandler::handleGetConfig(const network::HttpReque
         // Get all configuration values as JSON
         std::string configJson = m_configManager->getConfigAsJson(true);
         if (configJson.empty() || configJson == "{}") {
-            response.setStatusCode(500);
-            response.setBody(Json::stringify({{"error", "Failed to get configuration"}}));
+            response.statusCode = 500;
+            response.body = json::Json::stringify({{"error", "Failed to get configuration"}});
             return response;
         }
         
         // Return the configuration as JSON
-        response.setStatusCode(200);
-        response.setBody(configJson);
+        response.statusCode = 200;
+        response.body = configJson;
     } catch (const std::exception& e) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", std::string("Exception: ") + e.what()}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
     }
     
     return response;
@@ -114,41 +114,41 @@ network::HttpResponse ConfigApiHandler::handleGetConfigKey(const network::HttpRe
     network::HttpResponse response;
     
     if (!m_configManager) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", "Configuration manager is not initialized"}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
         return response;
     }
     
     try {
         // Get the key from the URL
-        std::string key = request.getPathParam("key");
+        std::string key = extractPathParam(request.path, "key");
         if (key.empty()) {
-            response.setStatusCode(400);
-            response.setBody(Json::stringify({{"error", "Key is required"}}));
+            response.statusCode = 400;
+            response.body = json::Json::stringify({{"error", "Key is required"}});
             return response;
         }
         
         // Check if the key exists
         if (!m_configManager->hasKey(key)) {
-            response.setStatusCode(404);
-            response.setBody(Json::stringify({{"error", "Key not found: " + key}}));
+            response.statusCode = 404;
+            response.body = json::Json::stringify({{"error", "Key not found: " + key}});
             return response;
         }
         
         // Get the value as JSON
         std::string valueJson = m_configManager->getConfigValueAsJson(key, true);
         if (valueJson.empty()) {
-            response.setStatusCode(404);
-            response.setBody(Json::stringify({{"error", "Key not found or value is empty: " + key}}));
+            response.statusCode = 404;
+            response.body = json::Json::stringify({{"error", "Key not found or value is empty: " + key}});
             return response;
         }
         
         // Return the value as JSON
-        response.setStatusCode(200);
-        response.setBody(valueJson);
+        response.statusCode = 200;
+        response.body = valueJson;
     } catch (const std::exception& e) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", std::string("Exception: ") + e.what()}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
     }
     
     return response;
@@ -158,41 +158,41 @@ network::HttpResponse ConfigApiHandler::handlePutConfigKey(const network::HttpRe
     network::HttpResponse response;
     
     if (!m_configManager) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", "Configuration manager is not initialized"}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
         return response;
     }
     
     try {
         // Get the key from the URL
-        std::string key = request.getPathParam("key");
+        std::string key = extractPathParam(request.path, "key");
         if (key.empty()) {
-            response.setStatusCode(400);
-            response.setBody(Json::stringify({{"error", "Key is required"}}));
+            response.statusCode = 400;
+            response.body = json::Json::stringify({{"error", "Key is required"}});
             return response;
         }
         
         // Get the value from the request body
-        std::string body = request.getBody();
+        std::string body = request.body;
         if (body.empty()) {
-            response.setStatusCode(400);
-            response.setBody(Json::stringify({{"error", "Request body is required"}}));
+            response.statusCode = 400;
+            response.body = json::Json::stringify({{"error", "Request body is required"}});
             return response;
         }
         
         // Set the value
         if (!m_configManager->setConfigValueFromJson(key, body)) {
-            response.setStatusCode(500);
-            response.setBody(Json::stringify({{"error", "Failed to set value for key: " + key}}));
+            response.statusCode = 500;
+            response.body = json::Json::stringify({{"error", "Failed to set value for key: " + key}});
             return response;
         }
         
         // Return success
-        response.setStatusCode(200);
-        response.setBody(Json::stringify({{"success", true}, {"key", key}}));
+        response.statusCode = 200;
+        response.body = json::Json::stringify({{"success", true}, {"key", key}});
     } catch (const std::exception& e) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", std::string("Exception: ") + e.what()}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
     }
     
     return response;
@@ -202,25 +202,25 @@ network::HttpResponse ConfigApiHandler::handleReloadConfig(const network::HttpRe
     network::HttpResponse response;
     
     if (!m_configManager) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", "Configuration manager is not initialized"}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
         return response;
     }
     
     try {
         // Reload the configuration
         if (!m_configManager->reloadConfiguration()) {
-            response.setStatusCode(500);
-            response.setBody(Json::stringify({{"error", "Failed to reload configuration"}}));
+            response.statusCode = 500;
+            response.body = json::Json::stringify({{"error", "Failed to reload configuration"}});
             return response;
         }
         
         // Return success
-        response.setStatusCode(200);
-        response.setBody(Json::stringify({{"success", true}}));
+        response.statusCode = 200;
+        response.body = json::Json::stringify({{"success", true}});
     } catch (const std::exception& e) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", std::string("Exception: ") + e.what()}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
     }
     
     return response;
@@ -230,14 +230,14 @@ network::HttpResponse ConfigApiHandler::handleSaveConfig(const network::HttpRequ
     network::HttpResponse response;
     
     if (!m_configManager) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", "Configuration manager is not initialized"}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
         return response;
     }
     
     try {
         // Get the file path from the query parameters
-        std::string filePath = request.getQueryParam("path");
+        std::string filePath = extractQueryParam(request, "path");
         
         // Save the configuration
         bool success;
@@ -248,20 +248,46 @@ network::HttpResponse ConfigApiHandler::handleSaveConfig(const network::HttpRequ
         }
         
         if (!success) {
-            response.setStatusCode(500);
-            response.setBody(Json::stringify({{"error", "Failed to save configuration"}}));
+            response.statusCode = 500;
+            response.body = json::Json::stringify({{"error", "Failed to save configuration"}});
             return response;
         }
         
         // Return success
-        response.setStatusCode(200);
-        response.setBody(Json::stringify({{"success", true}}));
+        response.statusCode = 200;
+        response.body = json::Json::stringify({{"success", true}});
     } catch (const std::exception& e) {
-        response.setStatusCode(500);
-        response.setBody(Json::stringify({{"error", std::string("Exception: ") + e.what()}}));
+        response.statusCode = 500;
+        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
     }
     
     return response;
+}
+
+std::string ConfigApiHandler::extractPathParam(const std::string& path, const std::string& paramName) const {
+    // Example: For path "/api/config/general.logLevel" and paramName "key",
+    // we want to extract "general.logLevel"
+    
+    // Find the parameter in the path template
+    std::string pattern = "{" + paramName + "}";
+    
+    // For /api/config/{key}, we need to extract everything after /api/config/
+    if (paramName == "key") {
+        size_t pos = path.find("/api/config/");
+        if (pos != std::string::npos) {
+            return path.substr(pos + 12); // 12 is the length of "/api/config/"
+        }
+    }
+    
+    return "";
+}
+
+std::string ConfigApiHandler::extractQueryParam(const network::HttpRequest& request, const std::string& paramName) const {
+    auto it = request.queryParams.find(paramName);
+    if (it != request.queryParams.end()) {
+        return it->second;
+    }
+    return "";
 }
 
 } // namespace dht_hunter::web::api

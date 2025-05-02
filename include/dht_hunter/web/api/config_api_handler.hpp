@@ -29,6 +29,21 @@ public:
 
 private:
     /**
+     * @brief Extracts a path parameter from a URL path
+     * @param path The URL path
+     * @param paramName The parameter name
+     * @return The parameter value, or an empty string if not found
+     */
+    std::string extractPathParam(const std::string& path, const std::string& paramName) const;
+
+    /**
+     * @brief Extracts a query parameter from a request
+     * @param request The HTTP request
+     * @param paramName The parameter name
+     * @return The parameter value, or an empty string if not found
+     */
+    std::string extractQueryParam(const network::HttpRequest& request, const std::string& paramName) const;
+    /**
      * @brief Handles GET requests to /api/config
      * @param request The HTTP request
      * @return The HTTP response
