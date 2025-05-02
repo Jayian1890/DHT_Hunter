@@ -42,7 +42,7 @@ ConfigurationManager::ConfigurationManager(const std::string& configFilePath)
       m_nextCallbackId(1) {
 
     // Create an empty JSON object as the root
-    m_configRoot = json::JsonValue::createObject();
+    m_configRoot = json::Json::createObject();
 
     // If a config file path was provided, try to load it
     if (!configFilePath.empty()) {
@@ -97,7 +97,7 @@ bool ConfigurationManager::loadConfiguration(const std::string& configFilePath) 
             std::string jsonStr = buffer.str();
 
             // Parse the JSON
-            auto jsonValue = json::JsonValue::parse(jsonStr);
+            auto jsonValue = json::Json::parse(jsonStr);
             if (!jsonValue) {
                 unified_event::logError("ConfigurationManager", "Failed to parse configuration file as JSON: " + configFilePath);
                 return false;
@@ -203,17 +203,17 @@ bool ConfigurationManager::saveConfiguration(const std::string& configFilePath) 
 bool ConfigurationManager::generateDefaultConfiguration(const std::string& configFilePath) {
     try {
         // Create a default configuration
-        auto config = json::JsonValue::createObject();
+        auto config = json::Json::createObject();
 
         // General settings
-        auto generalConfig = json::JsonValue::createObject();
+        auto generalConfig = json::Json::createObject();
         generalConfig->set("configDir", json::JsonValue("~/dht-hunter"));
         generalConfig->set("logFile", json::JsonValue("dht_hunter.log"));
         generalConfig->set("logLevel", json::JsonValue("info"));
         config->set("general", generalConfig);
 
         // DHT settings
-        auto dhtConfig = json::JsonValue::createObject();
+        auto dhtConfig = json::Json::createObject();
         dhtConfig->set("port", json::JsonValue(6881));
         dhtConfig->set("kBucketSize", json::JsonValue(16));
         dhtConfig->set("alpha", json::JsonValue(3));
@@ -224,30 +224,30 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         dhtConfig->set("maxQueries", json::JsonValue(100));
 
         // Bootstrap nodes
-        auto bootstrapNodes = json::JsonValue::createArray();
-        bootstrapNodes->append(json::JsonValue("dht.aelitis.com:6881"));
-        bootstrapNodes->append(json::JsonValue("dht.transmissionbt.com:6881"));
-        bootstrapNodes->append(json::JsonValue("dht.libtorrent.org:25401"));
-        bootstrapNodes->append(json::JsonValue("router.utorrent.com:6881"));
+        auto bootstrapNodes = json::Json::createArray();
+        bootstrapNodes->add(json::JsonValue("dht.aelitis.com:6881"));
+        bootstrapNodes->add(json::JsonValue("dht.transmissionbt.com:6881"));
+        bootstrapNodes->add(json::JsonValue("dht.libtorrent.org:25401"));
+        bootstrapNodes->add(json::JsonValue("router.utorrent.com:6881"));
         dhtConfig->set("bootstrapNodes", bootstrapNodes);
 
         config->set("dht", dhtConfig);
 
         // Network settings
-        auto networkConfig = json::JsonValue::createObject();
+        auto networkConfig = json::Json::createObject();
         networkConfig->set("transactionTimeout", json::JsonValue(30));
         networkConfig->set("maxTransactions", json::JsonValue(1024));
         networkConfig->set("mtuSize", json::JsonValue(1400));
         config->set("network", networkConfig);
 
         // Web interface settings
-        auto webConfig = json::JsonValue::createObject();
+        auto webConfig = json::Json::createObject();
         webConfig->set("port", json::JsonValue(8080));
         webConfig->set("webRoot", json::JsonValue("web"));
         config->set("web", webConfig);
 
         // Persistence settings
-        auto persistenceConfig = json::JsonValue::createObject();
+        auto persistenceConfig = json::Json::createObject();
         persistenceConfig->set("saveInterval", json::JsonValue(60)); // In minutes
         persistenceConfig->set("routingTablePath", json::JsonValue("routing_table.dat"));
         persistenceConfig->set("peerStoragePath", json::JsonValue("peer_storage.dat"));
@@ -256,7 +256,7 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         config->set("persistence", persistenceConfig);
 
         // Crawler settings
-        auto crawlerConfig = json::JsonValue::createObject();
+        auto crawlerConfig = json::Json::createObject();
         crawlerConfig->set("parallelCrawls", json::JsonValue(10));
         crawlerConfig->set("refreshInterval", json::JsonValue(15));
         crawlerConfig->set("maxNodes", json::JsonValue(1000000));
@@ -265,7 +265,7 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         config->set("crawler", crawlerConfig);
 
         // Metadata acquisition settings
-        auto metadataConfig = json::JsonValue::createObject();
+        auto metadataConfig = json::Json::createObject();
         metadataConfig->set("processingInterval", json::JsonValue(5));
         metadataConfig->set("maxConcurrentAcquisitions", json::JsonValue(5));
         metadataConfig->set("acquisitionTimeout", json::JsonValue(60));
@@ -274,7 +274,7 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         config->set("metadata", metadataConfig);
 
         // Event system settings
-        auto eventConfig = json::JsonValue::createObject();
+        auto eventConfig = json::Json::createObject();
         eventConfig->set("enableLogging", json::JsonValue(true));
         eventConfig->set("enableComponent", json::JsonValue(true));
         eventConfig->set("enableStatistics", json::JsonValue(true));
@@ -284,7 +284,7 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         config->set("event", eventConfig);
 
         // Logging settings
-        auto loggingConfig = json::JsonValue::createObject();
+        auto loggingConfig = json::Json::createObject();
         loggingConfig->set("consoleOutput", json::JsonValue(true));
         loggingConfig->set("fileOutput", json::JsonValue(true));
         loggingConfig->set("includeTimestamp", json::JsonValue(true));
@@ -877,7 +877,7 @@ std::string ConfigurationManager::getConfigAsJson(bool pretty) const {
             }
 
             try {
-                auto jsonValue = std::any_cast<std::shared_ptr<json::JsonValue>>(m_configRoot);
+                auto jsonValue = std::any_cast<std::shared_ptr<json::Json>>(m_configRoot);
                 if (!jsonValue) {
                     return std::string("{}");
                 }
@@ -907,7 +907,7 @@ std::string ConfigurationManager::getConfigValueAsJson(const std::string& key, b
             }
 
             try {
-                auto jsonValue = std::any_cast<std::shared_ptr<json::JsonValue>>(*value);
+                auto jsonValue = std::any_cast<std::shared_ptr<json::Json>>(*value);
                 if (!jsonValue) {
                     return std::string("");
                 }
@@ -932,7 +932,7 @@ bool ConfigurationManager::setConfigValueFromJson(const std::string& key, const 
             }
 
             // Parse the JSON string
-            auto jsonValue = json::JsonValue::parse(jsonStr);
+            auto jsonValue = json::Json::parse(jsonStr);
             if (!jsonValue) {
                 unified_event::logError("ConfigurationManager", "Failed to parse JSON string");
                 return false;

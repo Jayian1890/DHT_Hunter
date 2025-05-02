@@ -30,6 +30,9 @@ add_library(dht_hunter_utility
 
         # Metadata utilities
         metadata/metadata_utils.cpp
+
+        # Configuration utilities
+        config/configuration_manager.cpp
 )
 
 # Set include directories

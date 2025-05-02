@@ -86,7 +86,12 @@ network::HttpResponse ConfigApiHandler::handleGetConfig(const network::HttpReque
     
     if (!m_configManager) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue("Configuration manager is not initialized"));
+        response.body = json::Json::stringify(errorObj);
+        
         return response;
     }
     
@@ -95,7 +100,12 @@ network::HttpResponse ConfigApiHandler::handleGetConfig(const network::HttpReque
         std::string configJson = m_configManager->getConfigAsJson(true);
         if (configJson.empty() || configJson == "{}") {
             response.statusCode = 500;
-            response.body = json::Json::stringify({{"error", "Failed to get configuration"}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Failed to get configuration"));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
@@ -104,7 +114,11 @@ network::HttpResponse ConfigApiHandler::handleGetConfig(const network::HttpReque
         response.body = configJson;
     } catch (const std::exception& e) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue(std::string("Exception: ") + e.what()));
+        response.body = json::Json::stringify(errorObj);
     }
     
     return response;
@@ -115,7 +129,12 @@ network::HttpResponse ConfigApiHandler::handleGetConfigKey(const network::HttpRe
     
     if (!m_configManager) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue("Configuration manager is not initialized"));
+        response.body = json::Json::stringify(errorObj);
+        
         return response;
     }
     
@@ -124,14 +143,24 @@ network::HttpResponse ConfigApiHandler::handleGetConfigKey(const network::HttpRe
         std::string key = extractPathParam(request.path, "key");
         if (key.empty()) {
             response.statusCode = 400;
-            response.body = json::Json::stringify({{"error", "Key is required"}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Key is required"));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
         // Check if the key exists
         if (!m_configManager->hasKey(key)) {
             response.statusCode = 404;
-            response.body = json::Json::stringify({{"error", "Key not found: " + key}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Key not found: " + key));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
@@ -139,7 +168,12 @@ network::HttpResponse ConfigApiHandler::handleGetConfigKey(const network::HttpRe
         std::string valueJson = m_configManager->getConfigValueAsJson(key, true);
         if (valueJson.empty()) {
             response.statusCode = 404;
-            response.body = json::Json::stringify({{"error", "Key not found or value is empty: " + key}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Key not found or value is empty: " + key));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
@@ -148,7 +182,11 @@ network::HttpResponse ConfigApiHandler::handleGetConfigKey(const network::HttpRe
         response.body = valueJson;
     } catch (const std::exception& e) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue(std::string("Exception: ") + e.what()));
+        response.body = json::Json::stringify(errorObj);
     }
     
     return response;
@@ -159,7 +197,12 @@ network::HttpResponse ConfigApiHandler::handlePutConfigKey(const network::HttpRe
     
     if (!m_configManager) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue("Configuration manager is not initialized"));
+        response.body = json::Json::stringify(errorObj);
+        
         return response;
     }
     
@@ -168,7 +211,12 @@ network::HttpResponse ConfigApiHandler::handlePutConfigKey(const network::HttpRe
         std::string key = extractPathParam(request.path, "key");
         if (key.empty()) {
             response.statusCode = 400;
-            response.body = json::Json::stringify({{"error", "Key is required"}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Key is required"));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
@@ -176,23 +224,42 @@ network::HttpResponse ConfigApiHandler::handlePutConfigKey(const network::HttpRe
         std::string body = request.body;
         if (body.empty()) {
             response.statusCode = 400;
-            response.body = json::Json::stringify({{"error", "Request body is required"}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Request body is required"));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
         // Set the value
         if (!m_configManager->setConfigValueFromJson(key, body)) {
             response.statusCode = 500;
-            response.body = json::Json::stringify({{"error", "Failed to set value for key: " + key}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Failed to set value for key: " + key));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
         // Return success
         response.statusCode = 200;
-        response.body = json::Json::stringify({{"success", true}, {"key", key}});
+        
+        // Create success JSON
+        json::JsonValue successObj = json::Json::createObject();
+        successObj.set("success", json::JsonValue(true));
+        successObj.set("key", json::JsonValue(key));
+        response.body = json::Json::stringify(successObj);
     } catch (const std::exception& e) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue(std::string("Exception: ") + e.what()));
+        response.body = json::Json::stringify(errorObj);
     }
     
     return response;
@@ -203,7 +270,12 @@ network::HttpResponse ConfigApiHandler::handleReloadConfig(const network::HttpRe
     
     if (!m_configManager) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue("Configuration manager is not initialized"));
+        response.body = json::Json::stringify(errorObj);
+        
         return response;
     }
     
@@ -211,16 +283,29 @@ network::HttpResponse ConfigApiHandler::handleReloadConfig(const network::HttpRe
         // Reload the configuration
         if (!m_configManager->reloadConfiguration()) {
             response.statusCode = 500;
-            response.body = json::Json::stringify({{"error", "Failed to reload configuration"}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Failed to reload configuration"));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
         // Return success
         response.statusCode = 200;
-        response.body = json::Json::stringify({{"success", true}});
+        
+        // Create success JSON
+        json::JsonValue successObj = json::Json::createObject();
+        successObj.set("success", json::JsonValue(true));
+        response.body = json::Json::stringify(successObj);
     } catch (const std::exception& e) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue(std::string("Exception: ") + e.what()));
+        response.body = json::Json::stringify(errorObj);
     }
     
     return response;
@@ -231,7 +316,12 @@ network::HttpResponse ConfigApiHandler::handleSaveConfig(const network::HttpRequ
     
     if (!m_configManager) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", "Configuration manager is not initialized"}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue("Configuration manager is not initialized"));
+        response.body = json::Json::stringify(errorObj);
+        
         return response;
     }
     
@@ -249,16 +339,29 @@ network::HttpResponse ConfigApiHandler::handleSaveConfig(const network::HttpRequ
         
         if (!success) {
             response.statusCode = 500;
-            response.body = json::Json::stringify({{"error", "Failed to save configuration"}});
+            
+            // Create error JSON
+            json::JsonValue errorObj = json::Json::createObject();
+            errorObj.set("error", json::JsonValue("Failed to save configuration"));
+            response.body = json::Json::stringify(errorObj);
+            
             return response;
         }
         
         // Return success
         response.statusCode = 200;
-        response.body = json::Json::stringify({{"success", true}});
+        
+        // Create success JSON
+        json::JsonValue successObj = json::Json::createObject();
+        successObj.set("success", json::JsonValue(true));
+        response.body = json::Json::stringify(successObj);
     } catch (const std::exception& e) {
         response.statusCode = 500;
-        response.body = json::Json::stringify({{"error", std::string("Exception: ") + e.what()}});
+        
+        // Create error JSON
+        json::JsonValue errorObj = json::Json::createObject();
+        errorObj.set("error", json::JsonValue(std::string("Exception: ") + e.what()));
+        response.body = json::Json::stringify(errorObj);
     }
     
     return response;

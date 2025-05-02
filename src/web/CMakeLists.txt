@@ -1,6 +1,7 @@
 # Define the web library
 add_library(dht_hunter_web
     web_server.cpp
+    api/config_api_handler.cpp
 )
 
 # Set include directories
