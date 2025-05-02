@@ -20,12 +20,38 @@ namespace dht_hunter::bittorrent::metadata {
 
 /**
  * @brief Implements the BitTorrent Metadata Exchange Protocol (BEP 9)
- * 
+ *
  * This class is responsible for acquiring metadata for InfoHashes using
  * the BitTorrent Extension Protocol and the ut_metadata extension.
  */
 class MetadataExchange {
 public:
+    /**
+     * @brief Represents a peer connection for metadata exchange
+     */
+    struct PeerConnection {
+        network::TCPClient client;
+        types::InfoHash infoHash;
+        std::vector<uint8_t> buffer;
+        std::atomic<bool> handshakeComplete{false};
+        std::atomic<bool> extensionHandshakeComplete{false};
+        std::atomic<bool> metadataExchangeComplete{false};
+        std::atomic<bool> connected{false};
+        std::atomic<bool> failed{false};
+        std::atomic<int> metadataSize{0};
+        std::unordered_map<int, std::vector<uint8_t>> metadataPieces;
+        std::string peerId;  // Unique identifier for this peer connection
+        network::EndPoint peer; // The peer endpoint
+        int retryCount{0};   // Number of retry attempts
+        std::chrono::steady_clock::time_point startTime;
+        std::mutex mutex;
+
+        PeerConnection(const types::InfoHash& ih, const network::EndPoint& p)
+            : infoHash(ih), peer(p), startTime(std::chrono::steady_clock::now()) {
+            peerId = p.toString();
+        }
+    };
+
     /**
      * @brief Constructor
      */
@@ -41,35 +67,29 @@ public:
      * @param infoHash The InfoHash to acquire metadata for
      * @param peers The peers to connect to
      * @param callback The callback to call when metadata is acquired
+     * @param maxConcurrentPeers Maximum number of peers to connect to concurrently
      * @return True if the acquisition was started, false otherwise
      */
     bool acquireMetadata(
         const types::InfoHash& infoHash,
         const std::vector<network::EndPoint>& peers,
-        std::function<void(bool success)> callback);
+        std::function<void(bool success)> callback,
+        int maxConcurrentPeers = 3);
+
+    /**
+     * @brief Cancels metadata acquisition for an InfoHash
+     * @param infoHash The InfoHash to cancel acquisition for
+     */
+    void cancelAcquisition(const types::InfoHash& infoHash);
+
+    /**
+     * @brief Retries a failed connection
+     * @param connection The connection to retry
+     * @return True if the retry was successful, false otherwise
+     */
+    bool retryConnection(std::shared_ptr<PeerConnection> connection);
 
 private:
-    /**
-     * @brief Represents a peer connection for metadata exchange
-     */
-    struct PeerConnection {
-        network::TCPClient client;
-        types::InfoHash infoHash;
-        std::vector<uint8_t> buffer;
-        std::atomic<bool> handshakeComplete{false};
-        std::atomic<bool> extensionHandshakeComplete{false};
-        std::atomic<bool> metadataExchangeComplete{false};
-        std::atomic<bool> connected{false};
-        std::atomic<bool> failed{false};
-        std::atomic<int> metadataSize{0};
-        std::unordered_map<int, std::vector<uint8_t>> metadataPieces;
-        std::function<void(bool success)> callback;
-        std::chrono::steady_clock::time_point startTime;
-        std::mutex mutex;
-
-        PeerConnection(const types::InfoHash& ih, std::function<void(bool success)> cb)
-            : infoHash(ih), callback(cb), startTime(std::chrono::steady_clock::now()) {}
-    };
 
     /**
      * @brief Connects to a peer
@@ -166,9 +186,53 @@ private:
      */
     void cleanupTimedOutConnectionsPeriodically();
 
-    // Active connections
+    /**
+     * @brief Represents an acquisition task for an InfoHash
+     */
+    struct AcquisitionTask {
+        types::InfoHash infoHash;
+        std::vector<network::EndPoint> peers;
+        std::vector<network::EndPoint> remainingPeers;
+        std::function<void(bool success)> callback;
+        int maxConcurrentPeers;
+        std::atomic<int> activeConnections{0};
+        std::atomic<bool> completed{false};
+        std::chrono::steady_clock::time_point startTime;
+        std::chrono::steady_clock::time_point lastRetryTime;
+        int retryCount{0};
+
+        AcquisitionTask(const types::InfoHash& ih,
+                       const std::vector<network::EndPoint>& p,
+                       std::function<void(bool success)> cb,
+                       int maxPeers)
+            : infoHash(ih), peers(p), remainingPeers(p), callback(cb),
+              maxConcurrentPeers(maxPeers), startTime(std::chrono::steady_clock::now()),
+              lastRetryTime(std::chrono::steady_clock::now()) {}
+    };
+
+    // Active connections and tasks
     std::unordered_map<std::string, std::shared_ptr<PeerConnection>> m_connections;
+    std::unordered_map<std::string, std::shared_ptr<AcquisitionTask>> m_tasks;
     std::mutex m_connectionsMutex;
+    std::mutex m_tasksMutex;
+
+    /**
+     * @brief Tries to connect to more peers for a task
+     * @param task The acquisition task
+     */
+    void tryMorePeers(std::shared_ptr<AcquisitionTask> task);
+
+    /**
+     * @brief Handles a successful metadata acquisition
+     * @param connection The connection that acquired the metadata
+     */
+    void handleSuccessfulAcquisition(std::shared_ptr<PeerConnection> connection);
+
+    /**
+     * @brief Handles a failed metadata acquisition
+     * @param connection The connection that failed
+     */
+    void handleFailedAcquisition(std::shared_ptr<PeerConnection> connection);
 
     // Cleanup thread
     std::thread m_cleanupThread;
@@ -180,9 +244,12 @@ private:
     static constexpr uint8_t BT_EXTENSION_MESSAGE_ID = 20;
     static constexpr uint8_t BT_EXTENSION_HANDSHAKE_ID = 0;
 
-    // Timeout values
+    // Timeout and retry values
     static constexpr int CONNECTION_TIMEOUT_SECONDS = 30;
     static constexpr int CLEANUP_INTERVAL_SECONDS = 5;
+    static constexpr int MAX_RETRY_COUNT = 3;
+    static constexpr int RETRY_DELAY_BASE_SECONDS = 60; // Base delay for exponential backoff
+    static constexpr int MAX_CONCURRENT_PEERS_PER_INFOHASH = 5;
 };
 
 } // namespace dht_hunter::bittorrent::metadata

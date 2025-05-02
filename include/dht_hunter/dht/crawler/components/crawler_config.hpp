@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include "dht_hunter/utility/config/configuration_manager.hpp"
 
 namespace dht_hunter::dht::crawler {
 
@@ -14,6 +15,12 @@ public:
      * @brief Constructs a crawler configuration with default values
      */
     CrawlerConfig();
+
+    /**
+     * @brief Constructs a crawler configuration from the configuration manager
+     * @param configManager The configuration manager
+     */
+    explicit CrawlerConfig(std::shared_ptr<utility::config::ConfigurationManager> configManager);
 
     /**
      * @brief Gets the number of parallel crawls
@@ -78,16 +85,16 @@ public:
 private:
     // How many nodes to crawl in parallel
     size_t m_parallelCrawls;
-    
+
     // How often to refresh the crawler (in seconds)
     uint32_t m_refreshInterval;
-    
+
     // Maximum number of nodes to store
     size_t m_maxNodes;
-    
+
     // Maximum number of info hashes to track
     size_t m_maxInfoHashes;
-    
+
     // Whether to automatically start crawling on initialization
     bool m_autoStart;
 };

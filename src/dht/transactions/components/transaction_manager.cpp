@@ -27,6 +27,19 @@ TransactionManager::TransactionManager(const DHTConfig& config, const NodeID& no
     : BaseTransactionComponent("TransactionManager", config, nodeID),
       m_rng(std::random_device{}()),
       m_maxTransactions(calculateMaxTransactions()) {
+
+    // Get transaction timeout from configuration
+    auto configManager = utility::config::ConfigurationManager::getInstance();
+    m_transactionTimeout = configManager->getInt("network.transactionTimeout", 30);
+
+    // Get max transactions from configuration if specified
+    if (configManager->hasKey("network.maxTransactions")) {
+        m_maxTransactions = static_cast<size_t>(configManager->getInt("network.maxTransactions", static_cast<int>(m_maxTransactions)));
+    }
+
+    unified_event::logInfo("DHT.Transactions." + m_name,
+                          "Initialized with transaction timeout: " + std::to_string(m_transactionTimeout) +
+                          " seconds, max transactions: " + std::to_string(m_maxTransactions));
 }
 
 TransactionManager::~TransactionManager() {
@@ -225,7 +238,7 @@ void TransactionManager::checkTimeouts() {
                 const Transaction& transaction = it->second;
 
                 // Check if the transaction has timed out
-                if (transaction.hasTimedOut(TRANSACTION_TIMEOUT)) {
+                if (transaction.hasTimedOut(m_transactionTimeout)) {
                     unified_event::logDebug("DHT.Transactions." + m_name, "Transaction " + transaction.getID() + " timed out");
 
                     // Store the timeout callback for later execution

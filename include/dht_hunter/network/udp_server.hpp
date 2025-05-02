@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dht_hunter/network/udp_socket.hpp"
+#include "dht_hunter/utility/config/configuration_manager.hpp"
 #include <functional>
 #include <string>
 #include <vector>
@@ -31,6 +32,12 @@ public:
      * @return True if successful, false otherwise.
      */
     bool start(uint16_t port);
+
+    /**
+     * @brief Start the server using the port from the configuration.
+     * @return True if successful, false otherwise.
+     */
+    bool start();
 
     /**
      * @brief Stop the server.

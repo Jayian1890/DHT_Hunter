@@ -43,8 +43,9 @@ public:
     /**
      * @brief Constructs a DHT node
      * @param config The DHT configuration
+     * @param nodeID Optional node ID to use (if not provided, a random one will be generated)
      */
-    explicit DHTNode(const DHTConfig& config = DHTConfig());
+    explicit DHTNode(const DHTConfig& config = DHTConfig(), const NodeID& nodeID = generateRandomNodeID());
 
     /**
      * @brief Destructor

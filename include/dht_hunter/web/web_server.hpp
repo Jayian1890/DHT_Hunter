@@ -6,6 +6,8 @@
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/types/info_hash_metadata.hpp"
 #include "dht_hunter/utility/metadata/metadata_utils.hpp"
+#include "dht_hunter/bittorrent/metadata/metadata_acquisition_manager.hpp"
+#include "dht_hunter/utility/config/configuration_manager.hpp"
 #include <memory>
 #include <string>
 #include <chrono>
@@ -34,7 +36,21 @@ public:
         uint16_t port,
         std::shared_ptr<dht::services::StatisticsService> statisticsService,
         std::shared_ptr<dht::RoutingManager> routingManager,
-        std::shared_ptr<dht::PeerStorage> peerStorage
+        std::shared_ptr<dht::PeerStorage> peerStorage,
+        std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager
+    );
+
+    /**
+     * @brief Constructor that loads settings from configuration
+     * @param statisticsService The statistics service
+     * @param routingManager The routing manager
+     * @param peerStorage The peer storage
+     */
+    WebServer(
+        std::shared_ptr<dht::services::StatisticsService> statisticsService,
+        std::shared_ptr<dht::RoutingManager> routingManager,
+        std::shared_ptr<dht::PeerStorage> peerStorage,
+        std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager
     );
 
     /**
@@ -67,6 +83,7 @@ private:
     std::shared_ptr<dht::RoutingManager> m_routingManager;
     std::shared_ptr<dht::PeerStorage> m_peerStorage;
     std::shared_ptr<types::InfoHashMetadataRegistry> m_metadataRegistry;
+    std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> m_metadataManager;
     std::chrono::steady_clock::time_point m_startTime;
 
     /**
@@ -99,6 +116,20 @@ private:
      * @return The HTTP response
      */
     network::HttpResponse handleInfoHashesRequest(const network::HttpRequest& request);
+
+    /**
+     * @brief Handle metadata acquisition API request
+     * @param request The HTTP request
+     * @return The HTTP response
+     */
+    network::HttpResponse handleMetadataAcquisitionRequest(const network::HttpRequest& request);
+
+    /**
+     * @brief Handle metadata acquisition status API request
+     * @param request The HTTP request
+     * @return The HTTP response
+     */
+    network::HttpResponse handleMetadataStatusRequest(const network::HttpRequest& request);
 
     /**
      * @brief Handle uptime API request

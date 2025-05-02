@@ -1,6 +1,7 @@
 #include "dht_hunter/web/web_server.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include "dht_hunter/utility/json/json.hpp"
+#include "dht_hunter/utility/config/configuration_manager.hpp"
 #include <sstream>
 #include <iomanip>
 #include <filesystem>
@@ -15,7 +16,8 @@ WebServer::WebServer(
     uint16_t port,
     std::shared_ptr<dht::services::StatisticsService> statisticsService,
     std::shared_ptr<dht::RoutingManager> routingManager,
-    std::shared_ptr<dht::PeerStorage> peerStorage
+    std::shared_ptr<dht::PeerStorage> peerStorage,
+    std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager
 ) : m_webRoot(webRoot),
     m_port(port),
     m_httpServer(std::make_shared<network::HttpServer>()),
@@ -23,7 +25,31 @@ WebServer::WebServer(
     m_routingManager(routingManager),
     m_peerStorage(peerStorage),
     m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
+    m_metadataManager(metadataManager),
     m_startTime(std::chrono::steady_clock::now()) {
+    unified_event::logDebug("Web.Server", "WebServer initialized with webRoot: " + webRoot + ", port: " + std::to_string(port));
+}
+
+WebServer::WebServer(
+    std::shared_ptr<dht::services::StatisticsService> statisticsService,
+    std::shared_ptr<dht::RoutingManager> routingManager,
+    std::shared_ptr<dht::PeerStorage> peerStorage,
+    std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager
+) : m_httpServer(std::make_shared<network::HttpServer>()),
+    m_statisticsService(statisticsService),
+    m_routingManager(routingManager),
+    m_peerStorage(peerStorage),
+    m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
+    m_metadataManager(metadataManager),
+    m_startTime(std::chrono::steady_clock::now()) {
+
+    // Get settings from configuration
+    auto configManager = utility::config::ConfigurationManager::getInstance();
+    m_webRoot = configManager->getString("web.webRoot", "web");
+    m_port = static_cast<uint16_t>(configManager->getInt("web.port", 8080));
+
+    unified_event::logDebug("Web.Server", "WebServer initialized from configuration with webRoot: " + m_webRoot + ", port: " + std::to_string(m_port));
+}
 }
 
 WebServer::~WebServer() {
@@ -92,6 +118,24 @@ void WebServer::registerApiRoutes() {
         "/api/uptime",
         [this](const network::HttpRequest& request) {
             return handleUptimeRequest(request);
+        }
+    );
+
+    // Metadata acquisition API
+    m_httpServer->registerRoute(
+        network::HttpMethod::POST,
+        "/api/metadata/acquire",
+        [this](const network::HttpRequest& request) {
+            return handleMetadataAcquisitionRequest(request);
+        }
+    );
+
+    // Metadata status API
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/api/metadata/status",
+        [this](const network::HttpRequest& request) {
+            return handleMetadataStatusRequest(request);
         }
     );
 }
@@ -332,6 +376,14 @@ network::HttpResponse WebServer::handleInfoHashesRequest(const network::HttpRequ
                 }
             }
 
+            // Add metadata acquisition status if available
+            if (m_metadataManager) {
+                std::string status = m_metadataManager->getAcquisitionStatus(infoHash);
+                if (!status.empty()) {
+                    infoHashObj->set("metadataStatus", status);
+                }
+            }
+
             infoHashesArray->add(JsonValue(infoHashObj));
         }
     }
@@ -398,6 +450,147 @@ network::HttpResponse WebServer::serveStaticFile(const std::string& filePath) {
     }
 
     response.statusCode = 200;
+    return response;
+}
+
+network::HttpResponse WebServer::handleMetadataAcquisitionRequest(const network::HttpRequest& request) {
+    network::HttpResponse response;
+    response.headers["Content-Type"] = "application/json";
+
+    // Parse the request body as JSON
+    try {
+        auto json = utility::json::JsonValue::parse(request.body);
+
+        // Get the info hash from the request
+        if (!json.getObject()->has("infoHash") || !json.getObject()->get("infoHash").isString()) {
+            response.statusCode = 400;
+
+            auto errorObj = utility::json::JsonValue::createObject();
+            errorObj->set("success", utility::json::JsonValue(false));
+            errorObj->set("error", utility::json::JsonValue("Missing or invalid infoHash parameter"));
+
+            response.body = utility::json::JsonValue(errorObj).toString();
+            return response;
+        }
+
+        std::string infoHashStr = json.getObject()->get("infoHash").getString();
+        types::InfoHash infoHash;
+
+        if (!types::infoHashFromString(infoHashStr, infoHash)) {
+            response.statusCode = 400;
+
+            auto errorObj = utility::json::JsonValue::createObject();
+            errorObj->set("success", utility::json::JsonValue(false));
+            errorObj->set("error", utility::json::JsonValue("Invalid info hash format"));
+
+            response.body = utility::json::JsonValue(errorObj).toString();
+            return response;
+        }
+
+        // Get the priority from the request (optional)
+        int priority = 0;
+        if (json.getObject()->has("priority") && json.getObject()->get("priority").isNumber()) {
+            priority = json.getObject()->get("priority").getInt();
+        }
+
+        // Trigger metadata acquisition
+        if (!m_metadataManager || !m_metadataManager->acquireMetadata(infoHash, priority)) {
+            response.statusCode = 500;
+
+            auto errorObj = utility::json::JsonValue::createObject();
+            errorObj->set("success", utility::json::JsonValue(false));
+            errorObj->set("error", utility::json::JsonValue("Failed to start metadata acquisition"));
+
+            response.body = utility::json::JsonValue(errorObj).toString();
+            return response;
+        }
+
+        // Return success response
+        response.statusCode = 200;
+
+        auto successObj = utility::json::JsonValue::createObject();
+        successObj->set("success", utility::json::JsonValue(true));
+        successObj->set("infoHash", utility::json::JsonValue(infoHashStr));
+        successObj->set("message", utility::json::JsonValue("Metadata acquisition started"));
+
+        response.body = utility::json::JsonValue(successObj).toString();
+
+    } catch (const std::exception& e) {
+        response.statusCode = 400;
+
+        auto errorObj = utility::json::JsonValue::createObject();
+        errorObj->set("success", utility::json::JsonValue(false));
+        errorObj->set("error", utility::json::JsonValue(std::string("Error parsing request: ") + e.what()));
+
+        response.body = utility::json::JsonValue(errorObj).toString();
+    }
+
+    return response;
+}
+
+network::HttpResponse WebServer::handleMetadataStatusRequest(const network::HttpRequest& request) {
+    network::HttpResponse response;
+    response.headers["Content-Type"] = "application/json";
+
+    if (!m_metadataManager) {
+        response.statusCode = 500;
+
+        auto errorObj = utility::json::JsonValue::createObject();
+        errorObj->set("success", utility::json::JsonValue(false));
+        errorObj->set("error", utility::json::JsonValue("Metadata acquisition manager not available"));
+
+        response.body = utility::json::JsonValue(errorObj).toString();
+        return response;
+    }
+
+    // Get the info hash from the query parameters (optional)
+    auto params = request.queryParams;
+    auto it = params.find("infoHash");
+
+    if (it != params.end()) {
+        // Get status for a specific info hash
+        std::string infoHashStr = it->second;
+        types::InfoHash infoHash;
+
+        if (!types::infoHashFromString(infoHashStr, infoHash)) {
+            response.statusCode = 400;
+
+            auto errorObj = utility::json::JsonValue::createObject();
+            errorObj->set("success", utility::json::JsonValue(false));
+            errorObj->set("error", utility::json::JsonValue("Invalid info hash format"));
+
+            response.body = utility::json::JsonValue(errorObj).toString();
+            return response;
+        }
+
+        std::string status = m_metadataManager->getAcquisitionStatus(infoHash);
+
+        response.statusCode = 200;
+
+        auto successObj = utility::json::JsonValue::createObject();
+        successObj->set("success", utility::json::JsonValue(true));
+        successObj->set("infoHash", utility::json::JsonValue(infoHashStr));
+        successObj->set("status", utility::json::JsonValue(status));
+
+        response.body = utility::json::JsonValue(successObj).toString();
+    } else {
+        // Get overall statistics
+        auto stats = m_metadataManager->getStatistics();
+
+        auto statsObj = utility::json::JsonValue::createObject();
+        for (const auto& [key, value] : stats) {
+            statsObj->set(key, utility::json::JsonValue(static_cast<double>(value)));
+        }
+
+        response.statusCode = 200;
+
+        auto successObj = utility::json::JsonValue::createObject();
+        successObj->set("success", utility::json::JsonValue(true));
+        successObj->set("statistics", utility::json::JsonValue(statsObj));
+
+        response.body = utility::json::JsonValue(successObj).toString();
+    }
+
     return response;
 }
 

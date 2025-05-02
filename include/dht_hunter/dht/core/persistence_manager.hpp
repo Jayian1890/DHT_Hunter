@@ -2,6 +2,7 @@
 
 #include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
+#include "dht_hunter/types/node_id.hpp"
 #include "dht_hunter/types/info_hash_metadata.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include <string>
@@ -69,6 +70,26 @@ public:
      */
     bool loadFromDisk();
 
+    /**
+     * @brief Saves the node ID to disk
+     * @param nodeID The node ID to save
+     * @return True if the node ID was saved successfully, false otherwise
+     */
+    bool saveNodeID(const NodeID& nodeID);
+
+    /**
+     * @brief Loads the node ID from disk
+     * @param nodeID Reference to store the loaded node ID
+     * @return True if the node ID was loaded successfully, false otherwise
+     */
+    bool loadNodeID(NodeID& nodeID);
+
+    /**
+     * @brief Sets the save interval
+     * @param interval The save interval
+     */
+    void setSaveInterval(std::chrono::minutes interval);
+
 private:
     /**
      * @brief Private constructor for singleton pattern
@@ -94,6 +115,7 @@ private:
     std::string m_routingTablePath;
     std::string m_peerStoragePath;
     std::string m_metadataPath;
+    std::string m_nodeIDPath;
     std::atomic<bool> m_running;
     std::thread m_saveThread;
     mutable std::mutex m_mutex;

@@ -25,12 +25,24 @@ std::shared_ptr<CrawlerManager> CrawlerManager::getInstance(
     std::shared_ptr<PeerStorage> peerStorage,
     const CrawlerConfig& crawlerConfig) {
 
+    // If no crawler config was provided, create one from the configuration manager
+    CrawlerConfig effectiveCrawlerConfig = crawlerConfig;
+    if (crawlerConfig.getParallelCrawls() == 10 && // Check if it's the default config
+        crawlerConfig.getRefreshInterval() == 15 &&
+        crawlerConfig.getMaxNodes() == 1000000 &&
+        crawlerConfig.getMaxInfoHashes() == 1000000 &&
+        crawlerConfig.getAutoStart() == true) {
+
+        auto configManager = utility::config::ConfigurationManager::getInstance();
+        effectiveCrawlerConfig = CrawlerConfig(configManager);
+    }
+
     try {
         return utility::thread::withLock(s_instanceMutex, [&]() {
             if (!s_instance) {
                 s_instance = std::shared_ptr<CrawlerManager>(new CrawlerManager(
                     config, nodeID, routingManager, nodeLookup, peerLookup,
-                    transactionManager, messageSender, peerStorage, crawlerConfig));
+                    transactionManager, messageSender, peerStorage, effectiveCrawlerConfig));
             }
             return s_instance;
         }, "CrawlerManager::s_instanceMutex");

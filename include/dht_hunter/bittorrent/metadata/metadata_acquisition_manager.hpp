@@ -4,6 +4,7 @@
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/bittorrent/metadata/metadata_exchange.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
+#include "dht_hunter/utility/config/configuration_manager.hpp"
 
 #include <memory>
 #include <mutex>
@@ -56,9 +57,23 @@ public:
     /**
      * @brief Acquires metadata for an InfoHash
      * @param infoHash The InfoHash to acquire metadata for
+     * @param priority Priority of the acquisition (higher values = higher priority)
      * @return True if the acquisition was started, false otherwise
      */
-    bool acquireMetadata(const types::InfoHash& infoHash);
+    bool acquireMetadata(const types::InfoHash& infoHash, int priority = 0);
+
+    /**
+     * @brief Gets the acquisition status for an InfoHash
+     * @param infoHash The InfoHash to check
+     * @return A string describing the acquisition status
+     */
+    std::string getAcquisitionStatus(const types::InfoHash& infoHash) const;
+
+    /**
+     * @brief Gets the acquisition statistics
+     * @return A map of statistics
+     */
+    std::unordered_map<std::string, int> getStatistics() const;
 
     /**
      * @brief Checks if metadata acquisition is in progress for an InfoHash
@@ -109,9 +124,36 @@ private:
     std::unordered_set<types::InfoHash> m_acquisitionQueue;
     mutable std::mutex m_queueMutex;
 
+    /**
+     * @brief Represents an acquisition task
+     */
+    struct AcquisitionTask {
+        types::InfoHash infoHash;
+        int priority;
+        std::string status;
+        int retryCount;
+        std::chrono::steady_clock::time_point startTime;
+        std::chrono::steady_clock::time_point lastRetryTime;
+
+        AcquisitionTask(const types::InfoHash& ih, int p)
+            : infoHash(ih), priority(p), status("Queued"), retryCount(0),
+              startTime(std::chrono::steady_clock::now()),
+              lastRetryTime(std::chrono::steady_clock::now()) {}
+    };
+
     // Active acquisitions
-    std::unordered_map<types::InfoHash, std::chrono::steady_clock::time_point> m_activeAcquisitions;
+    std::unordered_map<types::InfoHash, std::shared_ptr<AcquisitionTask>> m_activeAcquisitions;
     mutable std::mutex m_activeAcquisitionsMutex;
+
+    // Failed acquisitions for retry
+    std::unordered_map<types::InfoHash, std::shared_ptr<AcquisitionTask>> m_failedAcquisitions;
+    mutable std::mutex m_failedAcquisitionsMutex;
+
+    // Acquisition statistics
+    std::atomic<int> m_totalAttempts{0};
+    std::atomic<int> m_successfulAcquisitionsCount{0};
+    std::atomic<int> m_failedAcquisitionsCount{0};
+    std::atomic<int> m_retryAttempts{0};
 
     // Processing thread
     std::thread m_processingThread;
@@ -122,10 +164,33 @@ private:
     // Event subscription
     int m_infoHashDiscoveredSubscription = 0;
 
-    // Constants
-    static constexpr int PROCESSING_INTERVAL_SECONDS = 5;
-    static constexpr int MAX_CONCURRENT_ACQUISITIONS = 5;
-    static constexpr int ACQUISITION_TIMEOUT_SECONDS = 60;
+    /**
+     * @brief Processes failed acquisitions for retry
+     */
+    void processFailedAcquisitions();
+
+    /**
+     * @brief Handles a successful metadata acquisition
+     * @param infoHash The InfoHash that was acquired
+     */
+    void handleSuccessfulAcquisition(const types::InfoHash& infoHash);
+
+    /**
+     * @brief Handles a failed metadata acquisition
+     * @param infoHash The InfoHash that failed
+     * @param error The error message
+     */
+    void handleFailedAcquisition(const types::InfoHash& infoHash, const std::string& error);
+
+    // Configuration parameters
+    int m_processingIntervalSeconds;
+    int m_maxConcurrentAcquisitions;
+    int m_acquisitionTimeoutSeconds;
+    int m_maxRetryCount;
+    int m_retryDelayBaseSeconds;
+
+    // Load configuration from the configuration manager
+    void loadConfiguration();
 };
 
 } // namespace dht_hunter::bittorrent::metadata

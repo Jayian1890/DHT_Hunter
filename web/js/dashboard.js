@@ -256,6 +256,38 @@ function updateInfoHashesTable(infoHashes) {
         firstSeenTd.textContent = formatTimeAgo(infoHash.firstSeen);
         tr.appendChild(firstSeenTd);
 
+        // Metadata Status
+        const statusTd = document.createElement('td');
+        if (infoHash.metadataStatus) {
+            statusTd.textContent = infoHash.metadataStatus;
+
+            // Add status styling
+            if (infoHash.metadataStatus === 'Queued') {
+                statusTd.className = 'status-queued';
+            } else if (infoHash.metadataStatus === 'In Progress') {
+                statusTd.className = 'status-in-progress';
+            } else if (infoHash.metadataStatus === 'Complete') {
+                statusTd.className = 'status-complete';
+            } else if (infoHash.metadataStatus.includes('Failed')) {
+                statusTd.className = 'status-failed';
+            } else if (infoHash.metadataStatus.includes('Retry')) {
+                statusTd.className = 'status-retry';
+            }
+        } else {
+            statusTd.textContent = 'Not Started';
+            statusTd.className = 'status-not-started';
+
+            // Add a button to acquire metadata
+            const acquireBtn = document.createElement('button');
+            acquireBtn.textContent = 'Acquire';
+            acquireBtn.className = 'acquire-btn';
+            acquireBtn.onclick = function() {
+                acquireMetadata(infoHash.hash);
+            };
+            statusTd.appendChild(acquireBtn);
+        }
+        tr.appendChild(statusTd);
+
         tbody.appendChild(tr);
     });
 }
@@ -334,4 +366,32 @@ function formatTimeAgo(timestamp) {
     } else {
         return Math.floor(diff / 86400000) + ' days ago';
     }
+}
+
+// Function to acquire metadata for an InfoHash
+function acquireMetadata(infoHash) {
+    fetch('/api/metadata/acquire', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            infoHash: infoHash
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Metadata acquisition started for', infoHash);
+            // Refresh the data immediately
+            fetchData();
+        } else {
+            console.error('Failed to start metadata acquisition:', data.error);
+            alert('Failed to start metadata acquisition: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error starting metadata acquisition:', error);
+        alert('Error starting metadata acquisition: ' + error);
+    });
 }

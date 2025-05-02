@@ -21,7 +21,7 @@ namespace dht_hunter::dht {
 
 // Use the existing infoHashToString function from dht_types.hpp
 
-DHTNode::DHTNode(const DHTConfig& config) : m_nodeID(generateRandomNodeID()), m_config(config), m_running(false) {
+DHTNode::DHTNode(const DHTConfig& config, const NodeID& nodeID) : m_nodeID(nodeID), m_config(config), m_running(false) {
     // TRACE: Constructor entry
     unified_event::logTrace("DHT.Node", "TRACE: Constructor entry");
 

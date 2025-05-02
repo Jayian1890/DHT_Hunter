@@ -227,31 +227,92 @@ footer {
     .stats-container {
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     }
-    
+
     .charts-container, .tables-container {
         grid-template-columns: 1fr;
     }
-    
+
     .stats-card {
         padding: 15px;
     }
-    
+
     .stats-icon {
         width: 40px;
         height: 40px;
         font-size: 18px;
     }
-    
+
     .stats-value {
         font-size: 20px;
     }
-    
+
     header {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .status {
         margin-top: 10px;
+    }
+}
+
+/* Metadata status styles */
+.status-queued {
+    color: var(--warning-color);
+    font-weight: bold;
+}
+
+.status-in-progress {
+    color: var(--secondary-color);
+    font-weight: bold;
+    animation: pulse 1.5s infinite;
+}
+
+.status-complete {
+    color: var(--success-color);
+    font-weight: bold;
+}
+
+.status-failed {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+.status-retry {
+    color: var(--warning-color);
+    font-weight: bold;
+}
+
+.status-not-started {
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.acquire-btn {
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.3s;
+}
+
+.acquire-btn:hover {
+    background-color: #2980b9;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
     }
 }

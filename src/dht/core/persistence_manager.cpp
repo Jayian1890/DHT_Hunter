@@ -34,6 +34,7 @@ PersistenceManager::PersistenceManager(const std::string& configDir)
       m_routingTablePath(configDir + "/routing_table.dat"),
       m_peerStoragePath(configDir + "/peer_storage.dat"),
       m_metadataPath(configDir + "/metadata.dat"),
+      m_nodeIDPath(configDir + "/node_id.dat"),
       m_running(false),
       m_saveInterval(1) { // Save every 1 minute
 
@@ -158,15 +159,17 @@ bool PersistenceManager::saveNow() {
     std::shared_ptr<types::InfoHashMetadataRegistry> metadataRegistry;
     std::string routingTablePath;
     std::string metadataPath;
+    std::string nodeIDPath;
 
     try {
-        utility::thread::withLock(m_mutex, [this, &routingTable, &peerStorage, &metadataRegistry, &routingTablePath, &metadataPath]() {
+        utility::thread::withLock(m_mutex, [this, &routingTable, &peerStorage, &metadataRegistry, &routingTablePath, &metadataPath, &nodeIDPath]() {
             // Make local copies of the shared pointers while holding the lock
             routingTable = m_routingTable;
             peerStorage = m_peerStorage;
             metadataRegistry = m_metadataRegistry;
             routingTablePath = m_routingTablePath;
             metadataPath = m_metadataPath;
+            nodeIDPath = m_nodeIDPath;
         }, "PersistenceManager::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PersistenceManager", e.what());
@@ -584,6 +587,90 @@ bool PersistenceManager::createConfigDir() {
     } catch (const std::exception& e) {
         unified_event::logError("DHT.PersistenceManager", "Exception while creating config directory: " + std::string(e.what()));
         return false;
+    }
+}
+
+bool PersistenceManager::saveNodeID(const NodeID& nodeID) {
+    try {
+        unified_event::logInfo("DHT.PersistenceManager", "Saving node ID: " + nodeID.toString() + " to " + m_nodeIDPath);
+
+        // Open file for binary writing
+        std::ofstream file(m_nodeIDPath, std::ios::binary);
+        if (!file) {
+            unified_event::logError("DHT.PersistenceManager", "Failed to open file for writing: " + m_nodeIDPath);
+            return false;
+        }
+
+        // Write the node ID (20 bytes)
+        file.write(reinterpret_cast<const char*>(nodeID.data()), static_cast<std::streamsize>(nodeID.size()));
+        file.close();
+
+        unified_event::logInfo("DHT.PersistenceManager", "Successfully saved node ID to " + m_nodeIDPath);
+        return true;
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PersistenceManager", "Exception while saving node ID: " + std::string(e.what()));
+        return false;
+    }
+}
+
+bool PersistenceManager::loadNodeID(NodeID& nodeID) {
+    try {
+        // Check if the file exists
+        if (!fs::exists(m_nodeIDPath)) {
+            unified_event::logInfo("DHT.PersistenceManager", "Node ID file does not exist: " + m_nodeIDPath);
+            return false;
+        }
+
+        unified_event::logInfo("DHT.PersistenceManager", "Loading node ID from " + m_nodeIDPath);
+
+        // Open file for binary reading
+        std::ifstream file(m_nodeIDPath, std::ios::binary);
+        if (!file) {
+            unified_event::logError("DHT.PersistenceManager", "Failed to open file for reading: " + m_nodeIDPath);
+            return false;
+        }
+
+        // Get file size
+        file.seekg(0, std::ios::end);
+        std::streamsize fileSize = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        // Check if the file size is correct (20 bytes for a NodeID)
+        if (fileSize != 20) {
+            unified_event::logError("DHT.PersistenceManager", "Invalid node ID file size: " + std::to_string(fileSize) + " bytes (expected 20 bytes)");
+            file.close();
+            return false;
+        }
+
+        // Read the node ID (20 bytes)
+        std::array<uint8_t, 20> nodeIDBytes;
+        if (!file.read(reinterpret_cast<char*>(nodeIDBytes.data()), fileSize)) {
+            unified_event::logError("DHT.PersistenceManager", "Failed to read node ID from file");
+            file.close();
+            return false;
+        }
+
+        file.close();
+
+        // Create the node ID from the bytes
+        nodeID = NodeID(nodeIDBytes);
+
+        unified_event::logInfo("DHT.PersistenceManager", "Successfully loaded node ID: " + nodeID.toString() + " from " + m_nodeIDPath);
+        return true;
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PersistenceManager", "Exception while loading node ID: " + std::string(e.what()));
+        return false;
+    }
+}
+
+void PersistenceManager::setSaveInterval(std::chrono::minutes interval) {
+    try {
+        utility::thread::withLock(m_mutex, [this, interval]() {
+            m_saveInterval = interval;
+            unified_event::logInfo("DHT.PersistenceManager", "Save interval set to " + std::to_string(interval.count()) + " minutes");
+        }, "PersistenceManager::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PersistenceManager", e.what());
     }
 }
 

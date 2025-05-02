@@ -2,10 +2,11 @@
 
 #include "dht_hunter/dht/transactions/components/base_transaction_component.hpp"
 #include "dht_hunter/dht/transactions/components/transaction.hpp"
+#include "dht_hunter/utility/config/configuration_manager.hpp"
+#include "dht_hunter/utility/system/memory_utils.hpp"
 #include <unordered_map>
 #include <thread>
 #include <random>
-#include "dht_hunter/utility/system/memory_utils.hpp"
 
 namespace dht_hunter::dht::transactions {
 
@@ -122,8 +123,8 @@ private:
     // Maximum number of transactions (calculated once during initialization)
     size_t m_maxTransactions;
 
-    // Constants
-    static constexpr int TRANSACTION_TIMEOUT = 30; // seconds
+    // Transaction timeout in seconds (configurable)
+    int m_transactionTimeout;
 
     // Maximum number of transactions is dynamically calculated based on available memory
     // This is just a fallback value if memory detection fails
