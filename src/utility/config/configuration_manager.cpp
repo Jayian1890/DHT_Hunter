@@ -636,10 +636,11 @@ std::optional<std::any> ConfigurationManager::getValueFromPath(const std::vector
                 return std::nullopt;
             }
 
-            auto next = current->getObject()->get(keyPath[i]);
-            if (!next) {
+            auto nextPtr = current->getObject()->get(keyPath[i]);
+            if (!nextPtr) {
                 return std::nullopt;
             }
+            json::JsonValue next(*nextPtr);
 
             current = next;
         }
@@ -648,10 +649,11 @@ std::optional<std::any> ConfigurationManager::getValueFromPath(const std::vector
             return std::nullopt;
         }
 
-        auto value = current->getObject()->get(keyPath.back());
-        if (!value) {
+        auto valuePtr = current->getObject()->get(keyPath.back());
+        if (!valuePtr) {
             return std::nullopt;
         }
+        json::JsonValue value(*valuePtr);
 
         return value;
     } catch (const std::bad_any_cast&) {
@@ -676,18 +678,21 @@ bool ConfigurationManager::setValueAtPath(const std::vector<std::string>& keyPat
                 return false;
             }
 
-            auto next = current->getObject()->get(keyPath[i]);
-            if (!next) {
+            auto nextPtr = current->getObject()->get(keyPath[i]);
+            if (!nextPtr) {
                 // Create a new object if the key doesn't exist
-                next = json::JsonValue::createObject();
+                json::JsonValue next(json::JsonValue::createObject());
                 current->getObject()->set(keyPath[i], next);
-            } else if (!next->isObject()) {
-                // Replace with an object if the value is not an object
-                next = json::JsonValue::createObject();
-                current->getObject()->set(keyPath[i], next);
+                current = std::make_shared<json::JsonValue>(next);
+            } else {
+                json::JsonValue next(*nextPtr);
+                if (!next.isObject()) {
+                    // Replace with an object if the value is not an object
+                    next = json::JsonValue(json::JsonValue::createObject());
+                    current->getObject()->set(keyPath[i], next);
+                }
+                current = std::make_shared<json::JsonValue>(next);
             }
-
-            current = next;
         }
 
         if (!current->isObject()) {
@@ -695,7 +700,7 @@ bool ConfigurationManager::setValueAtPath(const std::vector<std::string>& keyPat
         }
 
         try {
-            auto jsonValueToSet = std::any_cast<std::shared_ptr<json::JsonValue>>(value);
+            auto jsonValueToSet = std::any_cast<json::JsonValue>(value);
             current->getObject()->set(keyPath.back(), jsonValueToSet);
             return true;
         } catch (const std::bad_any_cast&) {

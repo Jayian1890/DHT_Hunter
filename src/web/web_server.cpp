@@ -387,8 +387,8 @@ dht_hunter::network::HttpResponse WebServer::handleInfoHashesRequest(const dht_h
     return response;
 }
 
-network::HttpResponse WebServer::handleUptimeRequest(const network::HttpRequest& /*request*/) {
-    network::HttpResponse response;
+dht_hunter::network::HttpResponse WebServer::handleUptimeRequest(const dht_hunter::network::HttpRequest& /*request*/) {
+    dht_hunter::network::HttpResponse response;
     response.statusCode = 200;
     response.setJsonContentType();
 
@@ -448,8 +448,8 @@ dht_hunter::network::HttpResponse WebServer::serveStaticFile(const std::string& 
     return response;
 }
 
-network::HttpResponse WebServer::handleMetadataAcquisitionRequest(const network::HttpRequest& request) {
-    network::HttpResponse response;
+dht_hunter::network::HttpResponse WebServer::handleMetadataAcquisitionRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
     response.headers["Content-Type"] = "application/json";
 
     // Parse the request body as JSON
@@ -523,8 +523,8 @@ network::HttpResponse WebServer::handleMetadataAcquisitionRequest(const network:
     return response;
 }
 
-network::HttpResponse WebServer::handleMetadataStatusRequest(const network::HttpRequest& request) {
-    network::HttpResponse response;
+dht_hunter::network::HttpResponse WebServer::handleMetadataStatusRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
     response.headers["Content-Type"] = "application/json";
 
     if (!m_metadataManager) {
@@ -587,6 +587,4 @@ network::HttpResponse WebServer::handleMetadataStatusRequest(const network::Http
     }
 
     return response;
-}
-
 } // namespace dht_hunter::web
