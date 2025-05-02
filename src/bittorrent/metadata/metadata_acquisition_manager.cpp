@@ -326,7 +326,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
 
     // Process the queue if we have capacity
     size_t activeCount = getActiveAcquisitionCount();
-    if (activeCount >= m_maxConcurrentAcquisitions) {
+    if (activeCount >= static_cast<size_t>(m_maxConcurrentAcquisitions)) {
         unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Maximum concurrent acquisitions reached: " +
                               std::to_string(activeCount) +
                               "/" +

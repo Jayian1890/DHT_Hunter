@@ -206,8 +206,8 @@ void WebServer::registerStaticRoutes() {
     );
 }
 
-network::HttpResponse WebServer::handleStatisticsRequest(const network::HttpRequest& /*request*/) {
-    network::HttpResponse response;
+dht_hunter::network::HttpResponse WebServer::handleStatisticsRequest(const dht_hunter::network::HttpRequest& /*request*/) {
+    dht_hunter::network::HttpResponse response;
     response.statusCode = 200;
     response.setJsonContentType();
 
@@ -241,8 +241,8 @@ network::HttpResponse WebServer::handleStatisticsRequest(const network::HttpRequ
     return response;
 }
 
-network::HttpResponse WebServer::handleNodesRequest(const network::HttpRequest& request) {
-    network::HttpResponse response;
+dht_hunter::network::HttpResponse WebServer::handleNodesRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
     response.statusCode = 200;
     response.setJsonContentType();
 
@@ -291,8 +291,8 @@ network::HttpResponse WebServer::handleNodesRequest(const network::HttpRequest& 
     return response;
 }
 
-network::HttpResponse WebServer::handleInfoHashesRequest(const network::HttpRequest& request) {
-    network::HttpResponse response;
+dht_hunter::network::HttpResponse WebServer::handleInfoHashesRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
     response.statusCode = 200;
     response.setJsonContentType();
 
@@ -404,9 +404,9 @@ network::HttpResponse WebServer::handleUptimeRequest(const network::HttpRequest&
     return response;
 }
 
-network::HttpResponse WebServer::serveStaticFile(const std::string& filePath) {
+dht_hunter::network::HttpResponse WebServer::serveStaticFile(const std::string& filePath) {
     unified_event::logInfo("Web.Server", "Serving static file: " + filePath);
-    network::HttpResponse response;
+    dht_hunter::network::HttpResponse response;
 
     // Check if file exists
     if (!std::filesystem::exists(filePath)) {

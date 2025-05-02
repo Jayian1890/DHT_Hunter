@@ -258,13 +258,13 @@ int main(int argc, char* argv[]) {
     dht_hunter::dht::DHTConfig dhtConfig(dhtPort, configDir);
 
     // Apply additional DHT configuration from config file
-    dhtConfig.setKBucketSize(configManager->getInt("dht.kBucketSize", 16));
-    dhtConfig.setAlpha(configManager->getInt("dht.alpha", 3));
-    dhtConfig.setMaxResults(configManager->getInt("dht.maxResults", 8));
+    dhtConfig.setKBucketSize(static_cast<size_t>(configManager->getInt("dht.kBucketSize", 16)));
+    dhtConfig.setAlpha(static_cast<size_t>(configManager->getInt("dht.alpha", 3)));
+    dhtConfig.setMaxResults(static_cast<size_t>(configManager->getInt("dht.maxResults", 8)));
     dhtConfig.setTokenRotationInterval(configManager->getInt("dht.tokenRotationInterval", 300));
     dhtConfig.setBucketRefreshInterval(configManager->getInt("dht.bucketRefreshInterval", 60));
-    dhtConfig.setMaxIterations(configManager->getInt("dht.maxIterations", 10));
-    dhtConfig.setMaxQueries(configManager->getInt("dht.maxQueries", 100));
+    dhtConfig.setMaxIterations(static_cast<size_t>(configManager->getInt("dht.maxIterations", 10)));
+    dhtConfig.setMaxQueries(static_cast<size_t>(configManager->getInt("dht.maxQueries", 100)));
 
     // Set bootstrap nodes from config
     if (configManager->hasKey("dht.bootstrapNodes")) {

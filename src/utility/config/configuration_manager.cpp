@@ -387,7 +387,7 @@ bool ConfigurationManager::getBool(const std::string& key, bool defaultValue) co
 
             try {
                 auto jsonValue = std::any_cast<json::JsonValue>(*value);
-                if (!jsonValue.isBool()) {
+                if (!jsonValue.isBoolean()) {
                     return defaultValue;
                 }
                 return jsonValue.getBoolean();
@@ -636,7 +636,7 @@ std::optional<std::any> ConfigurationManager::getValueFromPath(const std::vector
                 return std::nullopt;
             }
 
-            auto next = current->get(keyPath[i]);
+            auto next = current->getObject()->get(keyPath[i]);
             if (!next) {
                 return std::nullopt;
             }
@@ -648,7 +648,7 @@ std::optional<std::any> ConfigurationManager::getValueFromPath(const std::vector
             return std::nullopt;
         }
 
-        auto value = current->get(keyPath.back());
+        auto value = current->getObject()->get(keyPath.back());
         if (!value) {
             return std::nullopt;
         }
@@ -676,15 +676,15 @@ bool ConfigurationManager::setValueAtPath(const std::vector<std::string>& keyPat
                 return false;
             }
 
-            auto next = current->get(keyPath[i]);
+            auto next = current->getObject()->get(keyPath[i]);
             if (!next) {
                 // Create a new object if the key doesn't exist
                 next = json::JsonValue::createObject();
-                current->set(keyPath[i], next);
+                current->getObject()->set(keyPath[i], next);
             } else if (!next->isObject()) {
                 // Replace with an object if the value is not an object
                 next = json::JsonValue::createObject();
-                current->set(keyPath[i], next);
+                current->getObject()->set(keyPath[i], next);
             }
 
             current = next;
@@ -696,7 +696,7 @@ bool ConfigurationManager::setValueAtPath(const std::vector<std::string>& keyPat
 
         try {
             auto jsonValueToSet = std::any_cast<std::shared_ptr<json::JsonValue>>(value);
-            current->set(keyPath.back(), jsonValueToSet);
+            current->getObject()->set(keyPath.back(), jsonValueToSet);
             return true;
         } catch (const std::bad_any_cast&) {
             return false;
