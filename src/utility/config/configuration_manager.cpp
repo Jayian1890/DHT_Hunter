@@ -869,4 +869,94 @@ void ConfigurationManager::fileWatcherThread() {
     unified_event::logInfo("ConfigurationManager", "File watcher thread stopped");
 }
 
+std::string ConfigurationManager::getConfigAsJson(bool pretty) const {
+    try {
+        return utility::thread::withLock(m_configMutex, [this, pretty]() {
+            if (!m_configLoaded) {
+                return std::string("{}");
+            }
+
+            try {
+                auto jsonValue = std::any_cast<std::shared_ptr<json::JsonValue>>(m_configRoot);
+                if (!jsonValue) {
+                    return std::string("{}");
+                }
+
+                return jsonValue->toString(pretty);
+            } catch (const std::bad_any_cast&) {
+                return std::string("{}");
+            }
+        }, "ConfigurationManager::m_configMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("ConfigurationManager", e.what());
+        return std::string("{}");
+    }
+}
+
+std::string ConfigurationManager::getConfigValueAsJson(const std::string& key, bool pretty) const {
+    try {
+        return utility::thread::withLock(m_configMutex, [this, &key, pretty]() {
+            if (!m_configLoaded) {
+                return std::string("");
+            }
+
+            auto keyPath = splitKeyPath(key);
+            auto value = getValueFromPath(keyPath);
+            if (!value.has_value()) {
+                return std::string("");
+            }
+
+            try {
+                auto jsonValue = std::any_cast<std::shared_ptr<json::JsonValue>>(*value);
+                if (!jsonValue) {
+                    return std::string("");
+                }
+
+                return jsonValue->toString(pretty);
+            } catch (const std::bad_any_cast&) {
+                return std::string("");
+            }
+        }, "ConfigurationManager::m_configMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("ConfigurationManager", e.what());
+        return std::string("");
+    }
+}
+
+bool ConfigurationManager::setConfigValueFromJson(const std::string& key, const std::string& jsonStr) {
+    try {
+        return utility::thread::withLock(m_configMutex, [this, &key, &jsonStr]() {
+            if (!m_configLoaded) {
+                unified_event::logError("ConfigurationManager", "No configuration loaded");
+                return false;
+            }
+
+            // Parse the JSON string
+            auto jsonValue = json::JsonValue::parse(jsonStr);
+            if (!jsonValue) {
+                unified_event::logError("ConfigurationManager", "Failed to parse JSON string");
+                return false;
+            }
+
+            // Set the value
+            auto keyPath = splitKeyPath(key);
+            if (!setValueAtPath(keyPath, jsonValue)) {
+                unified_event::logError("ConfigurationManager", "Failed to set value for key: " + key);
+                return false;
+            }
+
+            // Notify callbacks
+            notifyChangeCallbacks(key);
+
+            return true;
+        }, "ConfigurationManager::m_configMutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("ConfigurationManager", e.what());
+        return false;
+    } catch (const std::exception& e) {
+        unified_event::logError("ConfigurationManager", "Exception while setting configuration value: " + std::string(e.what()));
+        return false;
+    }
+}
+
 } // namespace dht_hunter::utility::config

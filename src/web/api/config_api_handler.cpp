@@ -91,17 +91,17 @@ network::HttpResponse ConfigApiHandler::handleGetConfig(const network::HttpReque
     }
     
     try {
-        // Get all configuration values
-        auto configRoot = std::any_cast<std::shared_ptr<Json::JsonValue>>(m_configManager->m_configRoot);
-        if (!configRoot) {
+        // Get all configuration values as JSON
+        std::string configJson = m_configManager->getConfigAsJson(true);
+        if (configJson.empty() || configJson == "{}") {
             response.setStatusCode(500);
-            response.setBody(Json::stringify({{"error", "Configuration root is null"}}));
+            response.setBody(Json::stringify({{"error", "Failed to get configuration"}}));
             return response;
         }
         
         // Return the configuration as JSON
         response.setStatusCode(200);
-        response.setBody(configRoot->toString());
+        response.setBody(configJson);
     } catch (const std::exception& e) {
         response.setStatusCode(500);
         response.setBody(Json::stringify({{"error", std::string("Exception: ") + e.what()}}));
@@ -135,31 +135,17 @@ network::HttpResponse ConfigApiHandler::handleGetConfigKey(const network::HttpRe
             return response;
         }
         
-        // Get the value
-        auto keyPath = m_configManager->splitKeyPath(key);
-        auto value = m_configManager->getValueFromPath(keyPath);
-        if (!value.has_value()) {
+        // Get the value as JSON
+        std::string valueJson = m_configManager->getConfigValueAsJson(key, true);
+        if (valueJson.empty()) {
             response.setStatusCode(404);
-            response.setBody(Json::stringify({{"error", "Key not found: " + key}}));
+            response.setBody(Json::stringify({{"error", "Key not found or value is empty: " + key}}));
             return response;
         }
         
-        // Convert the value to JSON
-        try {
-            auto jsonValue = std::any_cast<std::shared_ptr<Json::JsonValue>>(*value);
-            if (!jsonValue) {
-                response.setStatusCode(500);
-                response.setBody(Json::stringify({{"error", "Value is null"}}));
-                return response;
-            }
-            
-            // Return the value as JSON
-            response.setStatusCode(200);
-            response.setBody(jsonValue->toString());
-        } catch (const std::bad_any_cast&) {
-            response.setStatusCode(500);
-            response.setBody(Json::stringify({{"error", "Failed to cast value to JSON"}}));
-        }
+        // Return the value as JSON
+        response.setStatusCode(200);
+        response.setBody(valueJson);
     } catch (const std::exception& e) {
         response.setStatusCode(500);
         response.setBody(Json::stringify({{"error", std::string("Exception: ") + e.what()}}));
@@ -194,24 +180,12 @@ network::HttpResponse ConfigApiHandler::handlePutConfigKey(const network::HttpRe
             return response;
         }
         
-        // Parse the value as JSON
-        auto jsonValue = Json::parse(body);
-        if (!jsonValue) {
-            response.setStatusCode(400);
-            response.setBody(Json::stringify({{"error", "Failed to parse request body as JSON"}}));
-            return response;
-        }
-        
         // Set the value
-        auto keyPath = m_configManager->splitKeyPath(key);
-        if (!m_configManager->setValueAtPath(keyPath, jsonValue)) {
+        if (!m_configManager->setConfigValueFromJson(key, body)) {
             response.setStatusCode(500);
             response.setBody(Json::stringify({{"error", "Failed to set value for key: " + key}}));
             return response;
         }
-        
-        // Notify callbacks
-        m_configManager->notifyChangeCallbacks(key);
         
         // Return success
         response.setStatusCode(200);

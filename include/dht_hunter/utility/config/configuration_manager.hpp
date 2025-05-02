@@ -206,12 +206,34 @@ public:
      */
     bool unregisterChangeCallback(int callbackId);
 
-private:
     /**
-     * @brief Private constructor for singleton pattern
-     * @param configFilePath Path to the configuration file
+     * @brief Gets the configuration as a JSON string
+     * @param pretty Whether to format the JSON string for readability
+     * @return The configuration as a JSON string
      */
-    explicit ConfigurationManager(const std::string& configFilePath);
+    std::string getConfigAsJson(bool pretty = true) const;
+
+    /**
+     * @brief Gets a specific configuration value as a JSON string
+     * @param key The key of the configuration value
+     * @param pretty Whether to format the JSON string for readability
+     * @return The configuration value as a JSON string, or an empty string if the key is not found
+     */
+    std::string getConfigValueAsJson(const std::string& key, bool pretty = true) const;
+
+    /**
+     * @brief Sets a configuration value from a JSON string
+     * @param key The key of the configuration value
+     * @param jsonStr The JSON string to parse
+     * @return True if the value was set successfully, false otherwise
+     */
+    bool setConfigValueFromJson(const std::string& key, const std::string& jsonStr);
+
+    /**
+     * @brief Notifies all registered callbacks of a configuration change
+     * @param key The key of the changed configuration value (empty string for any change)
+     */
+    void notifyChangeCallbacks(const std::string& key = "");
 
     /**
      * @brief Gets a value from the configuration using a key path
@@ -235,15 +257,18 @@ private:
      */
     static std::vector<std::string> splitKeyPath(const std::string& key);
 
+private:
+    /**
+     * @brief Private constructor for singleton pattern
+     * @param configFilePath Path to the configuration file
+     */
+    explicit ConfigurationManager(const std::string& configFilePath);
+
+
+
     // Static instance for singleton pattern
     static std::shared_ptr<ConfigurationManager> s_instance;
     static std::mutex s_instanceMutex;
-
-    /**
-     * @brief Notifies all registered callbacks of a configuration change
-     * @param key The key of the changed configuration value (empty string for any change)
-     */
-    void notifyChangeCallbacks(const std::string& key = "");
 
     /**
      * @brief File watcher thread function
