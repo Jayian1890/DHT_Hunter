@@ -203,90 +203,90 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
 
         // General settings
         json::JsonValue generalConfig(json::JsonValue::createObject());
-        generalConfig.get<json::JsonValue::JsonObject>().set("configDir", json::JsonValue("~/dht-hunter"));
-        generalConfig.get<json::JsonValue::JsonObject>().set("logFile", json::JsonValue("dht_hunter.log"));
-        generalConfig.get<json::JsonValue::JsonObject>().set("logLevel", json::JsonValue("info"));
-        config.get<json::JsonValue::JsonObject>().set("general", generalConfig);
+        generalConfig.getObject().set("configDir", json::JsonValue("~/dht-hunter"));
+        generalConfig.getObject().set("logFile", json::JsonValue("dht_hunter.log"));
+        generalConfig.getObject().set("logLevel", json::JsonValue("info"));
+        config.getObject().set("general", generalConfig);
 
         // DHT settings
         json::JsonValue dhtConfig(json::JsonValue::createObject());
-        dhtConfig.get<json::JsonValue::JsonObject>().set("port", json::JsonValue(6881));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("kBucketSize", json::JsonValue(16));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("alpha", json::JsonValue(3));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("maxResults", json::JsonValue(8));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("tokenRotationInterval", json::JsonValue(300));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("bucketRefreshInterval", json::JsonValue(60));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("maxIterations", json::JsonValue(10));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("maxQueries", json::JsonValue(100));
+        dhtConfig.getObject().set("port", json::JsonValue(6881));
+        dhtConfig.getObject().set("kBucketSize", json::JsonValue(16));
+        dhtConfig.getObject().set("alpha", json::JsonValue(3));
+        dhtConfig.getObject().set("maxResults", json::JsonValue(8));
+        dhtConfig.getObject().set("tokenRotationInterval", json::JsonValue(300));
+        dhtConfig.getObject().set("bucketRefreshInterval", json::JsonValue(60));
+        dhtConfig.getObject().set("maxIterations", json::JsonValue(10));
+        dhtConfig.getObject().set("maxQueries", json::JsonValue(100));
 
         // Bootstrap nodes
         json::JsonValue bootstrapNodes(json::JsonValue::createArray());
-        bootstrapNodes.get<json::JsonValue::JsonArray>().add(json::JsonValue("dht.aelitis.com:6881"));
-        bootstrapNodes.get<json::JsonValue::JsonArray>().add(json::JsonValue("dht.transmissionbt.com:6881"));
-        bootstrapNodes.get<json::JsonValue::JsonArray>().add(json::JsonValue("dht.libtorrent.org:25401"));
-        bootstrapNodes.get<json::JsonValue::JsonArray>().add(json::JsonValue("router.utorrent.com:6881"));
-        dhtConfig.get<json::JsonValue::JsonObject>().set("bootstrapNodes", bootstrapNodes);
+        bootstrapNodes.getArray().add(json::JsonValue("dht.aelitis.com:6881"));
+        bootstrapNodes.getArray().add(json::JsonValue("dht.transmissionbt.com:6881"));
+        bootstrapNodes.getArray().add(json::JsonValue("dht.libtorrent.org:25401"));
+        bootstrapNodes.getArray().add(json::JsonValue("router.utorrent.com:6881"));
+        dhtConfig.getObject().set("bootstrapNodes", bootstrapNodes);
 
-        config.get<json::JsonValue::JsonObject>().set("dht", dhtConfig);
+        config.getObject().set("dht", dhtConfig);
 
         // Network settings
         json::JsonValue networkConfig(json::JsonValue::createObject());
-        networkConfig.get<json::JsonValue::JsonObject>().set("transactionTimeout", json::JsonValue(30));
-        networkConfig.get<json::JsonValue::JsonObject>().set("maxTransactions", json::JsonValue(1024));
-        networkConfig.get<json::JsonValue::JsonObject>().set("mtuSize", json::JsonValue(1400));
-        config.get<json::JsonValue::JsonObject>().set("network", networkConfig);
+        networkConfig.getObject().set("transactionTimeout", json::JsonValue(30));
+        networkConfig.getObject().set("maxTransactions", json::JsonValue(1024));
+        networkConfig.getObject().set("mtuSize", json::JsonValue(1400));
+        config.getObject().set("network", networkConfig);
 
         // Web interface settings
         json::JsonValue webConfig(json::JsonValue::createObject());
-        webConfig.get<json::JsonValue::JsonObject>().set("port", json::JsonValue(8080));
-        webConfig.get<json::JsonValue::JsonObject>().set("webRoot", json::JsonValue("web"));
-        config.get<json::JsonValue::JsonObject>().set("web", webConfig);
+        webConfig.getObject().set("port", json::JsonValue(8080));
+        webConfig.getObject().set("webRoot", json::JsonValue("web"));
+        config.getObject().set("web", webConfig);
 
         // Persistence settings
         json::JsonValue persistenceConfig(json::JsonValue::createObject());
-        persistenceConfig.get<json::JsonValue::JsonObject>().set("saveInterval", json::JsonValue(60)); // In minutes
-        persistenceConfig.get<json::JsonValue::JsonObject>().set("routingTablePath", json::JsonValue("routing_table.dat"));
-        persistenceConfig.get<json::JsonValue::JsonObject>().set("peerStoragePath", json::JsonValue("peer_storage.dat"));
-        persistenceConfig.get<json::JsonValue::JsonObject>().set("metadataPath", json::JsonValue("metadata.dat"));
-        persistenceConfig.get<json::JsonValue::JsonObject>().set("nodeIDPath", json::JsonValue("node_id.dat"));
-        config.get<json::JsonValue::JsonObject>().set("persistence", persistenceConfig);
+        persistenceConfig.getObject().set("saveInterval", json::JsonValue(60)); // In minutes
+        persistenceConfig.getObject().set("routingTablePath", json::JsonValue("routing_table.dat"));
+        persistenceConfig.getObject().set("peerStoragePath", json::JsonValue("peer_storage.dat"));
+        persistenceConfig.getObject().set("metadataPath", json::JsonValue("metadata.dat"));
+        persistenceConfig.getObject().set("nodeIDPath", json::JsonValue("node_id.dat"));
+        config.getObject().set("persistence", persistenceConfig);
 
         // Crawler settings
         json::JsonValue crawlerConfig(json::JsonValue::createObject());
-        crawlerConfig.get<json::JsonValue::JsonObject>().set("parallelCrawls", json::JsonValue(10));
-        crawlerConfig.get<json::JsonValue::JsonObject>().set("refreshInterval", json::JsonValue(15));
-        crawlerConfig.get<json::JsonValue::JsonObject>().set("maxNodes", json::JsonValue(1000000));
-        crawlerConfig.get<json::JsonValue::JsonObject>().set("maxInfoHashes", json::JsonValue(1000000));
-        crawlerConfig.get<json::JsonValue::JsonObject>().set("autoStart", json::JsonValue(true));
-        config.get<json::JsonValue::JsonObject>().set("crawler", crawlerConfig);
+        crawlerConfig.getObject().set("parallelCrawls", json::JsonValue(10));
+        crawlerConfig.getObject().set("refreshInterval", json::JsonValue(15));
+        crawlerConfig.getObject().set("maxNodes", json::JsonValue(1000000));
+        crawlerConfig.getObject().set("maxInfoHashes", json::JsonValue(1000000));
+        crawlerConfig.getObject().set("autoStart", json::JsonValue(true));
+        config.getObject().set("crawler", crawlerConfig);
 
         // Metadata acquisition settings
         json::JsonValue metadataConfig(json::JsonValue::createObject());
-        metadataConfig.get<json::JsonValue::JsonObject>().set("processingInterval", json::JsonValue(5));
-        metadataConfig.get<json::JsonValue::JsonObject>().set("maxConcurrentAcquisitions", json::JsonValue(5));
-        metadataConfig.get<json::JsonValue::JsonObject>().set("acquisitionTimeout", json::JsonValue(60));
-        metadataConfig.get<json::JsonValue::JsonObject>().set("maxRetryCount", json::JsonValue(3));
-        metadataConfig.get<json::JsonValue::JsonObject>().set("retryDelayBase", json::JsonValue(300));
-        config.get<json::JsonValue::JsonObject>().set("metadata", metadataConfig);
+        metadataConfig.getObject().set("processingInterval", json::JsonValue(5));
+        metadataConfig.getObject().set("maxConcurrentAcquisitions", json::JsonValue(5));
+        metadataConfig.getObject().set("acquisitionTimeout", json::JsonValue(60));
+        metadataConfig.getObject().set("maxRetryCount", json::JsonValue(3));
+        metadataConfig.getObject().set("retryDelayBase", json::JsonValue(300));
+        config.getObject().set("metadata", metadataConfig);
 
         // Event system settings
         json::JsonValue eventConfig(json::JsonValue::createObject());
-        eventConfig.get<json::JsonValue::JsonObject>().set("enableLogging", json::JsonValue(true));
-        eventConfig.get<json::JsonValue::JsonObject>().set("enableComponent", json::JsonValue(true));
-        eventConfig.get<json::JsonValue::JsonObject>().set("enableStatistics", json::JsonValue(true));
-        eventConfig.get<json::JsonValue::JsonObject>().set("asyncProcessing", json::JsonValue(false));
-        eventConfig.get<json::JsonValue::JsonObject>().set("eventQueueSize", json::JsonValue(1000));
-        eventConfig.get<json::JsonValue::JsonObject>().set("processingThreads", json::JsonValue(1));
-        config.get<json::JsonValue::JsonObject>().set("event", eventConfig);
+        eventConfig.getObject().set("enableLogging", json::JsonValue(true));
+        eventConfig.getObject().set("enableComponent", json::JsonValue(true));
+        eventConfig.getObject().set("enableStatistics", json::JsonValue(true));
+        eventConfig.getObject().set("asyncProcessing", json::JsonValue(false));
+        eventConfig.getObject().set("eventQueueSize", json::JsonValue(1000));
+        eventConfig.getObject().set("processingThreads", json::JsonValue(1));
+        config.getObject().set("event", eventConfig);
 
         // Logging settings
         json::JsonValue loggingConfig(json::JsonValue::createObject());
-        loggingConfig.get<json::JsonValue::JsonObject>().set("consoleOutput", json::JsonValue(true));
-        loggingConfig.get<json::JsonValue::JsonObject>().set("fileOutput", json::JsonValue(true));
-        loggingConfig.get<json::JsonValue::JsonObject>().set("includeTimestamp", json::JsonValue(true));
-        loggingConfig.get<json::JsonValue::JsonObject>().set("includeSeverity", json::JsonValue(true));
-        loggingConfig.get<json::JsonValue::JsonObject>().set("includeSource", json::JsonValue(true));
-        config.get<json::JsonValue::JsonObject>().set("logging", loggingConfig);
+        loggingConfig.getObject().set("consoleOutput", json::JsonValue(true));
+        loggingConfig.getObject().set("fileOutput", json::JsonValue(true));
+        loggingConfig.getObject().set("includeTimestamp", json::JsonValue(true));
+        loggingConfig.getObject().set("includeSeverity", json::JsonValue(true));
+        loggingConfig.getObject().set("includeSource", json::JsonValue(true));
+        config.getObject().set("logging", loggingConfig);
 
         // Convert to JSON string
         std::string jsonStr = json::Json::stringify(config, true); // Pretty print
@@ -340,7 +340,7 @@ std::string ConfigurationManager::getString(const std::string& key, const std::s
                 if (!jsonValue.isString()) {
                     return defaultValue;
                 }
-                return jsonValue.get<std::string>();
+                return jsonValue.getString();
             } catch (const std::bad_any_cast&) {
                 return defaultValue;
             }
@@ -365,7 +365,7 @@ int ConfigurationManager::getInt(const std::string& key, int defaultValue) const
                 if (!jsonValue.isNumber()) {
                     return defaultValue;
                 }
-                return jsonValue.get<int>();
+                return jsonValue.getInt();
             } catch (const std::bad_any_cast&) {
                 return defaultValue;
             }
@@ -390,7 +390,7 @@ bool ConfigurationManager::getBool(const std::string& key, bool defaultValue) co
                 if (!jsonValue.isBool()) {
                     return defaultValue;
                 }
-                return jsonValue.get<bool>();
+                return jsonValue.getBoolean();
             } catch (const std::bad_any_cast&) {
                 return defaultValue;
             }
@@ -415,7 +415,7 @@ double ConfigurationManager::getDouble(const std::string& key, double defaultVal
                 if (!jsonValue.isNumber()) {
                     return defaultValue;
                 }
-                return jsonValue.get<double>();
+                return jsonValue.getNumber();
             } catch (const std::bad_any_cast&) {
                 return defaultValue;
             }
@@ -442,10 +442,11 @@ std::vector<std::string> ConfigurationManager::getStringArray(const std::string&
                     return result;
                 }
 
-                const auto& array = jsonValue.get<json::JsonValue::JsonArray>();
-                for (const auto& item : array.getValues()) {
+                const auto& array = jsonValue.getArray();
+                for (size_t i = 0; i < array.size(); ++i) {
+                    auto item = array.get(i);
                     if (item.isString()) {
-                        result.push_back(item.get<std::string>());
+                        result.push_back(item.getString());
                     }
                 }
                 return result;
@@ -475,10 +476,11 @@ std::vector<int> ConfigurationManager::getIntArray(const std::string& key) const
                     return result;
                 }
 
-                const auto& array = jsonValue.get<json::JsonValue::JsonArray>();
-                for (const auto& item : array.getValues()) {
+                const auto& array = jsonValue.getArray();
+                for (size_t i = 0; i < array.size(); ++i) {
+                    auto item = array.get(i);
                     if (item.isNumber()) {
-                        result.push_back(item.get<int>());
+                        result.push_back(item.getInt());
                     }
                 }
                 return result;
@@ -540,9 +542,9 @@ void ConfigurationManager::setStringArray(const std::string& key, const std::vec
     try {
         utility::thread::withLock(m_configMutex, [this, &key, &value]() {
             auto keyPath = splitKeyPath(key);
-            auto array = json::JsonValue::createArray();
+            json::JsonValue array(json::JsonValue::createArray());
             for (const auto& item : value) {
-                array->append(json::JsonValue(item));
+                array.getArray().add(json::JsonValue(item));
             }
             setValueAtPath(keyPath, array);
         }, "ConfigurationManager::m_configMutex");
@@ -555,9 +557,9 @@ void ConfigurationManager::setIntArray(const std::string& key, const std::vector
     try {
         utility::thread::withLock(m_configMutex, [this, &key, &value]() {
             auto keyPath = splitKeyPath(key);
-            auto array = json::JsonValue::createArray();
+            json::JsonValue array(json::JsonValue::createArray());
             for (const auto& item : value) {
-                array->append(json::JsonValue(item));
+                array.getArray().add(json::JsonValue(item));
             }
             setValueAtPath(keyPath, array);
         }, "ConfigurationManager::m_configMutex");
