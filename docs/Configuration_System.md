@@ -22,6 +22,8 @@ This document provides detailed information about the DHT Hunter configuration s
 
 DHT Hunter uses a JSON configuration file to store all application settings. This allows for easy customization of the application's behavior without recompiling the code. The configuration file is loaded at application startup and can be specified via command-line arguments.
 
+If the configuration file does not exist, a default configuration file will be automatically generated at the specified location. This ensures that the application always has a valid configuration to work with.
+
 ## Configuration File Location
 
 By default, the configuration file is located at:

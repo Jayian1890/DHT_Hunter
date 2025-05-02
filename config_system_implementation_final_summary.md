@@ -4,6 +4,8 @@
 
 The configuration system has been successfully implemented, allowing users to customize all aspects of the DHT Hunter application through a single JSON configuration file. The system is modular, well-documented, and follows best practices for configuration management in C++ applications.
 
+A key user-friendly feature is the automatic generation of a default configuration file if one doesn't exist at the specified location. This ensures that the application always has a valid configuration to work with, eliminating the need for manual configuration file creation.
+
 ## Completed Tasks
 
 1. **Created Configuration Structure and Default File** ✅

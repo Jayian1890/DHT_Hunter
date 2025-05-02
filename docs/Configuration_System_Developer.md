@@ -19,6 +19,8 @@ This document provides detailed information about the DHT Hunter configuration s
 
 The configuration system is built around the `ConfigurationManager` class, which is implemented as a singleton. This class is responsible for loading, parsing, and providing access to configuration settings from a JSON file.
 
+The system is designed to be user-friendly, automatically generating a default configuration file if one doesn't exist at the specified location. This ensures that the application always has a valid configuration to work with.
+
 Key components:
 - **ConfigurationManager**: Singleton class that manages configuration settings
 - **JSON Parser**: Uses the `JsonValue` class to parse and manipulate JSON data

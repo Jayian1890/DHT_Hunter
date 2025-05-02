@@ -183,7 +183,21 @@ int main(int argc, char* argv[]) {
             configDir = configDirFromFile;
         }
     } else {
-        std::cout << "No configuration file found at: " << configFile << ". Using default settings." << std::endl;
+        std::cout << "No configuration file found at: " << configFile << ". Generating default configuration file." << std::endl;
+
+        // Generate default configuration file
+        if (!dht_hunter::utility::config::ConfigurationManager::generateDefaultConfiguration(configFile)) {
+            std::cerr << "Error: Failed to generate default configuration file" << std::endl;
+            return 1;
+        }
+        std::cout << "Default configuration file generated successfully at: " << configFile << std::endl;
+
+        // Reload the configuration manager with the new file
+        configManager = dht_hunter::utility::config::ConfigurationManager::getInstance(configFile);
+        if (!configManager) {
+            std::cerr << "Error: Failed to initialize configuration manager with new config file" << std::endl;
+            return 1;
+        }
     }
 
     // Initialize the unified event system with settings from config
