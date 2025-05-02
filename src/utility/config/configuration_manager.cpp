@@ -78,6 +78,8 @@ ConfigurationManager::~ConfigurationManager() {
 bool ConfigurationManager::loadConfiguration(const std::string& configFilePath) {
     try {
         return utility::thread::withLock(m_configMutex, [this, &configFilePath]() {
+            unified_event::logDebug("ConfigurationManager", "Loading configuration from file: " + configFilePath);
+
             // Check if the file exists
             if (!fs::exists(configFilePath)) {
                 unified_event::logError("ConfigurationManager", "Configuration file does not exist: " + configFilePath);
@@ -95,9 +97,11 @@ bool ConfigurationManager::loadConfiguration(const std::string& configFilePath) 
             std::stringstream buffer;
             buffer << file.rdbuf();
             std::string jsonStr = buffer.str();
+            unified_event::logDebug("ConfigurationManager", "Read configuration file content, size: " + std::to_string(jsonStr.size()));
 
             // Parse the JSON
             auto jsonValue = json::JsonValue::parse(jsonStr);
+            unified_event::logDebug("ConfigurationManager", "Parsed JSON configuration");
 
             // Check if the root is an object
             if (!jsonValue.isObject()) {
@@ -110,6 +114,7 @@ bool ConfigurationManager::loadConfiguration(const std::string& configFilePath) 
             m_configRoot = jsonValue;
             m_configFilePath = configFilePath;
             m_configLoaded = true;
+            unified_event::logDebug("ConfigurationManager", "Configuration loaded successfully");
 
             // Update the last modified time
             try {
@@ -329,19 +334,25 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
 std::string ConfigurationManager::getString(const std::string& key, const std::string& defaultValue) const {
     try {
         return utility::thread::withLock(m_configMutex, [this, &key, &defaultValue]() -> std::string {
+            unified_event::logDebug("ConfigurationManager", "Getting string value for key: " + key);
             auto keyPath = splitKeyPath(key);
             auto value = getValueFromPath(keyPath);
             if (!value.has_value()) {
+                unified_event::logDebug("ConfigurationManager", "No value found for key: " + key + ", using default: " + defaultValue);
                 return defaultValue;
             }
 
             try {
                 auto jsonValue = std::any_cast<json::JsonValue>(*value);
                 if (!jsonValue.isString()) {
+                    unified_event::logDebug("ConfigurationManager", "Value for key: " + key + " is not a string, using default: " + defaultValue);
                     return defaultValue;
                 }
-                return jsonValue.getString();
+                std::string result = jsonValue.getString();
+                unified_event::logDebug("ConfigurationManager", "Found string value for key: " + key + ", value: " + result);
+                return result;
             } catch (const std::bad_any_cast&) {
+                unified_event::logDebug("ConfigurationManager", "Bad any cast for key: " + key + ", using default: " + defaultValue);
                 return defaultValue;
             }
         }, "ConfigurationManager::m_configMutex");
@@ -621,23 +632,27 @@ bool ConfigurationManager::validateConfiguration() const {
 
 std::optional<std::any> ConfigurationManager::getValueFromPath(const std::vector<std::string>& keyPath) const {
     if (keyPath.empty()) {
+        unified_event::logDebug("ConfigurationManager", "Empty key path");
         return std::nullopt;
     }
 
     try {
         auto jsonValue = std::any_cast<json::JsonValue>(m_configRoot);
         if (!jsonValue.isObject()) {
+            unified_event::logDebug("ConfigurationManager", "Root is not an object");
             return std::nullopt;
         }
 
         json::JsonValue current = jsonValue;
         for (size_t i = 0; i < keyPath.size() - 1; ++i) {
             if (!current.isObject()) {
+                unified_event::logDebug("ConfigurationManager", "Path element is not an object: " + keyPath[i]);
                 return std::nullopt;
             }
 
             json::JsonValue next = current.getObject()->get(keyPath[i]);
             if (next.isNull()) {
+                unified_event::logDebug("ConfigurationManager", "Path element not found: " + keyPath[i]);
                 return std::nullopt;
             }
 
@@ -645,16 +660,20 @@ std::optional<std::any> ConfigurationManager::getValueFromPath(const std::vector
         }
 
         if (!current.isObject()) {
+            unified_event::logDebug("ConfigurationManager", "Final path element is not an object: " + keyPath.back());
             return std::nullopt;
         }
 
         json::JsonValue value = current.getObject()->get(keyPath.back());
         if (value.isNull()) {
+            unified_event::logDebug("ConfigurationManager", "Value not found for key: " + keyPath.back());
             return std::nullopt;
         }
 
+        unified_event::logDebug("ConfigurationManager", "Found value for key: " + keyPath.back());
         return value;
     } catch (const std::bad_any_cast&) {
+        unified_event::logDebug("ConfigurationManager", "Bad any cast");
         return std::nullopt;
     }
 }

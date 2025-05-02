@@ -35,7 +35,9 @@ WebServer::WebServer(std::shared_ptr<dht::services::StatisticsService> statistic
       m_startTime(std::chrono::steady_clock::now()) {
     // Get settings from configuration
     auto configManager = utility::config::ConfigurationManager::getInstance();
+    unified_event::logDebug("Web.Server", "Getting webRoot from configuration");
     m_webRoot = configManager->getString("web.webRoot", "web");
+    unified_event::logDebug("Web.Server", "Got webRoot from configuration: " + m_webRoot);
     m_port = static_cast<uint16_t>(configManager->getInt("web.port", 8080));
 
     unified_event::logDebug("Web.Server", "WebServer initialized from configuration with webRoot: " + m_webRoot + ", port: " + std::to_string(m_port));
