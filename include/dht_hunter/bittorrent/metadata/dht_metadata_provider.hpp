@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/types/info_hash.hpp"
-#include "dht_hunter/dht/dht_node.hpp"
+#include "dht_hunter/dht/core/dht_node.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 
 #include <memory>
@@ -18,7 +18,7 @@ namespace dht_hunter::bittorrent::metadata {
 
 /**
  * @brief Implements the DHT Metadata Protocol (BEP 51)
- * 
+ *
  * This class is responsible for acquiring metadata for InfoHashes using
  * the DHT Metadata Protocol.
  */

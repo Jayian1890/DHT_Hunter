@@ -3,6 +3,12 @@ add_library(dht_hunter_bittorrent
         bt_message_handler.cpp
         metadata/metadata_exchange.cpp
         metadata/metadata_acquisition_manager.cpp
+        metadata/peer_health_tracker.cpp
+        metadata/dht_metadata_provider.cpp
+        metadata/connection_pool.cpp
+        tracker/http_tracker.cpp
+        tracker/udp_tracker.cpp
+        tracker/tracker_manager.cpp
 )
 
 # Link with other libraries

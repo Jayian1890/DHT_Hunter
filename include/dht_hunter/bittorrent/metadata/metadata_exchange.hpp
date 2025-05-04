@@ -5,6 +5,8 @@
 #include "dht_hunter/network/tcp_client.hpp"
 #include "dht_hunter/bencode/bencode.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
+#include "dht_hunter/bittorrent/metadata/peer_health_tracker.hpp"
+#include "dht_hunter/bittorrent/metadata/connection_pool.hpp"
 
 #include <memory>
 #include <string>
@@ -30,7 +32,7 @@ public:
      * @brief Represents a peer connection for metadata exchange
      */
     struct PeerConnection {
-        network::TCPClient client;
+        std::shared_ptr<network::TCPClient> client;
         types::InfoHash infoHash;
         std::vector<uint8_t> buffer;
         std::atomic<bool> handshakeComplete{false};
@@ -39,15 +41,18 @@ public:
         std::atomic<bool> connected{false};
         std::atomic<bool> failed{false};
         std::atomic<int> metadataSize{0};
+        std::atomic<uint8_t> utMetadataId{1}; // Default ut_metadata message ID
         std::unordered_map<int, std::vector<uint8_t>> metadataPieces;
         std::string peerId;  // Unique identifier for this peer connection
         network::EndPoint peer; // The peer endpoint
         int retryCount{0};   // Number of retry attempts
         std::chrono::steady_clock::time_point startTime;
+        std::chrono::steady_clock::time_point lastActivityTime; // Time of last activity
         std::mutex mutex;
 
         PeerConnection(const types::InfoHash& ih, const network::EndPoint& p)
-            : infoHash(ih), peer(p), startTime(std::chrono::steady_clock::now()) {
+            : infoHash(ih), peer(p), startTime(std::chrono::steady_clock::now()),
+              lastActivityTime(std::chrono::steady_clock::now()) {
             peerId = p.toString();
         }
     };
@@ -215,6 +220,9 @@ private:
     std::unordered_map<std::string, std::shared_ptr<AcquisitionTask>> m_tasks;
     std::mutex m_connectionsMutex;
     std::mutex m_tasksMutex;
+
+    // Connection pool
+    std::shared_ptr<ConnectionPool> m_connectionPool;
 
     /**
      * @brief Tries to connect to more peers for a task

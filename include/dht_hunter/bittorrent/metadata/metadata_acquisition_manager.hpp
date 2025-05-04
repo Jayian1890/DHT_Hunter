@@ -3,6 +3,10 @@
 #include "dht_hunter/types/info_hash.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/bittorrent/metadata/metadata_exchange.hpp"
+#include "dht_hunter/bittorrent/metadata/peer_health_tracker.hpp"
+#include "dht_hunter/bittorrent/metadata/dht_metadata_provider.hpp"
+#include "dht_hunter/bittorrent/tracker/tracker_manager.hpp"
+#include "dht_hunter/network/nat/nat_traversal_manager.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include "dht_hunter/utility/config/configuration_manager.hpp"
 
@@ -96,6 +100,13 @@ private:
     explicit MetadataAcquisitionManager(std::shared_ptr<dht::PeerStorage> peerStorage);
 
     /**
+     * @brief Prioritizes peers for metadata acquisition
+     * @param peers The list of peers to prioritize
+     * @return The prioritized list of peers
+     */
+    std::vector<network::EndPoint> prioritizePeers(const std::vector<network::EndPoint>& peers);
+
+    /**
      * @brief Processes the acquisition queue
      */
     void processAcquisitionQueue();
@@ -118,6 +129,9 @@ private:
     // Dependencies
     std::shared_ptr<dht::PeerStorage> m_peerStorage;
     std::shared_ptr<MetadataExchange> m_metadataExchange;
+    std::shared_ptr<DHTMetadataProvider> m_dhtMetadataProvider;
+    std::shared_ptr<tracker::TrackerManager> m_trackerManager;
+    std::shared_ptr<network::nat::NATTraversalManager> m_natTraversalManager;
     std::shared_ptr<unified_event::EventBus> m_eventBus;
 
     // Acquisition queue

@@ -1,6 +1,8 @@
 #include "dht_hunter/bittorrent/metadata/metadata_acquisition_manager.hpp"
 #include "dht_hunter/utility/metadata/metadata_utils.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
+#include <algorithm>
+#include <random>
 
 namespace dht_hunter::bittorrent::metadata {
 
@@ -30,6 +32,9 @@ std::shared_ptr<MetadataAcquisitionManager> MetadataAcquisitionManager::getInsta
 MetadataAcquisitionManager::MetadataAcquisitionManager(std::shared_ptr<dht::PeerStorage> peerStorage)
     : m_peerStorage(peerStorage),
       m_metadataExchange(std::make_shared<MetadataExchange>()),
+      m_dhtMetadataProvider(std::make_shared<DHTMetadataProvider>(nullptr)), // We'll set the DHT node later
+      m_trackerManager(tracker::TrackerManager::getInstance()),
+      m_natTraversalManager(network::nat::NATTraversalManager::getInstance()),
       m_eventBus(unified_event::EventBus::getInstance()),
       m_processingIntervalSeconds(5),
       m_maxConcurrentAcquisitions(5),
@@ -39,6 +44,12 @@ MetadataAcquisitionManager::MetadataAcquisitionManager(std::shared_ptr<dht::Peer
 
     // Load configuration
     loadConfiguration();
+}
+
+std::vector<network::EndPoint> MetadataAcquisitionManager::prioritizePeers(const std::vector<network::EndPoint>& peers) {
+    // Use the PeerHealthTracker to prioritize peers based on health
+    auto healthTracker = PeerHealthTracker::getInstance();
+    return healthTracker->prioritizePeers(peers);
 }
 
 MetadataAcquisitionManager::~MetadataAcquisitionManager() {
@@ -81,6 +92,57 @@ bool MetadataAcquisitionManager::start() {
     // Start the processing thread
     m_processingThread = std::thread(&MetadataAcquisitionManager::processAcquisitionQueuePeriodically, this);
 
+    // Start the DHT metadata provider
+    if (m_dhtMetadataProvider) {
+        if (!m_dhtMetadataProvider->start()) {
+            unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to start DHT metadata provider");
+        } else {
+            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Started DHT metadata provider");
+        }
+    }
+
+    // Initialize the tracker manager
+    if (m_trackerManager) {
+        if (!m_trackerManager->initialize()) {
+            unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to initialize tracker manager");
+        } else {
+            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Initialized tracker manager");
+
+            // Add some default trackers
+            m_trackerManager->addTracker("udp://tracker.opentrackr.org:1337/announce");
+            m_trackerManager->addTracker("udp://tracker.openbittorrent.com:6969/announce");
+            m_trackerManager->addTracker("udp://tracker.torrent.eu.org:451/announce");
+            m_trackerManager->addTracker("udp://tracker.tiny-vps.com:6969/announce");
+            m_trackerManager->addTracker("udp://open.stealth.si:80/announce");
+        }
+    }
+
+    // Initialize the NAT traversal manager
+    if (m_natTraversalManager) {
+        if (!m_natTraversalManager->initialize()) {
+            unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to initialize NAT traversal manager");
+        } else {
+            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Initialized NAT traversal manager");
+
+            // Add port mappings for DHT and BitTorrent
+            auto configManager = utility::config::ConfigurationManager::getInstance();
+            uint16_t dhtPort = static_cast<uint16_t>(configManager->getInt("dht.port", 6881));
+            uint16_t btPort = static_cast<uint16_t>(configManager->getInt("bittorrent.port", 6881));
+
+            // Add port mappings
+            uint16_t mappedDhtPort = m_natTraversalManager->addPortMapping(dhtPort, dhtPort, "UDP", "DHT-Hunter DHT");
+            uint16_t mappedBtPort = m_natTraversalManager->addPortMapping(btPort, btPort, "TCP", "DHT-Hunter BitTorrent");
+
+            if (mappedDhtPort > 0) {
+                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Mapped DHT port: " + std::to_string(dhtPort) + " -> " + std::to_string(mappedDhtPort));
+            }
+
+            if (mappedBtPort > 0) {
+                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Mapped BitTorrent port: " + std::to_string(btPort) + " -> " + std::to_string(mappedBtPort));
+            }
+        }
+    }
+
     // Publish a system started event
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("BitTorrent.MetadataAcquisitionManager");
     m_eventBus->publish(startedEvent);
@@ -107,6 +169,21 @@ void MetadataAcquisitionManager::stop() {
     m_processingCondition.notify_all();
     if (m_processingThread.joinable()) {
         m_processingThread.join();
+    }
+
+    // Stop the DHT metadata provider
+    if (m_dhtMetadataProvider) {
+        m_dhtMetadataProvider->stop();
+    }
+
+    // Shut down the tracker manager
+    if (m_trackerManager) {
+        m_trackerManager->shutdown();
+    }
+
+    // Shut down the NAT traversal manager
+    if (m_natTraversalManager) {
+        m_natTraversalManager->shutdown();
     }
 
     // Publish a system stopped event
@@ -344,13 +421,25 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
 
     // Process timed out tasks outside of the lock
     for (const auto& infoHash : timedOutInfoHashes) {
+        // Get peer count for context
+        size_t peerCount = 0;
+        if (m_peerStorage) {
+            peerCount = m_peerStorage->getPeers(infoHash).size();
+        }
+
         unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition timed out for info hash: " +
-                                 types::infoHashToString(infoHash));
+                                 types::infoHashToString(infoHash) +
+                                 " after " + std::to_string(m_acquisitionTimeoutSeconds) + " seconds" +
+                                 ", available peers: " + std::to_string(peerCount));
     }
 
     // Handle failed acquisitions outside of the lock
     for (const auto& pair : tasksToUpdate) {
-        handleFailedAcquisition(pair.first, "Timed out");
+        std::string timeoutMessage = "Acquisition timed out after " +
+                                   std::to_string(m_acquisitionTimeoutSeconds) +
+                                   " seconds (retry " + std::to_string(pair.second->retryCount + 1) +
+                                   "/" + std::to_string(m_maxRetryCount) + ")";
+        handleFailedAcquisition(pair.first, timeoutMessage);
     }
 
     // Process the queue if we have capacity
@@ -399,8 +488,44 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
     }
 
     std::vector<network::EndPoint> peers = m_peerStorage->getPeers(infoHash);
+
+    // Assign common BitTorrent ports to peers with port 0
+    std::vector<uint16_t> commonBitTorrentPorts = {6881, 6882, 6883, 6884, 6885, 6886, 6887, 6888, 6889};
+    size_t portIndex = 0;
+
+    std::vector<network::EndPoint> enhancedPeers;
+    for (const auto& peer : peers) {
+        if (peer.getPort() == 0) {
+            // Create a new endpoint with a common BitTorrent port
+            uint16_t newPort = commonBitTorrentPorts[portIndex % commonBitTorrentPorts.size()];
+            network::EndPoint newPeer(peer.getAddress(), newPort);
+            enhancedPeers.push_back(newPeer);
+            portIndex++;
+        } else if (peer.getPort() < 65000) { // Skip very high ports
+            enhancedPeers.push_back(peer);
+        }
+    }
+
+    // Replace the original peers with the enhanced ones
+    peers = enhancedPeers;
+
+    if (portIndex > 0) {
+        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Enhanced " +
+                             std::to_string(portIndex) +
+                             " peers with common BitTorrent ports for info hash: " +
+                             types::infoHashToString(infoHash));
+    }
+
+    // Prioritize peers for better connection success rate
+    peers = prioritizePeers(peers);
+
+    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Using " +
+                         std::to_string(peers.size()) +
+                         " prioritized peers for info hash: " +
+                         types::infoHashToString(infoHash));
+
     if (peers.empty()) {
-        unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "No peers available for info hash: " + types::infoHashToString(infoHash));
+        unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "No valid peers available for info hash: " + types::infoHashToString(infoHash));
         return;
     }
 
@@ -417,17 +542,89 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
         return;
     }
 
-    // Start the acquisition
-    m_metadataExchange->acquireMetadata(infoHash, peers, [this, infoHash](bool success) {
-        if (success) {
-            handleSuccessfulAcquisition(infoHash);
-        } else {
-            handleFailedAcquisition(infoHash, "Failed to acquire metadata");
-        }
+    // Try to acquire metadata using all available providers
+    bool btStarted = false;
+    bool dhtStarted = false;
+    bool trackerStarted = false;
 
-        // Notify the processing thread to continue
+    // Get the BitTorrent port for tracker announces
+    auto configManager = utility::config::ConfigurationManager::getInstance();
+    uint16_t btPort = static_cast<uint16_t>(configManager->getInt("bittorrent.port", 6881));
+
+    // First, try the BitTorrent metadata exchange with DHT peers
+    if (!peers.empty()) {
+        btStarted = m_metadataExchange->acquireMetadata(infoHash, peers, [this, infoHash](bool success) {
+            if (success) {
+                handleSuccessfulAcquisition(infoHash);
+            } else {
+                // Don't mark as failed yet, other providers might succeed
+                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                                    "BitTorrent metadata exchange with DHT peers failed for info hash: " +
+                                    types::infoHashToString(infoHash) +
+                                    ", waiting for other provider results");
+            }
+
+            // Notify the processing thread to continue
+            m_processingCondition.notify_one();
+        }, 5); // Try up to 5 peers concurrently
+    }
+
+    // Then, try the tracker manager to get more peers
+    if (m_trackerManager && m_trackerManager->isInitialized()) {
+        trackerStarted = true;
+        m_trackerManager->announceToAll(infoHash, btPort, "started", [this, infoHash](bool success, const std::vector<types::EndPoint>& trackerPeers) {
+            if (success && !trackerPeers.empty()) {
+                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                                    "Got " + std::to_string(trackerPeers.size()) +
+                                    " peers from trackers for info hash: " +
+                                    types::infoHashToString(infoHash));
+
+                // Try to acquire metadata using the tracker peers
+                m_metadataExchange->acquireMetadata(infoHash, trackerPeers, [this, infoHash](bool success) {
+                    if (success) {
+                        handleSuccessfulAcquisition(infoHash);
+                    } else {
+                        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                                            "BitTorrent metadata exchange with tracker peers failed for info hash: " +
+                                            types::infoHashToString(infoHash));
+                    }
+
+                    // Notify the processing thread to continue
+                    m_processingCondition.notify_one();
+                }, 5); // Try up to 5 peers concurrently
+            } else {
+                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                                    "Failed to get peers from trackers for info hash: " +
+                                    types::infoHashToString(infoHash));
+
+                // Notify the processing thread to continue
+                m_processingCondition.notify_one();
+            }
+        });
+    }
+
+    // Then, try the DHT metadata provider
+    if (m_dhtMetadataProvider) {
+        dhtStarted = m_dhtMetadataProvider->acquireMetadata(infoHash, [this, infoHash, btStarted, trackerStarted](bool success) {
+            if (success) {
+                handleSuccessfulAcquisition(infoHash);
+            } else if (!btStarted && !trackerStarted) {
+                // Only mark as failed if all providers failed
+                std::string errorDetails = "Failed to acquire metadata from all providers";
+                handleFailedAcquisition(infoHash, errorDetails);
+            }
+
+            // Notify the processing thread to continue
+            m_processingCondition.notify_one();
+        });
+    }
+
+    // If no provider was started, mark as failed
+    if (!btStarted && !dhtStarted && !trackerStarted) {
+        std::string errorDetails = "Failed to start metadata acquisition using any provider";
+        handleFailedAcquisition(infoHash, errorDetails);
         m_processingCondition.notify_one();
-    }, 3); // Try up to 3 peers concurrently
+    }
 }
 
 void MetadataAcquisitionManager::loadConfiguration() {
@@ -546,10 +743,18 @@ void MetadataAcquisitionManager::handleSuccessfulAcquisition(const types::InfoHa
 }
 
 void MetadataAcquisitionManager::handleFailedAcquisition(const types::InfoHash& infoHash, const std::string& error) {
+    // Get peer count for context
+    size_t peerCount = 0;
+    if (m_peerStorage) {
+        peerCount = m_peerStorage->getPeers(infoHash).size();
+    }
+
     unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to acquire metadata for info hash: " +
                             types::infoHashToString(infoHash) +
                             ", error: " +
-                            error);
+                            error +
+                            ", available peers: " + std::to_string(peerCount) +
+                            ", retry count: " + std::to_string(m_failedAcquisitionsCount));
 
     // Get the task from active acquisitions and remove it
     std::shared_ptr<AcquisitionTask> task;

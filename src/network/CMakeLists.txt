@@ -6,6 +6,9 @@ add_library(dht_hunter_network
         tcp_client.cpp
         network_address.cpp
         http_server.cpp
+        nat/upnp_service.cpp
+        nat/natpmp_service.cpp
+        nat/nat_traversal_manager.cpp
 )
 
 # Set include directories

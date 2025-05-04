@@ -13,6 +13,10 @@
 namespace dht_hunter::bittorrent::metadata {
 
 MetadataExchange::MetadataExchange() {
+    // Initialize the connection pool
+    m_connectionPool = ConnectionPool::getInstance();
+    m_connectionPool->start();
+
     // Start the cleanup thread
     m_cleanupThread = std::thread(&MetadataExchange::cleanupTimedOutConnectionsPeriodically, this);
 }
@@ -26,7 +30,7 @@ MetadataExchange::~MetadataExchange() {
     {
         std::lock_guard<std::mutex> lock(m_connectionsMutex);
         for (auto& [_, connection] : m_connections) {
-            connection->client.disconnect();
+            connection->client->disconnect();
         }
         m_connections.clear();
     }
@@ -114,7 +118,7 @@ void MetadataExchange::cancelAcquisition(const types::InfoHash& infoHash) {
         std::lock_guard<std::mutex> lock(m_connectionsMutex);
         for (auto& [id, connection] : m_connections) {
             if (connection->infoHash == infoHash) {
-                connection->client.disconnect();
+                connection->client->disconnect();
                 connectionsToRemove.push_back(id);
             }
         }
@@ -196,7 +200,10 @@ void MetadataExchange::tryMorePeers(std::shared_ptr<AcquisitionTask> task) {
 
     // If we couldn't connect to any peers and there are no active connections, fail the task
     if (connectedCount == 0 && task->activeConnections == 0 && task->remainingPeers.empty()) {
-        unified_event::logWarning("BitTorrent.MetadataExchange", "Failed to connect to any peers for info hash: " + types::infoHashToString(task->infoHash));
+        size_t totalPeers = task->peers.size();
+        unified_event::logWarning("BitTorrent.MetadataExchange", "Failed to connect to any peers for info hash: " +
+                                types::infoHashToString(task->infoHash) +
+                                " (attempted " + std::to_string(totalPeers) + " peers)");
 
         // Call the callback
         if (task->callback) {
@@ -210,6 +217,10 @@ void MetadataExchange::tryMorePeers(std::shared_ptr<AcquisitionTask> task) {
 }
 
 void MetadataExchange::handleSuccessfulAcquisition(std::shared_ptr<PeerConnection> connection) {
+    // Record successful peer health
+    auto healthTracker = PeerHealthTracker::getInstance();
+    healthTracker->recordSuccess(connection->peer);
+
     // Find the task for this connection
     std::string taskId = types::infoHashToString(connection->infoHash);
     std::shared_ptr<AcquisitionTask> task;
@@ -240,7 +251,7 @@ void MetadataExchange::handleSuccessfulAcquisition(std::shared_ptr<PeerConnectio
         std::lock_guard<std::mutex> lock(m_connectionsMutex);
         for (auto& [id, conn] : m_connections) {
             if (conn->infoHash == connection->infoHash && conn.get() != connection.get()) {
-                conn->client.disconnect();
+                conn->client->disconnect();
                 connectionsToRemove.push_back(id);
             }
         }
@@ -259,6 +270,22 @@ void MetadataExchange::handleSuccessfulAcquisition(std::shared_ptr<PeerConnectio
 }
 
 void MetadataExchange::handleFailedAcquisition(std::shared_ptr<PeerConnection> connection) {
+    // Record failed peer health
+    auto healthTracker = PeerHealthTracker::getInstance();
+    std::string failureReason = "Unknown failure";
+
+    if (!connection->connected) {
+        failureReason = "Connection failed";
+    } else if (!connection->handshakeComplete) {
+        failureReason = "Handshake failed";
+    } else if (!connection->extensionHandshakeComplete) {
+        failureReason = "Extension handshake failed";
+    } else {
+        failureReason = "Metadata exchange failed";
+    }
+
+    healthTracker->recordFailure(connection->peer, failureReason);
+
     // Find the task for this connection
     std::string taskId = types::infoHashToString(connection->infoHash);
     std::shared_ptr<AcquisitionTask> task;
@@ -283,38 +310,77 @@ void MetadataExchange::handleFailedAcquisition(std::shared_ptr<PeerConnection> c
 }
 
 bool MetadataExchange::connectToPeer(const network::EndPoint& peer, std::shared_ptr<PeerConnection> connection) {
-    unified_event::logInfo("BitTorrent.MetadataExchange", "Connecting to peer: " + peer.toString() + " for info hash: " + types::infoHashToString(connection->infoHash));
+    try {
+        // Validate peer information
+        if (!peer.getAddress().isValid()) {
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Invalid peer address for info hash: " +
+                                   types::infoHashToString(connection->infoHash));
+            return false;
+        }
 
-    // Set up the data received callback
-    connection->client.setDataReceivedCallback([this, connection](const uint8_t* data, size_t length) {
-        handleDataReceived(connection, data, length);
-    });
+        if (peer.getPort() == 0 || peer.getPort() > 65000) {
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Invalid peer port (" +
+                                   std::to_string(peer.getPort()) +
+                                   ") for info hash: " +
+                                   types::infoHashToString(connection->infoHash));
+            return false;
+        }
 
-    // Set up the error callback
-    connection->client.setErrorCallback([this, connection](const std::string& error) {
-        handleConnectionError(connection, error);
-    });
+        unified_event::logInfo("BitTorrent.MetadataExchange", "Connecting to peer: " + peer.toString() +
+                             " for info hash: " + types::infoHashToString(connection->infoHash));
 
-    // Set up the connection closed callback
-    connection->client.setConnectionClosedCallback([this, connection]() {
-        handleConnectionClosed(connection);
-    });
+        // Store peer information in the connection
+        connection->peer = peer;
+        connection->peerId = peer.toString();
 
-    // Connect to the peer
-    if (!connection->client.connect(peer.getAddress().toString(), peer.getPort())) {
-        unified_event::logWarning("BitTorrent.MetadataExchange", "Failed to connect to peer: " + peer.toString());
+        // Create data received callback
+        auto dataCallback = [this, connection](const uint8_t* data, size_t length) {
+            handleDataReceived(connection, data, length);
+        };
+
+        // Create error callback
+        auto errorCallback = [this, connection](const std::string& error) {
+            handleConnectionError(connection, error);
+        };
+
+        // Create connection closed callback
+        auto closedCallback = [this, connection]() {
+            handleConnectionClosed(connection);
+        };
+
+        // Get a connection from the pool
+        auto client = m_connectionPool->getConnection(peer, dataCallback, errorCallback, closedCallback);
+        if (!client) {
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Failed to connect to peer: " +
+                                   peer.toString() +
+                                   " for info hash: " +
+                                   types::infoHashToString(connection->infoHash));
+            return false;
+        }
+
+        // Store the client in the connection
+        connection->client = client;
+
+        // Send the handshake
+        if (!sendHandshake(connection)) {
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Failed to send handshake to peer: " +
+                                   peer.toString() +
+                                   " for info hash: " +
+                                   types::infoHashToString(connection->infoHash));
+            connection->client->disconnect();
+            return false;
+        }
+
+        connection->connected = true;
+        return true;
+    } catch (const std::exception& e) {
+        unified_event::logError("BitTorrent.MetadataExchange", "Exception connecting to peer " +
+                             peer.toString() +
+                             " for info hash: " +
+                             types::infoHashToString(connection->infoHash) +
+                             ", error: " + e.what());
         return false;
     }
-
-    // Send the handshake
-    if (!sendHandshake(connection)) {
-        unified_event::logWarning("BitTorrent.MetadataExchange", "Failed to send handshake to peer: " + peer.toString());
-        connection->client.disconnect();
-        return false;
-    }
-
-    connection->connected = true;
-    return true;
 }
 
 bool MetadataExchange::sendHandshake(std::shared_ptr<PeerConnection> connection) {
@@ -349,10 +415,13 @@ bool MetadataExchange::sendHandshake(std::shared_ptr<PeerConnection> connection)
     std::memcpy(handshake.data() + 48, peerId.c_str(), 20);
 
     // Send the handshake
-    return connection->client.send(handshake.data(), handshake.size());
+    return connection->client->send(handshake.data(), handshake.size());
 }
 
 void MetadataExchange::handleDataReceived(std::shared_ptr<PeerConnection> connection, const uint8_t* data, size_t length) {
+    // Update last activity time
+    connection->lastActivityTime = std::chrono::steady_clock::now();
+
     // Add the data to the buffer
     connection->buffer.insert(connection->buffer.end(), data, data + length);
 
@@ -368,7 +437,7 @@ void MetadataExchange::handleDataReceived(std::shared_ptr<PeerConnection> connec
                 sendExtensionHandshake(connection);
             } else {
                 // Handshake failed, disconnect
-                connection->client.disconnect();
+                connection->client->disconnect();
             }
         }
     } else {
@@ -479,7 +548,7 @@ bool MetadataExchange::sendExtensionHandshake(std::shared_ptr<PeerConnection> co
     std::memcpy(message.data() + 6, encodedHandshake.data(), encodedHandshake.size());
 
     // Send the message
-    return connection->client.send(message.data(), message.size());
+    return connection->client->send(message.data(), message.size());
 }
 
 bool MetadataExchange::processExtensionHandshake(std::shared_ptr<PeerConnection> connection, const uint8_t* data, size_t length) {
@@ -510,26 +579,44 @@ bool MetadataExchange::processExtensionHandshake(std::shared_ptr<PeerConnection>
             return false;
         }
 
+        // Store the ut_metadata message ID
+        connection->utMetadataId = static_cast<uint8_t>(*utMetadata);
+
         // Get the metadata size
         auto metadataSize = handshake->getInteger("metadata_size");
         if (!metadataSize) {
-            unified_event::logWarning("BitTorrent.MetadataExchange", "Missing or invalid metadata_size in extension handshake");
-            return false;
+            // Some clients don't include metadata_size in the initial handshake
+            // We'll continue and hope they include it in subsequent messages
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Missing or invalid metadata_size in extension handshake, will try to continue");
+
+            // We'll set a default size and adjust it later if needed
+            connection->metadataSize = 0;
+        } else {
+            // Store the metadata size
+            connection->metadataSize = static_cast<int>(*metadataSize);
+
+            unified_event::logInfo("BitTorrent.MetadataExchange", "Extension handshake successful for info hash: " +
+                                   types::infoHashToString(connection->infoHash) +
+                                   ", metadata size: " + std::to_string(connection->metadataSize));
         }
-
-        // Store the metadata size
-        connection->metadataSize = static_cast<int>(*metadataSize);
-
-        unified_event::logInfo("BitTorrent.MetadataExchange", "Extension handshake successful for info hash: " +
-                               types::infoHashToString(connection->infoHash) +
-                               ", metadata size: " + std::to_string(connection->metadataSize));
 
         connection->extensionHandshakeComplete = true;
 
-        // Request all metadata pieces
-        int pieceCount = (connection->metadataSize + 16383) / 16384; // 16 KB pieces
-        for (int piece = 0; piece < pieceCount; piece++) {
-            sendMetadataRequest(connection, piece);
+        // If we have a valid metadata size, request all pieces
+        if (connection->metadataSize > 0) {
+            int pieceCount = (connection->metadataSize + 16383) / 16384; // 16 KB pieces
+            unified_event::logInfo("BitTorrent.MetadataExchange", "Requesting " + std::to_string(pieceCount) +
+                                 " metadata pieces for info hash: " +
+                                 types::infoHashToString(connection->infoHash));
+
+            for (int piece = 0; piece < pieceCount; piece++) {
+                sendMetadataRequest(connection, piece);
+            }
+        } else {
+            // If we don't have a metadata size, request piece 0 to try to get more information
+            unified_event::logInfo("BitTorrent.MetadataExchange", "Requesting metadata piece 0 to determine size for info hash: " +
+                                 types::infoHashToString(connection->infoHash));
+            sendMetadataRequest(connection, 0);
         }
 
         return true;
@@ -565,19 +652,21 @@ bool MetadataExchange::sendMetadataRequest(std::shared_ptr<PeerConnection> conne
     // Message ID (1 byte)
     message[4] = BT_EXTENSION_MESSAGE_ID;
 
-    // Extension message ID (1 byte) - use 1 for ut_metadata
-    message[5] = 1;
+    // Extension message ID (1 byte) - use the ut_metadata ID from the handshake
+    message[5] = connection->utMetadataId;
 
     // Extension message payload
     std::memcpy(message.data() + 6, encodedRequest.data(), encodedRequest.size());
 
     // Send the message
-    return connection->client.send(message.data(), message.size());
+    return connection->client->send(message.data(), message.size());
 }
 
 bool MetadataExchange::processMetadataResponse(std::shared_ptr<PeerConnection> connection, const uint8_t* data, size_t length) {
     try {
-        // The first byte is the extension message ID
+        // Update last activity time
+        connection->lastActivityTime = std::chrono::steady_clock::now();
+
         // The first byte is the extension message ID (unused)
 
         // The rest is the bencoded data
@@ -610,6 +699,19 @@ bool MetadataExchange::processMetadataResponse(std::shared_ptr<PeerConnection> c
 
             int pieceIndex = static_cast<int>(*piece);
 
+            // Check if we have a metadata size
+            if (connection->metadataSize == 0) {
+                // Try to get the metadata size from the total_size field
+                auto totalSize = response->getInteger("total_size");
+                if (totalSize) {
+                    connection->metadataSize = static_cast<int>(*totalSize);
+                    unified_event::logInfo("BitTorrent.MetadataExchange", "Got metadata size from response: " +
+                                         std::to_string(connection->metadataSize) +
+                                         " for info hash: " +
+                                         types::infoHashToString(connection->infoHash));
+                }
+            }
+
             // Find the total message size
             size_t totalSize = encodedData.size();
             size_t headerSize = 0;
@@ -634,27 +736,56 @@ bool MetadataExchange::processMetadataResponse(std::shared_ptr<PeerConnection> c
             std::lock_guard<std::mutex> lock(connection->mutex);
             connection->metadataPieces[pieceIndex] = pieceData;
 
-            unified_event::logInfo("BitTorrent.MetadataExchange", "Received metadata piece " +
-                                   std::to_string(pieceIndex) +
-                                   " for info hash: " +
-                                   types::infoHashToString(connection->infoHash) +
-                                   " (" +
-                                   std::to_string(connection->metadataPieces.size()) +
-                                   "/" +
-                                   std::to_string((connection->metadataSize + 16383) / 16384) +
-                                   ")");
+            // If we still don't have a metadata size, try to estimate it from the piece size
+            if (connection->metadataSize == 0 && pieceIndex == 0) {
+                // Assume this is the first and only piece
+                connection->metadataSize = static_cast<int>(pieceData.size());
+                unified_event::logInfo("BitTorrent.MetadataExchange", "Estimated metadata size from piece 0: " +
+                                     std::to_string(connection->metadataSize) +
+                                     " for info hash: " +
+                                     types::infoHashToString(connection->infoHash));
+            }
 
-            // Check if we have all pieces
-            int pieceCount = (connection->metadataSize + 16383) / 16384;
-            if (static_cast<int>(connection->metadataPieces.size()) == pieceCount) {
-                // Process the complete metadata
-                processCompleteMetadata(connection);
+            // Now that we have a metadata size, request any missing pieces
+            if (connection->metadataSize > 0) {
+                int pieceCount = (connection->metadataSize + 16383) / 16384;
+
+                unified_event::logInfo("BitTorrent.MetadataExchange", "Received metadata piece " +
+                                     std::to_string(pieceIndex) +
+                                     " for info hash: " +
+                                     types::infoHashToString(connection->infoHash) +
+                                     " (" +
+                                     std::to_string(connection->metadataPieces.size()) +
+                                     "/" +
+                                     std::to_string(pieceCount) +
+                                     ")");
+
+                // Request any missing pieces
+                if (static_cast<int>(connection->metadataPieces.size()) < pieceCount) {
+                    for (int i = 0; i < pieceCount; i++) {
+                        if (connection->metadataPieces.find(i) == connection->metadataPieces.end()) {
+                            sendMetadataRequest(connection, i);
+                        }
+                    }
+                }
+
+                // Check if we have all pieces
+                if (static_cast<int>(connection->metadataPieces.size()) == pieceCount) {
+                    // Process the complete metadata
+                    processCompleteMetadata(connection);
+                }
             }
 
             return true;
         } else if (type == 2) {
             // Reject message
-            unified_event::logWarning("BitTorrent.MetadataExchange", "Metadata request rejected by peer");
+            auto piece = response->getInteger("piece");
+            int pieceIndex = piece ? static_cast<int>(*piece) : -1;
+
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Metadata request rejected by peer for piece " +
+                                    std::to_string(pieceIndex) +
+                                    " for info hash: " +
+                                    types::infoHashToString(connection->infoHash));
             return false;
         }
 
@@ -786,7 +917,7 @@ bool MetadataExchange::processCompleteMetadata(std::shared_ptr<PeerConnection> c
         handleSuccessfulAcquisition(connection);
 
         // Disconnect from the peer
-        connection->client.disconnect();
+        connection->client->disconnect();
 
         return true;
     } catch (const std::exception& e) {
@@ -796,10 +927,24 @@ bool MetadataExchange::processCompleteMetadata(std::shared_ptr<PeerConnection> c
 }
 
 void MetadataExchange::handleConnectionError(std::shared_ptr<PeerConnection> connection, const std::string& error) {
+    // Determine connection state for better diagnostics
+    std::string connectionState = "unknown state";
+    if (!connection->connected) {
+        connectionState = "during connection setup";
+    } else if (!connection->handshakeComplete) {
+        connectionState = "during handshake";
+    } else if (!connection->extensionHandshakeComplete) {
+        connectionState = "during extension handshake";
+    } else {
+        connectionState = "during metadata exchange";
+    }
+
     unified_event::logWarning("BitTorrent.MetadataExchange", "Connection error for info hash: " +
                              types::infoHashToString(connection->infoHash) +
-                             ", error: " +
-                             error);
+                             ", peer: " + connection->peer.toString() +
+                             ", state: " + connectionState +
+                             ", error: " + error +
+                             ", retry count: " + std::to_string(connection->retryCount) + "/" + std::to_string(MAX_RETRY_COUNT));
 
     connection->failed = true;
 
@@ -808,14 +953,29 @@ void MetadataExchange::handleConnectionError(std::shared_ptr<PeerConnection> con
 }
 
 void MetadataExchange::handleConnectionClosed(std::shared_ptr<PeerConnection> connection) {
-    unified_event::logDebug("BitTorrent.MetadataExchange", "Connection closed for info hash: " +
-                           types::infoHashToString(connection->infoHash));
+    // Determine connection state for better diagnostics
+    std::string connectionState = "unknown state";
+    if (!connection->connected) {
+        connectionState = "during connection setup";
+    } else if (!connection->handshakeComplete) {
+        connectionState = "during handshake";
+    } else if (!connection->extensionHandshakeComplete) {
+        connectionState = "during extension handshake";
+    } else {
+        connectionState = "during metadata exchange";
+    }
 
-    // If the metadata exchange was completed successfully, handle it
     if (connection->metadataExchangeComplete) {
+        unified_event::logDebug("BitTorrent.MetadataExchange", "Connection closed after successful metadata exchange for info hash: " +
+                              types::infoHashToString(connection->infoHash) +
+                              ", peer: " + connection->peer.toString());
         handleSuccessfulAcquisition(connection);
     } else {
-        // Otherwise, handle the failed acquisition
+        unified_event::logDebug("BitTorrent.MetadataExchange", "Connection closed before completing metadata exchange for info hash: " +
+                              types::infoHashToString(connection->infoHash) +
+                              ", peer: " + connection->peer.toString() +
+                              ", state: " + connectionState +
+                              ", retry count: " + std::to_string(connection->retryCount) + "/" + std::to_string(MAX_RETRY_COUNT));
         handleFailedAcquisition(connection);
     }
 }
@@ -851,7 +1011,7 @@ void MetadataExchange::cleanupTimedOutConnections() {
     // Disconnect the connections outside the lock
     for (auto& connection : connectionsToDisconnect) {
         // Disconnect the client
-        connection->client.disconnect();
+        connection->client->disconnect();
 
         // Handle the failed acquisition
         handleFailedAcquisition(connection);

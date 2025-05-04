@@ -174,8 +174,8 @@ inline std::string get_bundled_file_mime_type(const std::string& path) {
     return "application/octet-stream";
 }
 
-}}  // namespace web_bundle
-}}  // namespace {namespace}
+}  // namespace web_bundle
+}  // namespace {namespace}
 """
 
     # Write the index file
