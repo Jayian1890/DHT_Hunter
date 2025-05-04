@@ -542,7 +542,22 @@ function populateSettingsGroup(group, settings) {
         settingItem.appendChild(description);
 
         // Special handling for known settings
-        if (group === 'web' && key === 'port') {
+
+        // General settings
+        if (group === 'general' && (key === 'configDir' || key === 'logFile' || key === 'logLevel')) {
+            // These should always be strings
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'setting-input';
+            input.value = String(value);
+            input.id = `setting-${group}-${key}`;
+            input.dataset.group = group;
+            input.dataset.key = key;
+            input.dataset.type = 'string';
+            settingItem.appendChild(input);
+        }
+        // Web settings
+        else if (group === 'web' && key === 'port') {
             // Web port should always be a number
             const input = document.createElement('input');
             input.type = 'number';
@@ -554,6 +569,17 @@ function populateSettingsGroup(group, settings) {
             input.dataset.group = group;
             input.dataset.key = key;
             input.dataset.type = 'number';
+            settingItem.appendChild(input);
+        } else if (group === 'web' && key === 'webRoot') {
+            // webRoot should always be a string
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'setting-input';
+            input.value = String(value);
+            input.id = `setting-${group}-${key}`;
+            input.dataset.group = group;
+            input.dataset.key = key;
+            input.dataset.type = 'string';
             settingItem.appendChild(input);
         } else if (group === 'web' && key === 'useBundledFiles') {
             // useBundledFiles should always be a boolean
@@ -672,7 +698,27 @@ function saveSettings() {
         }
     });
 
-    // Ensure web settings have the correct types
+    // Ensure settings have the correct types
+
+    // General settings
+    if (settings.general) {
+        // Ensure configDir is a string
+        if (settings.general.configDir !== undefined) {
+            settings.general.configDir = String(settings.general.configDir);
+        }
+
+        // Ensure logFile is a string
+        if (settings.general.logFile !== undefined) {
+            settings.general.logFile = String(settings.general.logFile);
+        }
+
+        // Ensure logLevel is a string
+        if (settings.general.logLevel !== undefined) {
+            settings.general.logLevel = String(settings.general.logLevel);
+        }
+    }
+
+    // Web settings
     if (settings.web) {
         // Ensure port is a number
         if (settings.web.port !== undefined) {
@@ -694,36 +740,124 @@ function saveSettings() {
         }
     }
 
+    // Network settings
+    if (settings.network) {
+        // Ensure transactionTimeout is a number
+        if (settings.network.transactionTimeout !== undefined) {
+            settings.network.transactionTimeout = parseInt(settings.network.transactionTimeout, 10);
+        }
+
+        // Ensure maxTransactions is a number
+        if (settings.network.maxTransactions !== undefined) {
+            settings.network.maxTransactions = parseInt(settings.network.maxTransactions, 10);
+        }
+
+        // Ensure mtuSize is a number
+        if (settings.network.mtuSize !== undefined) {
+            settings.network.mtuSize = parseInt(settings.network.mtuSize, 10);
+        }
+    }
+
+    // Crawler settings
+    if (settings.crawler) {
+        // Ensure parallelCrawls is a number
+        if (settings.crawler.parallelCrawls !== undefined) {
+            settings.crawler.parallelCrawls = parseInt(settings.crawler.parallelCrawls, 10);
+        }
+
+        // Ensure refreshInterval is a number
+        if (settings.crawler.refreshInterval !== undefined) {
+            settings.crawler.refreshInterval = parseInt(settings.crawler.refreshInterval, 10);
+        }
+
+        // Ensure maxNodes is a number
+        if (settings.crawler.maxNodes !== undefined) {
+            settings.crawler.maxNodes = parseInt(settings.crawler.maxNodes, 10);
+        }
+
+        // Ensure maxInfoHashes is a number
+        if (settings.crawler.maxInfoHashes !== undefined) {
+            settings.crawler.maxInfoHashes = parseInt(settings.crawler.maxInfoHashes, 10);
+        }
+
+        // Ensure autoStart is a boolean
+        if (settings.crawler.autoStart !== undefined) {
+            settings.crawler.autoStart = Boolean(settings.crawler.autoStart);
+        }
+    }
+
+    // Persistence settings
+    if (settings.persistence) {
+        // Ensure saveInterval is a number
+        if (settings.persistence.saveInterval !== undefined) {
+            settings.persistence.saveInterval = parseInt(settings.persistence.saveInterval, 10);
+        }
+
+        // Ensure all paths are strings
+        const pathKeys = ['routingTablePath', 'peerStoragePath', 'metadataPath', 'nodeIDPath'];
+        pathKeys.forEach(key => {
+            if (settings.persistence[key] !== undefined) {
+                settings.persistence[key] = String(settings.persistence[key]);
+            }
+        });
+    }
+
     // Save each group
     for (const group in settings) {
-        const settingsJson = JSON.stringify(settings[group]);
-        console.log(`Saving ${group} settings:`, settingsJson);
+        try {
+            // Validate settings before saving
+            const settingsObj = settings[group];
 
-        fetch(`/api/config/${group}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: settingsJson
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error ${response.status}`);
+            // Ensure all values have the correct types
+            for (const key in settingsObj) {
+                const value = settingsObj[key];
+                if (typeof value === 'number' && isNaN(value)) {
+                    alert(`Invalid number value for ${group}.${key}`);
+                    return;
+                }
             }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                console.log(`Settings for ${group} saved successfully`);
-            } else {
-                console.error(`Failed to save settings for ${group}:`, data.error);
-                alert(`Failed to save settings for ${group}: ${data.error}`);
-            }
-        })
-        .catch(error => {
-            console.error(`Error saving settings for ${group}:`, error);
-            alert(`Error saving settings for ${group}: ${error}`);
-        });
+
+            const settingsJson = JSON.stringify(settingsObj);
+            console.log(`Saving ${group} settings:`, settingsJson);
+
+            fetch(`/api/config/${group}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: settingsJson
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        try {
+                            // Try to parse as JSON
+                            const errorData = JSON.parse(text);
+                            throw new Error(errorData.error || `HTTP error ${response.status}`);
+                        } catch (e) {
+                            // If not valid JSON, use the raw text
+                            throw new Error(`HTTP error ${response.status}: ${text}`);
+                        }
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    console.log(`Settings for ${group} saved successfully`);
+                } else {
+                    console.error(`Failed to save settings for ${group}:`, data.error);
+                    alert(`Failed to save settings for ${group}: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error(`Error saving settings for ${group}:`, error);
+                alert(`Error saving settings for ${group}: ${error}`);
+            });
+        } catch (error) {
+            console.error(`Error preparing settings for ${group}:`, error);
+            alert(`Error preparing settings for ${group}: ${error}`);
+        }
     }
 
     // Save configuration to disk
