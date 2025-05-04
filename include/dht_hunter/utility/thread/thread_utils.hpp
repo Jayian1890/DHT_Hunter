@@ -36,7 +36,7 @@ extern std::atomic<bool> g_shuttingDown;
 
 template <typename Mutex, typename Func>
 auto withLock(Mutex& mutex, Func func, const std::string& lockName = "unnamed",
-             unsigned int timeoutMs = 5000, unsigned int maxRetries = 10)
+             unsigned int timeoutMs = 10000, unsigned int maxRetries = 20)
     -> decltype(func()) {
 
     // If we're shutting down, don't try to acquire locks
