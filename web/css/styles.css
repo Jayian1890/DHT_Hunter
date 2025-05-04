@@ -335,6 +335,11 @@ footer {
     gap: 10px;
 }
 
+.status-unknown {
+    color: var(--text-light);
+    font-weight: bold;
+}
+
 .acquire-btn, .details-btn {
     background-color: var(--secondary-color);
     color: white;

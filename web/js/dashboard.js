@@ -212,22 +212,36 @@ function updateNodesTable(nodes) {
 
         const lastSeenTd = document.createElement('td');
         lastSeenTd.textContent = formatTimeAgo(node.lastSeen);
-        lastSeenTd.title = new Date(node.lastSeen).toLocaleString(); // Show exact time on hover
+
+        // Set tooltip only if timestamp is valid
+        if (node.lastSeen && node.lastSeen > 0 && node.lastSeen <= Date.now() * 10) {
+            lastSeenTd.title = new Date(node.lastSeen).toLocaleString(); // Show exact time on hover
+        } else {
+            lastSeenTd.title = 'Unknown timestamp';
+        }
+
         tr.appendChild(lastSeenTd);
 
         // Add status column
         const statusTd = document.createElement('td');
-        const timeSinceLastSeen = Date.now() - node.lastSeen;
 
-        if (timeSinceLastSeen < 300000) { // Less than 5 minutes
-            statusTd.textContent = 'Active';
-            statusTd.className = 'status-complete';
-        } else if (timeSinceLastSeen < 3600000) { // Less than 1 hour
-            statusTd.textContent = 'Recent';
-            statusTd.className = 'status-in-progress';
+        // Check if timestamp is valid
+        if (!node.lastSeen || node.lastSeen <= 0 || node.lastSeen > Date.now() * 10) {
+            statusTd.textContent = 'Unknown';
+            statusTd.className = 'status-unknown';
         } else {
-            statusTd.textContent = 'Inactive';
-            statusTd.className = 'status-failed';
+            const timeSinceLastSeen = Date.now() - node.lastSeen;
+
+            if (timeSinceLastSeen < 300000) { // Less than 5 minutes
+                statusTd.textContent = 'Active';
+                statusTd.className = 'status-complete';
+            } else if (timeSinceLastSeen < 3600000) { // Less than 1 hour
+                statusTd.textContent = 'Recent';
+                statusTd.className = 'status-in-progress';
+            } else {
+                statusTd.textContent = 'Inactive';
+                statusTd.className = 'status-failed';
+            }
         }
 
         tr.appendChild(statusTd);
@@ -273,7 +287,14 @@ function updateInfoHashesTable(infoHashes) {
         // First Seen
         const firstSeenTd = document.createElement('td');
         firstSeenTd.textContent = formatTimeAgo(infoHash.firstSeen);
-        firstSeenTd.title = new Date(infoHash.firstSeen).toLocaleString(); // Show exact time on hover
+
+        // Set tooltip only if timestamp is valid
+        if (infoHash.firstSeen && infoHash.firstSeen > 0 && infoHash.firstSeen <= Date.now() * 10) {
+            firstSeenTd.title = new Date(infoHash.firstSeen).toLocaleString(); // Show exact time on hover
+        } else {
+            firstSeenTd.title = 'Unknown timestamp';
+        }
+
         tr.appendChild(firstSeenTd);
 
         // Metadata Status
@@ -318,13 +339,19 @@ function updateInfoHashesTable(infoHashes) {
         detailsBtn.textContent = 'Details';
         detailsBtn.className = 'details-btn';
         detailsBtn.onclick = function() {
+            // Format first seen date
+            let firstSeenStr = 'Unknown';
+            if (infoHash.firstSeen && infoHash.firstSeen > 0 && infoHash.firstSeen <= Date.now() * 10) {
+                firstSeenStr = new Date(infoHash.firstSeen).toLocaleString();
+            }
+
             alert('Info Hash Details:\n' +
                   'Hash: ' + infoHash.hash + '\n' +
                   'Name: ' + (infoHash.name || 'Unknown') + '\n' +
                   'Peers: ' + infoHash.peers + '\n' +
                   'Size: ' + (infoHash.size ? formatSize(infoHash.size) : 'Unknown') + '\n' +
                   'Files: ' + (infoHash.fileCount || 'Unknown') + '\n' +
-                  'First Seen: ' + new Date(infoHash.firstSeen).toLocaleString() + '\n' +
+                  'First Seen: ' + firstSeenStr + '\n' +
                   'Status: ' + (infoHash.metadataStatus || 'Not Started'));
         };
         actionsTd.appendChild(detailsBtn);
@@ -397,6 +424,11 @@ function formatSize(bytes) {
 
 // Helper function to format time ago
 function formatTimeAgo(timestamp) {
+    // Check if timestamp is valid
+    if (!timestamp || timestamp <= 0 || timestamp > Date.now() * 10) {
+        return 'Unknown';
+    }
+
     const now = Date.now();
     const diff = now - timestamp;
 
@@ -407,7 +439,9 @@ function formatTimeAgo(timestamp) {
     } else if (diff < 86400000) {
         return Math.floor(diff / 3600000) + ' hours ago';
     } else {
-        return Math.floor(diff / 86400000) + ' days ago';
+        // Limit to 30 days to avoid showing extremely old dates
+        const days = Math.floor(diff / 86400000);
+        return (days > 30 ? '30+' : days) + ' days ago';
     }
 }
 
