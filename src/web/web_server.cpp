@@ -5,6 +5,8 @@
 #include <sstream>
 #include <iomanip>
 #include <filesystem>
+#include <random>
+#include <chrono>
 
 namespace dht_hunter::web {
 
@@ -21,8 +23,12 @@ WebServer::WebServer(const std::string& webRoot, uint16_t port, std::shared_ptr<
       m_peerStorage(peerStorage),
       m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
       m_metadataManager(metadataManager),
-      m_startTime(std::chrono::steady_clock::now()) {
-    unified_event::logDebug("Web.Server", "WebServer initialized with webRoot: " + webRoot + ", port: " + std::to_string(port));
+      m_startTime(std::chrono::steady_clock::now()),
+      m_useBundledWebFiles(true) {
+    unified_event::logInfo("Web.Server", "WebServer initialized with webRoot: " + webRoot + ", port: " + std::to_string(port));
+
+    // Create the web bundle manager
+    m_webBundleManager = std::make_shared<WebBundleManager>(m_httpServer);
 }
 
 WebServer::WebServer(std::shared_ptr<dht::services::StatisticsService> statisticsService, std::shared_ptr<dht::RoutingManager> routingManager, std::shared_ptr<dht::PeerStorage> peerStorage, std::shared_ptr<bittorrent::metadata::MetadataAcquisitionManager> metadataManager)
@@ -32,16 +38,45 @@ WebServer::WebServer(std::shared_ptr<dht::services::StatisticsService> statistic
       m_peerStorage(peerStorage),
       m_metadataRegistry(types::InfoHashMetadataRegistry::getInstance()),
       m_metadataManager(metadataManager),
-      m_startTime(std::chrono::steady_clock::now()) {
+      m_startTime(std::chrono::steady_clock::now()),
+      m_useBundledWebFiles(true) {
     // Get settings from configuration
     auto configManager = utility::config::ConfigurationManager::getInstance();
-    unified_event::logDebug("Web.Server", "Getting webRoot from configuration");
+    unified_event::logInfo("Web.Server", "Getting webRoot from configuration");
+
+    // Debug: Print the configuration file path
+    unified_event::logInfo("Web.Server", "Configuration file path: " + configManager->getConfigFilePath());
+
+    // Debug: Check if the configuration file exists
+    std::string configPath = configManager->getConfigFilePath();
+    unified_event::logInfo("Web.Server", "Configuration file exists: " +
+        std::string(std::filesystem::exists(configPath) ? "true" : "false"));
+
+    // Debug: Check if the configuration manager is initialized
+    unified_event::logInfo("Web.Server", "Configuration manager initialized: " +
+        std::string(configManager ? "true" : "false"));
+
+    // Debug: Try to get the web section directly
+    auto webSection = configManager->getString("web", "<not found>");
+    unified_event::logInfo("Web.Server", "Web section: " + webSection);
+
+    // Debug: Try to get the web.port value
+    auto webPort = configManager->getInt("web.port", -1);
+    unified_event::logInfo("Web.Server", "Web port: " + std::to_string(webPort));
+
+    // Debug: Try to get the web.webRoot value
     m_webRoot = configManager->getString("web.webRoot", "web");
-    unified_event::logDebug("Web.Server", "Got webRoot from configuration: " + m_webRoot);
+    unified_event::logInfo("Web.Server", "Got webRoot from configuration: " + m_webRoot);
     m_port = static_cast<uint16_t>(configManager->getInt("web.port", 8080));
 
+    // Check if we should use bundled web files
+    m_useBundledWebFiles = configManager->getBool("web.useBundledFiles", true);
+    unified_event::logInfo("Web.Server", "Using bundled web files: " + std::string(m_useBundledWebFiles ? "true" : "false"));
+
+    // Create the web bundle manager
+    m_webBundleManager = std::make_shared<WebBundleManager>(m_httpServer);
+
     unified_event::logDebug("Web.Server", "WebServer initialized from configuration with webRoot: " + m_webRoot + ", port: " + std::to_string(m_port));
-}
 }
 
 using dht_hunter::web::WebServer;
@@ -138,74 +173,81 @@ void WebServer::registerApiRoutes() {
 }
 
 void WebServer::registerStaticRoutes() {
-    // Check if web root exists
-    if (!std::filesystem::exists(m_webRoot)) {
-        unified_event::logError("Web.Server", "Web root directory does not exist: " + m_webRoot);
-        return;
-    }
-
-    unified_event::logInfo("Web.Server", "Registering static files from directory: " + m_webRoot);
-
-    // List files in web root to verify
-    try {
-        for (const auto& entry : std::filesystem::directory_iterator(m_webRoot)) {
-            unified_event::logInfo("Web.Server", "Found file: " + entry.path().string());
+    if (m_useBundledWebFiles) {
+        // Use bundled web files
+        unified_event::logInfo("Web.Server", "Using bundled web files");
+        m_webBundleManager->registerRoutes();
+    } else {
+        // Use files from disk
+        // Check if web root exists
+        if (!std::filesystem::exists(m_webRoot)) {
+            unified_event::logError("Web.Server", "Web root directory does not exist: " + m_webRoot);
+            return;
         }
-    } catch (const std::exception& e) {
-        unified_event::logError("Web.Server", "Error listing web root directory: " + std::string(e.what()));
-    }
 
-    // Register static directory
-    m_httpServer->registerStaticDirectory("/", m_webRoot);
+        unified_event::logInfo("Web.Server", "Registering static files from directory: " + m_webRoot);
 
-    // Register specific static files explicitly
-    m_httpServer->registerStaticFile("/index.html", m_webRoot + "/index.html");
-    m_httpServer->registerStaticFile("/css/styles.css", m_webRoot + "/css/styles.css");
-    m_httpServer->registerStaticFile("/js/dashboard.js", m_webRoot + "/js/dashboard.js");
+        // List files in web root to verify
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(m_webRoot)) {
+                unified_event::logInfo("Web.Server", "Found file: " + entry.path().string());
+            }
+        } catch (const std::exception& e) {
+            unified_event::logError("Web.Server", "Error listing web root directory: " + std::string(e.what()));
+        }
 
-    // Register index.html for root path
-    m_httpServer->registerRoute(
-        network::HttpMethod::GET,
-        "/",
-        [this](const network::HttpRequest& /*request*/) {
-            unified_event::logInfo("Web.Server", "Serving index.html for root path");
+        // Register static directory
+        m_httpServer->registerStaticDirectory("/", m_webRoot);
 
-            // Check if index.html exists
-            std::string indexPath = m_webRoot + "/index.html";
-            if (!std::filesystem::exists(indexPath)) {
-                unified_event::logError("Web.Server", "index.html not found at: " + indexPath);
+        // Register specific static files explicitly
+        m_httpServer->registerStaticFile("/index.html", m_webRoot + "/index.html");
+        m_httpServer->registerStaticFile("/css/styles.css", m_webRoot + "/css/styles.css");
+        m_httpServer->registerStaticFile("/js/dashboard.js", m_webRoot + "/js/dashboard.js");
+
+        // Register index.html for root path
+        m_httpServer->registerRoute(
+            network::HttpMethod::GET,
+            "/",
+            [this](const network::HttpRequest& /*request*/) {
+                unified_event::logInfo("Web.Server", "Serving index.html for root path");
+
+                // Check if index.html exists
+                std::string indexPath = m_webRoot + "/index.html";
+                if (!std::filesystem::exists(indexPath)) {
+                    unified_event::logError("Web.Server", "index.html not found at: " + indexPath);
+                    network::HttpResponse response;
+                    response.statusCode = 404;
+                    response.body = "index.html not found";
+                    response.setContentType("text/plain");
+                    return response;
+                }
+
+                // Read the file content
+                std::ifstream file(indexPath, std::ios::binary);
+                if (!file) {
+                    unified_event::logError("Web.Server", "Failed to open index.html: " + indexPath);
+                    network::HttpResponse response;
+                    response.statusCode = 500;
+                    response.body = "Failed to open index.html";
+                    response.setContentType("text/plain");
+                    return response;
+                }
+
+                // Create the response
                 network::HttpResponse response;
-                response.statusCode = 404;
-                response.body = "index.html not found";
-                response.setContentType("text/plain");
+                std::stringstream buffer;
+                buffer << file.rdbuf();
+                response.body = buffer.str();
+                response.setHtmlContentType();
+                response.statusCode = 200;
+
+                unified_event::logInfo("Web.Server", "Successfully served index.html for root path, size: " +
+                                    std::to_string(response.body.size()) + " bytes");
+
                 return response;
             }
-
-            // Read the file content
-            std::ifstream file(indexPath, std::ios::binary);
-            if (!file) {
-                unified_event::logError("Web.Server", "Failed to open index.html: " + indexPath);
-                network::HttpResponse response;
-                response.statusCode = 500;
-                response.body = "Failed to open index.html";
-                response.setContentType("text/plain");
-                return response;
-            }
-
-            // Create the response
-            network::HttpResponse response;
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            response.body = buffer.str();
-            response.setHtmlContentType();
-            response.statusCode = 200;
-
-            unified_event::logInfo("Web.Server", "Successfully served index.html for root path, size: " +
-                                 std::to_string(response.body.size()) + " bytes");
-
-            return response;
-        }
-    );
+        );
+    }
 }
 
 dht_hunter::network::HttpResponse WebServer::handleStatisticsRequest(const dht_hunter::network::HttpRequest& /*request*/) {
@@ -223,6 +265,47 @@ dht_hunter::network::HttpResponse WebServer::handleStatisticsRequest(const dht_h
         statsObj->set("messagesReceived", static_cast<long long>(m_statisticsService->getMessagesReceived()));
         statsObj->set("messagesSent", static_cast<long long>(m_statisticsService->getMessagesSent()));
         statsObj->set("errors", static_cast<long long>(m_statisticsService->getErrors()));
+
+        // Add network speed data for the last 24 hours
+        auto networkSpeedObj = Json::createObject();
+
+        // Create arrays for the network speed data
+        auto labelsArray = Json::createArray();
+        auto bytesReceivedArray = Json::createArray();
+        auto bytesSentArray = Json::createArray();
+
+        // Get current time
+        auto now = std::chrono::system_clock::now();
+
+        // Generate 24 hourly data points
+        for (int i = 23; i >= 0; i--) {
+            // Format the time label (HH:MM)
+            auto timePoint = now - std::chrono::hours(i);
+            auto timeT = std::chrono::system_clock::to_time_t(timePoint);
+            std::tm tm = *std::localtime(&timeT);
+            std::stringstream ss;
+            ss << std::setfill('0') << std::setw(2) << tm.tm_hour << ":"
+               << std::setfill('0') << std::setw(2) << tm.tm_min;
+            labelsArray->add(ss.str());
+
+            // Generate some sample network speed data
+            // In a real implementation, this would come from historical data
+            // For now, we'll generate random values between 10 and 100 KB/s
+            // This should be replaced with actual historical data collection
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_real_distribution<> downloadDist(10.0, 100.0);
+            std::uniform_real_distribution<> uploadDist(5.0, 50.0);
+
+            bytesReceivedArray->add(downloadDist(gen));
+            bytesSentArray->add(uploadDist(gen));
+        }
+
+        networkSpeedObj->set("labels", JsonValue(labelsArray));
+        networkSpeedObj->set("bytesReceived", JsonValue(bytesReceivedArray));
+        networkSpeedObj->set("bytesSent", JsonValue(bytesSentArray));
+
+        statsObj->set("networkSpeed", JsonValue(networkSpeedObj));
     }
 
     // Get routing table statistics
@@ -589,4 +672,6 @@ dht_hunter::network::HttpResponse WebServer::handleMetadataStatusRequest(const d
     }
 
     return response;
+}
+
 } // namespace dht_hunter::web

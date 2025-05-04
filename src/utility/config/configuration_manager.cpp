@@ -103,6 +103,27 @@ bool ConfigurationManager::loadConfiguration(const std::string& configFilePath) 
             auto jsonValue = json::JsonValue::parse(jsonStr);
             unified_event::logDebug("ConfigurationManager", "Parsed JSON configuration");
 
+            // Debug: Print the parsed JSON structure
+            if (jsonValue.isObject()) {
+                auto& obj = jsonValue.getObject();
+                // List all keys at the root level
+                std::vector<std::string> keys = obj->keys();
+                for (const auto& key : keys) {
+                    unified_event::logDebug("ConfigurationManager", "Root key: " + key);
+                    auto value = obj->get(key);
+                    if (key == "web" && value.isObject()) {
+                        auto& webObj = value.getObject();
+                        // List all keys in the web section
+                        std::vector<std::string> webKeys = webObj->keys();
+                        for (const auto& webKey : webKeys) {
+                            auto webValue = webObj->get(webKey);
+                            unified_event::logDebug("ConfigurationManager", "Web key: " + webKey + ", value: " +
+                                (webValue.isString() ? webValue.getString() : "<not a string>"));
+                        }
+                    }
+                }
+            }
+
             // Check if the root is an object
             if (!jsonValue.isObject()) {
                 unified_event::logError("ConfigurationManager", "Configuration root must be a JSON object");
@@ -114,7 +135,25 @@ bool ConfigurationManager::loadConfiguration(const std::string& configFilePath) 
             m_configRoot = jsonValue;
             m_configFilePath = configFilePath;
             m_configLoaded = true;
-            unified_event::logDebug("ConfigurationManager", "Configuration loaded successfully");
+            unified_event::logInfo("ConfigurationManager", "Configuration loaded successfully");
+
+            // Debug: Try to access the web section
+            if (jsonValue.isObject()) {
+                auto& obj = jsonValue.getObject();
+                auto webValue = obj->get("web");
+                if (!webValue.isNull() && webValue.isObject()) {
+                    unified_event::logInfo("ConfigurationManager", "Found web section in configuration");
+                    auto& webObj = webValue.getObject();
+                    auto webRootValue = webObj->get("webRoot");
+                    if (!webRootValue.isNull() && webRootValue.isString()) {
+                        unified_event::logInfo("ConfigurationManager", "Found webRoot in configuration: " + webRootValue.getString());
+                    } else {
+                        unified_event::logInfo("ConfigurationManager", "webRoot not found in configuration or not a string");
+                    }
+                } else {
+                    unified_event::logInfo("ConfigurationManager", "Web section not found in configuration or not an object");
+                }
+            }
 
             // Update the last modified time
             try {
@@ -618,8 +657,8 @@ bool ConfigurationManager::validateConfiguration() const {
             // TODO: Implement validation rules for each configuration parameter
             // For now, just check if the root is an object
             try {
-                auto jsonValue = std::any_cast<std::shared_ptr<json::JsonValue>>(m_configRoot);
-                return jsonValue->isObject();
+                auto jsonValue = std::any_cast<json::JsonValue>(m_configRoot);
+                return jsonValue.isObject();
             } catch (const std::bad_any_cast&) {
                 return false;
             }

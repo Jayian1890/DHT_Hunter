@@ -73,56 +73,109 @@
             </div>
 
             <div class="charts-container">
-                <div class="chart-card">
-                    <h3>Network Activity</h3>
+                <div class="chart-card full-width">
+                    <h3>Network Speed (24 Hours)</h3>
                     <canvas id="network-activity-chart"></canvas>
-                </div>
-
-                <div class="chart-card">
-                    <h3>Node Distribution</h3>
-                    <canvas id="node-distribution-chart"></canvas>
                 </div>
             </div>
 
             <div class="tables-container">
-                <div class="table-card">
-                    <h3>Recent Nodes</h3>
-                    <div class="table-responsive">
-                        <table id="nodes-table">
-                            <thead>
-                                <tr>
-                                    <th>Node ID</th>
-                                    <th>IP Address</th>
-                                    <th>Port</th>
-                                    <th>Last Seen</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Nodes will be populated here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <div class="table-card full-width">
+                    <div class="tabs">
+                        <div class="tab-header">
+                            <div class="tab-item active" data-tab="nodes">Recent Nodes</div>
+                            <div class="tab-item" data-tab="infohashes">Recent Info Hashes</div>
+                            <div class="tab-item" data-tab="settings">Settings</div>
+                        </div>
+                        <div class="tab-content">
+                            <div class="tab-pane active" id="nodes-tab">
+                                <div class="table-responsive">
+                                    <table id="nodes-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Node ID</th>
+                                                <th>IP Address</th>
+                                                <th>Port</th>
+                                                <th>Last Seen</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Nodes will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-pane" id="infohashes-tab">
+                                <div class="table-responsive">
+                                    <table id="info-hashes-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Info Hash</th>
+                                                <th>Name</th>
+                                                <th>Peers</th>
+                                                <th>Size</th>
+                                                <th>Files</th>
+                                                <th>First Seen</th>
+                                                <th>Metadata Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Info hashes will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-pane" id="settings-tab">
+                                <div class="settings-container">
+                                    <div class="settings-section">
+                                        <h3>General Settings</h3>
+                                        <div class="settings-group" id="general-settings">
+                                            <!-- General settings will be populated here -->
+                                            <div class="loading-spinner">Loading settings...</div>
+                                        </div>
+                                    </div>
 
-                <div class="table-card">
-                    <h3>Recent Info Hashes</h3>
-                    <div class="table-responsive">
-                        <table id="info-hashes-table">
-                            <thead>
-                                <tr>
-                                    <th>Info Hash</th>
-                                    <th>Name</th>
-                                    <th>Peers</th>
-                                    <th>Size</th>
-                                    <th>Files</th>
-                                    <th>First Seen</th>
-                                    <th>Metadata Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Info hashes will be populated here -->
-                            </tbody>
-                        </table>
+                                    <div class="settings-section">
+                                        <h3>Network Settings</h3>
+                                        <div class="settings-group" id="network-settings">
+                                            <!-- Network settings will be populated here -->
+                                            <div class="loading-spinner">Loading settings...</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="settings-section">
+                                        <h3>Web Interface Settings</h3>
+                                        <div class="settings-group" id="web-settings">
+                                            <!-- Web settings will be populated here -->
+                                            <div class="loading-spinner">Loading settings...</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="settings-section">
+                                        <h3>Crawler Settings</h3>
+                                        <div class="settings-group" id="crawler-settings">
+                                            <!-- Crawler settings will be populated here -->
+                                            <div class="loading-spinner">Loading settings...</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="settings-section">
+                                        <h3>Persistence Settings</h3>
+                                        <div class="settings-group" id="persistence-settings">
+                                            <!-- Persistence settings will be populated here -->
+                                            <div class="loading-spinner">Loading settings...</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="settings-actions">
+                                        <button id="save-settings" class="primary-btn">Save Settings</button>
+                                        <button id="reload-settings" class="secondary-btn">Reload Settings</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

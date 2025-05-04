@@ -57,7 +57,26 @@ target_include_directories(dht_hunter_core INTERFACE
 add_subdirectory(src)
 add_subdirectory(examples)
 
-# Copy web directory to build directory
+# Include the web bundler module
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WebBundler.cmake)
+
+# Bundle web files
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tools/web_bundler.py)
+    message(STATUS "Bundling web files...")
+    execute_process(
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/web_bundler.py
+                --web-dir=${CMAKE_CURRENT_SOURCE_DIR}/web
+                --output-dir=${CMAKE_CURRENT_SOURCE_DIR}/include/dht_hunter/web/bundle
+                --namespace=dht_hunter
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        RESULT_VARIABLE WEB_BUNDLE_RESULT
+    )
+    if(NOT WEB_BUNDLE_RESULT EQUAL 0)
+        message(WARNING "Failed to bundle web files: ${WEB_BUNDLE_RESULT}")
+    endif()
+endif()
+
+# Copy web directory to build directory (for development mode)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/web DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 # Tests have been removed from the project

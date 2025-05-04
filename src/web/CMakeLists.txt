@@ -1,6 +1,7 @@
 # Define the web library
 add_library(dht_hunter_web
     web_server.cpp
+    web_bundle_manager.cpp
     api/config_api_handler.cpp
 )
 
@@ -30,3 +31,5 @@ install(TARGETS dht_hunter_web
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
+
+# Note: Web files are bundled at the top level CMakeLists.txt
