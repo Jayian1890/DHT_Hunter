@@ -13,6 +13,7 @@
 #include <atomic>
 #include <thread>
 #include <condition_variable>
+#include <set>
 
 namespace dht_hunter::bittorrent::metadata {
 
@@ -72,6 +73,7 @@ private:
         std::chrono::steady_clock::time_point startTime;
         int retryCount{0};
         std::atomic<bool> completed{false};
+        std::set<std::string> transactionIds; // Transaction IDs for this task
 
         MetadataTask(const types::InfoHash& ih, std::function<void(bool success)> cb)
             : infoHash(ih), callback(cb), startTime(std::chrono::steady_clock::now()) {}
