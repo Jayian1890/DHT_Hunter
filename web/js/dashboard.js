@@ -541,8 +541,32 @@ function populateSettingsGroup(group, settings) {
         description.textContent = getSettingDescription(group, key);
         settingItem.appendChild(description);
 
-        // Create appropriate input based on value type
-        if (typeof value === 'boolean') {
+        // Special handling for known settings
+        if (group === 'web' && key === 'port') {
+            // Web port should always be a number
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'setting-input';
+            input.value = Number(value);
+            input.min = '1';
+            input.max = '65535';
+            input.id = `setting-${group}-${key}`;
+            input.dataset.group = group;
+            input.dataset.key = key;
+            input.dataset.type = 'number';
+            settingItem.appendChild(input);
+        } else if (group === 'web' && key === 'useBundledFiles') {
+            // useBundledFiles should always be a boolean
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'setting-checkbox';
+            input.checked = Boolean(value);
+            input.id = `setting-${group}-${key}`;
+            input.dataset.group = group;
+            input.dataset.key = key;
+            input.dataset.type = 'boolean';
+            settingItem.appendChild(input);
+        } else if (typeof value === 'boolean') {
             const input = document.createElement('input');
             input.type = 'checkbox';
             input.className = 'setting-checkbox';
@@ -602,6 +626,7 @@ function getSettingDescription(group, key) {
         web: {
             port: 'Web interface port',
             webRoot: 'Web interface root directory',
+            useBundledFiles: 'Use bundled web files instead of files from disk',
         },
         crawler: {
             parallelCrawls: 'Number of parallel crawl operations',
@@ -647,9 +672,32 @@ function saveSettings() {
         }
     });
 
+    // Ensure web settings have the correct types
+    if (settings.web) {
+        // Ensure port is a number
+        if (settings.web.port !== undefined) {
+            settings.web.port = parseInt(settings.web.port, 10);
+            if (isNaN(settings.web.port)) {
+                alert('Web port must be a valid number');
+                return;
+            }
+        }
+
+        // Ensure webRoot is a string
+        if (settings.web.webRoot !== undefined) {
+            settings.web.webRoot = String(settings.web.webRoot);
+        }
+
+        // Ensure useBundledFiles is a boolean if it exists
+        if (settings.web.useBundledFiles !== undefined) {
+            settings.web.useBundledFiles = Boolean(settings.web.useBundledFiles);
+        }
+    }
+
     // Save each group
     for (const group in settings) {
         const settingsJson = JSON.stringify(settings[group]);
+        console.log(`Saving ${group} settings:`, settingsJson);
 
         fetch(`/api/config/${group}`, {
             method: 'PUT',
@@ -658,7 +706,12 @@ function saveSettings() {
             },
             body: settingsJson
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 console.log(`Settings for ${group} saved successfully`);
