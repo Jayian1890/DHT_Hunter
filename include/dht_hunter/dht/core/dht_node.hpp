@@ -168,6 +168,24 @@ public:
      */
     std::shared_ptr<PeerStorage> getPeerStorage() const;
 
+    /**
+     * @brief Sends a query to a node
+     * @param nodeId The node ID to send the query to
+     * @param query The query to send
+     * @param callback The callback to call when a response is received
+     * @return True if the query was sent, false otherwise
+     */
+    bool sendQueryToNode(const NodeID& nodeId, std::shared_ptr<QueryMessage> query,
+                         std::function<void(std::shared_ptr<ResponseMessage>, bool)> callback);
+
+    /**
+     * @brief Finds nodes that might have metadata for an info hash
+     * @param infoHash The info hash
+     * @param callback The callback to call with the nodes
+     */
+    void findNodesWithMetadata(const InfoHash& infoHash,
+                              std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback);
+
 private:
     // Routing table saving method has been removed
     // This operation is now handled by the PersistenceManager

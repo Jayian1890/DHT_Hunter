@@ -361,6 +361,20 @@ public:
         return *this;
     }
 
+    /**
+     * @brief Encodes the bencode value to a string.
+     * @return The encoded string.
+     */
+    std::string encode() const;
+
+    /**
+     * @brief Decodes a string to a bencode value.
+     * @param data The string to decode.
+     * @param size The size of the string.
+     * @return The decoded bencode value.
+     */
+    static std::shared_ptr<BencodeValue> decode(const char* data, size_t size);
+
 private:
     Value m_value;
 };

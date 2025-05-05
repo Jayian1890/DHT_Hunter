@@ -37,13 +37,15 @@ public:
      * @param responseCallback The response callback
      * @param errorCallback The error callback
      * @param timeoutCallback The timeout callback
+     * @param context Optional context data for the transaction
      * @return The transaction ID
      */
     std::string createTransaction(std::shared_ptr<QueryMessage> query,
                                  const EndPoint& endpoint,
                                  TransactionResponseCallback responseCallback,
                                  TransactionErrorCallback errorCallback,
-                                 TransactionTimeoutCallback timeoutCallback);
+                                 TransactionTimeoutCallback timeoutCallback,
+                                 std::shared_ptr<void> context = nullptr);
 
     /**
      * @brief Handles a response message

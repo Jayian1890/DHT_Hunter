@@ -3,6 +3,11 @@
 #include "dht_hunter/types/info_hash.hpp"
 #include "dht_hunter/dht/core/dht_node.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
+#include "dht_hunter/unified_event/event_bus.hpp"
+#include "dht_hunter/bittorrent/metadata/metadata_validator.hpp"
+#include "dht_hunter/bittorrent/metadata/metadata_persistence.hpp"
+#include "dht_hunter/bittorrent/events/metadata_events.hpp"
+#include "dht_hunter/dht/network/query_message.hpp"
 
 #include <memory>
 #include <string>
@@ -74,6 +79,9 @@ private:
         int retryCount{0};
         std::atomic<bool> completed{false};
         std::set<std::string> transactionIds; // Transaction IDs for this task
+        std::shared_ptr<bencode::BencodeValue> metadata; // Metadata when acquired
+        std::vector<types::NodeID> attemptedNodes; // Nodes we've already tried
+        std::vector<types::NodeID> pendingNodes; // Nodes we haven't tried yet
 
         MetadataTask(const types::InfoHash& ih, std::function<void(bool success)> cb)
             : infoHash(ih), callback(cb), startTime(std::chrono::steady_clock::now()) {}

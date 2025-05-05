@@ -51,6 +51,30 @@ public:
      */
     void setSenderIP(const std::string& senderIP);
 
+    /**
+     * @brief Gets the response values dictionary
+     * @return The response values dictionary or nullptr if not available
+     */
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseDictionary() const {
+        return getResponseValues();
+    }
+
+    /**
+     * @brief Gets metadata from the response if available
+     * @return The metadata dictionary or nullptr if not available
+     */
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getMetadata() const {
+        auto responseDict = getResponseValues();
+        if (!responseDict || !responseDict->isDictionary()) {
+            return nullptr;
+        }
+        auto metadataOpt = responseDict->getDictionary("metadata");
+        if (!metadataOpt) {
+            return nullptr;
+        }
+        return std::make_shared<dht_hunter::bencode::BencodeValue>(*metadataOpt);
+    }
+
 protected:
     /**
      * @brief Gets the response values
@@ -233,6 +257,37 @@ protected:
      * @return The response values
      */
     std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const override;
+};
+
+/**
+ * @brief DHT get_metadata response
+ */
+class MetadataResponse : public ResponseMessage {
+public:
+    /**
+     * @brief Constructs a get_metadata response
+     * @param transactionID The transaction ID
+     * @param nodeID The node ID
+     * @param metadata The metadata
+     */
+    MetadataResponse(const std::string& transactionID, const NodeID& nodeID,
+                    std::shared_ptr<dht_hunter::bencode::BencodeValue> metadata);
+
+    /**
+     * @brief Gets the metadata
+     * @return The metadata
+     */
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getMetadataValues() const;
+
+protected:
+    /**
+     * @brief Gets the response values
+     * @return The response values
+     */
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getResponseValues() const override;
+
+private:
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> m_metadata;
 };
 
 } // namespace dht_hunter::dht

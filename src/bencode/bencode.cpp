@@ -335,4 +335,14 @@ BencodeValue::Dictionary BencodeDecoder::decodeDictionary(const std::string& dat
     pos++; // Skip 'e'
     return result;
 }
+
+// BencodeValue encode and decode methods
+std::string BencodeValue::encode() const {
+    return BencodeEncoder::encode(*this);
+}
+
+std::shared_ptr<BencodeValue> BencodeValue::decode(const char* data, size_t size) {
+    return BencodeDecoder::decode(std::string(data, size));
+}
+
 } // namespace dht_hunter::bencode

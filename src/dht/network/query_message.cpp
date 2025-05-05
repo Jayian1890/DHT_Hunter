@@ -102,6 +102,8 @@ std::shared_ptr<QueryMessage> QueryMessage::decode(const dht_hunter::bencode::Be
         return GetPeersQuery::create(*transactionID, nodeID, args);
     } else if (*methodName == "announce_peer") {
         return AnnouncePeerQuery::create(*transactionID, nodeID, args);
+    } else if (*methodName == "get_metadata") {
+        return GetMetadataQuery::create(*transactionID, nodeID, args);
     } else {
         return nullptr;
     }

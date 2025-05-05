@@ -16,7 +16,9 @@ enum class QueryMethod {
     Ping,
     FindNode,
     GetPeers,
-    AnnouncePeer
+    AnnouncePeer,
+    GetMetadata,  // Add this new method
+    Unknown
 };
 
 /**
@@ -265,6 +267,108 @@ private:
     uint16_t m_port;
     std::string m_token;
     bool m_impliedPort;
+};
+
+/**
+ * @brief Get metadata query
+ */
+class GetMetadataQuery : public QueryMessage {
+public:
+    /**
+     * @brief Constructor
+     * @param transactionID The transaction ID
+     * @param nodeID The node ID
+     * @param infoHash The info hash to get metadata for
+     */
+    GetMetadataQuery(const std::string& transactionID, const NodeID& nodeID, const InfoHash& infoHash)
+        : QueryMessage(transactionID, nodeID, QueryMethod::GetMetadata), m_infoHash(infoHash) {
+        // Create arguments dictionary
+        auto arguments = std::make_shared<dht_hunter::bencode::BencodeValue>(dht_hunter::bencode::BencodeValue::Dictionary());
+
+        // Add the target (info hash) to the query
+        arguments->setString("target", std::string(reinterpret_cast<const char*>(infoHash.data()), infoHash.size()));
+
+        // Add the get_metadata extension
+        arguments->setString("q", "get_metadata");
+
+        // We don't need to set the arguments here, they will be set in the encode method
+    }
+
+    /**
+     * @brief Gets the info hash
+     * @return The info hash
+     */
+    const InfoHash& getInfoHash() const {
+        return m_infoHash;
+    }
+
+    /**
+     * @brief Adds metadata fields to request
+     * @param fields List of field names to request
+     */
+    void addMetadataFields(const std::vector<std::string>& fields) {
+        // Get the arguments from the getArguments method
+        auto arguments = getArguments();
+        if (!arguments) {
+            return;
+        }
+
+        dht_hunter::bencode::BencodeValue::List fieldsList;
+        for (const auto& field : fields) {
+            fieldsList.push_back(std::make_shared<dht_hunter::bencode::BencodeValue>(field));
+        }
+        arguments->setList("metadata_fields", fieldsList);
+    }
+
+    /**
+     * @brief Creates a GetMetadataQuery from a transaction ID, node ID, and arguments
+     * @param transactionID The transaction ID
+     * @param nodeID The node ID
+     * @param arguments The arguments
+     * @return The created query
+     */
+    static std::shared_ptr<GetMetadataQuery> create(const std::string& transactionID, const NodeID& nodeID, const dht_hunter::bencode::BencodeValue& arguments) {
+        // Extract the info hash
+        auto targetStr = arguments.getString("target");
+        if (!targetStr) {
+            return nullptr;
+        }
+
+        // Convert the target string to an info hash
+        InfoHash infoHash;
+        if (targetStr->size() != infoHash.size()) {
+            return nullptr;
+        }
+        std::copy(targetStr->begin(), targetStr->end(), infoHash.begin());
+
+        // Create the query
+        return std::make_shared<GetMetadataQuery>(transactionID, nodeID, infoHash);
+    }
+
+protected:
+    /**
+     * @brief Gets the method name
+     * @return The method name
+     */
+    std::string getMethodName() const override {
+        return "get_metadata";
+    }
+
+    /**
+     * @brief Gets the arguments for the query
+     * @return The arguments
+     */
+    std::shared_ptr<dht_hunter::bencode::BencodeValue> getArguments() const override {
+        auto arguments = std::make_shared<dht_hunter::bencode::BencodeValue>(dht_hunter::bencode::BencodeValue::Dictionary());
+
+        // Add the target (info hash) to the query
+        arguments->setString("target", std::string(reinterpret_cast<const char*>(m_infoHash.data()), m_infoHash.size()));
+
+        return arguments;
+    }
+
+private:
+    InfoHash m_infoHash;
 };
 
 } // namespace dht_hunter::dht

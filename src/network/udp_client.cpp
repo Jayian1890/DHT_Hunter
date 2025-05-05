@@ -4,6 +4,8 @@
 namespace dht_hunter::network {
 
 UDPClient::UDPClient() : m_running(false) {
+    // Create a new UDP socket
+    unified_event::logTrace("Network.UDPClient", "TRACE: Creating new UDP client");
 }
 
 UDPClient::~UDPClient() {

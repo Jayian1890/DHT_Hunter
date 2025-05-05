@@ -66,24 +66,64 @@ bool MetadataExchange::acquireMetadata(
         std::lock_guard<std::mutex> lock(m_tasksMutex);
         auto it = m_tasks.find(taskId);
         if (it != m_tasks.end()) {
-            // Task already exists, just update the callback
-            it->second->callback = callback;
-            unified_event::logInfo("BitTorrent.MetadataExchange", "Metadata acquisition already in progress for info hash: " + types::infoHashToString(infoHash));
+            // Task already exists, add any new peers to the task
+            auto& task = it->second;
+
+            // Update the callback
+            task->callback = callback;
+
+            // Add any new peers to the task
+            for (const auto& peer : peers) {
+                // Check if this peer is already in the task
+                bool peerExists = false;
+                for (const auto& existingPeer : task->peers) {
+                    if (existingPeer == peer) {
+                        peerExists = true;
+                        break;
+                    }
+                }
+
+                // Add the peer if it doesn't exist
+                if (!peerExists) {
+                    task->peers.push_back(peer);
+                    task->remainingPeers.push_back(peer);
+                    unified_event::logDebug("BitTorrent.MetadataExchange", "Added new peer " + peer.toString() +
+                                          " to existing task for info hash: " + types::infoHashToString(infoHash));
+                }
+            }
+
+            // Try more peers if we have capacity
+            if (task->activeConnections < task->maxConcurrentPeers && !task->remainingPeers.empty()) {
+                tryMorePeers(task);
+            }
+
+            unified_event::logInfo("BitTorrent.MetadataExchange", "Metadata acquisition already in progress for info hash: " +
+                                 types::infoHashToString(infoHash) + ", added " + std::to_string(peers.size()) + " peers");
             return true;
         }
     }
 
-    // Limit the number of concurrent peers
+    // Increase the default max concurrent peers to improve chances of success
     maxConcurrentPeers = std::min(maxConcurrentPeers, MAX_CONCURRENT_PEERS_PER_INFOHASH);
+    if (maxConcurrentPeers < 5 && peers.size() > 5) {
+        maxConcurrentPeers = 5; // Try more peers concurrently
+    }
 
     // Create a new task
     auto task = std::make_shared<AcquisitionTask>(infoHash, peers, callback, maxConcurrentPeers);
+
+    // Set the task to continue after first success
+    task->continueAfterFirstSuccess = true;
 
     // Add the task to the active tasks
     {
         std::lock_guard<std::mutex> lock(m_tasksMutex);
         m_tasks[taskId] = task;
     }
+
+    unified_event::logInfo("BitTorrent.MetadataExchange", "Starting metadata acquisition for info hash: " +
+                         types::infoHashToString(infoHash) + " with " + std::to_string(peers.size()) +
+                         " peers, max concurrent: " + std::to_string(maxConcurrentPeers));
 
     // Start connecting to peers
     tryMorePeers(task);
@@ -237,35 +277,96 @@ void MetadataExchange::handleSuccessfulAcquisition(std::shared_ptr<PeerConnectio
         return;
     }
 
-    // Mark the task as completed
-    task->completed = true;
+    // Mark the task as having at least one successful acquisition
+    task->hasSucceeded = true;
+    task->completedConnections++;
 
-    // Call the callback
-    if (task->callback) {
-        task->callback(true);
+    // Log the successful acquisition
+    unified_event::logInfo("BitTorrent.MetadataExchange", "Successfully acquired metadata for info hash: " +
+                         types::infoHashToString(connection->infoHash) + " from peer: " + connection->peer.toString());
+
+    // Call the callback if this is the first success
+    if (!task->callbackCalled) {
+        task->callbackCalled = true;
+        if (task->callback) {
+            task->callback(true);
+        }
     }
 
-    // Disconnect all connections for this task
-    std::vector<std::string> connectionsToRemove;
-    {
-        std::lock_guard<std::mutex> lock(m_connectionsMutex);
-        for (auto& [id, conn] : m_connections) {
-            if (conn->infoHash == connection->infoHash && conn.get() != connection.get()) {
-                conn->client->disconnect();
-                connectionsToRemove.push_back(id);
+    // If we should continue after first success, keep going with other peers
+    if (task->continueAfterFirstSuccess) {
+        // Mark this connection as completed
+        connection->metadataExchangeComplete = true;
+
+        // Try more peers if we have capacity
+        if (task->activeConnections < task->maxConcurrentPeers && !task->remainingPeers.empty()) {
+            unified_event::logDebug("BitTorrent.MetadataExchange", "Continuing with more peers for info hash: " +
+                                  types::infoHashToString(connection->infoHash));
+            tryMorePeers(task);
+        }
+
+        // Check if we should complete the task
+        bool shouldComplete = task->remainingPeers.empty() &&
+                             (task->activeConnections <= 1 || // This is the last active connection
+                              task->completedConnections >= task->maxConcurrentPeers); // We've completed enough connections
+
+        if (shouldComplete) {
+            // Mark the task as completed
+            task->completed = true;
+
+            // Disconnect all connections for this task
+            std::vector<std::string> connectionsToRemove;
+            {
+                std::lock_guard<std::mutex> lock(m_connectionsMutex);
+                for (auto& [id, conn] : m_connections) {
+                    if (conn->infoHash == connection->infoHash && conn.get() != connection.get()) {
+                        conn->client->disconnect();
+                        connectionsToRemove.push_back(id);
+                    }
+                }
+
+                // Remove the connections
+                for (const auto& id : connectionsToRemove) {
+                    m_connections.erase(id);
+                }
+            }
+
+            // Remove the task
+            {
+                std::lock_guard<std::mutex> lock(m_tasksMutex);
+                m_tasks.erase(taskId);
+            }
+
+            unified_event::logInfo("BitTorrent.MetadataExchange", "Completed metadata acquisition task for info hash: " +
+                                 types::infoHashToString(connection->infoHash));
+        }
+    } else {
+        // Traditional behavior - complete the task immediately after first success
+        // Mark the task as completed
+        task->completed = true;
+
+        // Disconnect all connections for this task
+        std::vector<std::string> connectionsToRemove;
+        {
+            std::lock_guard<std::mutex> lock(m_connectionsMutex);
+            for (auto& [id, conn] : m_connections) {
+                if (conn->infoHash == connection->infoHash && conn.get() != connection.get()) {
+                    conn->client->disconnect();
+                    connectionsToRemove.push_back(id);
+                }
+            }
+
+            // Remove the connections
+            for (const auto& id : connectionsToRemove) {
+                m_connections.erase(id);
             }
         }
 
-        // Remove the connections
-        for (const auto& id : connectionsToRemove) {
-            m_connections.erase(id);
+        // Remove the task
+        {
+            std::lock_guard<std::mutex> lock(m_tasksMutex);
+            m_tasks.erase(taskId);
         }
-    }
-
-    // Remove the task
-    {
-        std::lock_guard<std::mutex> lock(m_tasksMutex);
-        m_tasks.erase(taskId);
     }
 }
 

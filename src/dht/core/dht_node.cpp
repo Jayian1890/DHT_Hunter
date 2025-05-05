@@ -771,4 +771,128 @@ std::shared_ptr<PeerStorage> DHTNode::getPeerStorage() const {
     return m_peerStorage;
 }
 
+bool DHTNode::sendQueryToNode(const NodeID& nodeId, std::shared_ptr<QueryMessage> query,
+                             std::function<void(std::shared_ptr<ResponseMessage>, bool)> callback) {
+    unified_event::logTrace("DHT.Node", "TRACE: sendQueryToNode() called for node ID: " + nodeIDToString(nodeId));
+
+    if (!m_running) {
+        unified_event::logError("DHT.Node", "Send query to node called while not running");
+        unified_event::logTrace("DHT.Node", "TRACE: Node not running, returning false");
+        return false;
+    }
+
+    // Find the node in the routing table
+    auto nodes = m_routingTable->getClosestNodes(nodeId, 1);
+    std::shared_ptr<Node> node;
+    if (!nodes.empty()) {
+        node = nodes[0];
+    }
+    if (!node) {
+        unified_event::logWarning("DHT.Node", "Node not found in routing table: " + nodeIDToString(nodeId));
+        unified_event::logTrace("DHT.Node", "TRACE: Node not found in routing table, returning false");
+        return false;
+    }
+
+    // Get the endpoint
+    auto endpoint = node->getEndpoint();
+
+    // Create a transaction
+    auto transactionManager = transactions::TransactionManager::getInstance(m_config, m_nodeID);
+
+    // Create a response callback
+    auto responseCallback = [callback](std::shared_ptr<ResponseMessage> response, const EndPoint& sender) {
+        unified_event::logTrace("DHT.Node", "TRACE: Response received from " + sender.toString());
+        callback(response, true);
+    };
+
+    // Create an error callback
+    auto errorCallback = [callback](std::shared_ptr<ErrorMessage> /*error*/, const EndPoint& sender) {
+        unified_event::logTrace("DHT.Node", "TRACE: Error received from " + sender.toString());
+        callback(nullptr, false);
+    };
+
+    // Create a timeout callback
+    auto timeoutCallback = [callback]() {
+        unified_event::logTrace("DHT.Node", "TRACE: Transaction timed out");
+        callback(nullptr, false);
+    };
+
+    // Create the transaction
+    transactionManager->createTransaction(query, endpoint, responseCallback, errorCallback, timeoutCallback);
+
+    // Send the query
+    auto messageSender = MessageSender::getInstance(m_config, nullptr);
+    bool sent = messageSender->sendQuery(query, endpoint);
+
+    if (sent) {
+        unified_event::logDebug("DHT.Node", "Sent query to node: " + nodeIDToString(nodeId));
+        unified_event::logTrace("DHT.Node", "TRACE: Query sent successfully, returning true");
+    } else {
+        unified_event::logWarning("DHT.Node", "Failed to send query to node: " + nodeIDToString(nodeId));
+        unified_event::logTrace("DHT.Node", "TRACE: Failed to send query, returning false");
+    }
+
+    return sent;
+}
+
+void DHTNode::findNodesWithMetadata(const InfoHash& infoHash,
+                                   std::function<void(const std::vector<std::shared_ptr<Node>>&)> callback) {
+    unified_event::logTrace("DHT.Node", "TRACE: findNodesWithMetadata() called for info hash: " + infoHashToString(infoHash));
+
+    if (!m_running) {
+        unified_event::logError("DHT.Node", "Find nodes with metadata called while not running");
+        unified_event::logTrace("DHT.Node", "TRACE: Node not running, returning empty result");
+        if (callback) {
+            callback({});
+        }
+        return;
+    }
+
+    // Convert the info hash to a node ID
+    NodeID targetID;
+    std::array<uint8_t, 20> bytes;
+    std::copy(infoHash.begin(), infoHash.end(), bytes.begin());
+    targetID = NodeID(bytes);
+
+    // First, check if we have any peers for this info hash
+    auto peers = m_peerStorage->getPeers(infoHash);
+    if (!peers.empty()) {
+        unified_event::logTrace("DHT.Node", "TRACE: Found " + std::to_string(peers.size()) + " peers for info hash");
+
+        // If we have peers, try to find the nodes that announced them
+        std::vector<std::shared_ptr<Node>> nodes;
+        for (const auto& peer : peers) {
+            // Find a node with this endpoint
+            std::shared_ptr<Node> node;
+            auto allNodes = m_routingTable->getAllNodes();
+            for (const auto& n : allNodes) {
+                if (n->getEndpoint() == peer) {
+                    node = n;
+                    break;
+                }
+            }
+            if (node) {
+                unified_event::logTrace("DHT.Node", "TRACE: Found node for peer: " + peer.toString());
+                nodes.push_back(node);
+            }
+        }
+
+        if (!nodes.empty()) {
+            unified_event::logDebug("DHT.Node", "Found " + std::to_string(nodes.size()) + " nodes with peers for info hash: " + infoHashToString(infoHash));
+            unified_event::logTrace("DHT.Node", "TRACE: Calling callback with " + std::to_string(nodes.size()) + " nodes");
+            callback(nodes);
+            return;
+        }
+    }
+
+    unified_event::logTrace("DHT.Node", "TRACE: No peers found, using closest nodes");
+
+    // If we don't have any peers, use the closest nodes
+    findClosestNodes(targetID, [infoHash, callback](const std::vector<std::shared_ptr<Node>>& nodes) {
+        unified_event::logDebug("DHT.Node", "Found " + std::to_string(nodes.size()) + " closest nodes for info hash: " + infoHashToString(infoHash));
+        unified_event::logTrace("DHT.Node", "TRACE: Calling callback with " + std::to_string(nodes.size()) + " closest nodes");
+        callback(nodes);
+    });
+}
+
 }  // namespace dht_hunter::dht

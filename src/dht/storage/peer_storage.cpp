@@ -84,13 +84,16 @@ bool dht_hunter::dht::PeerStorage::isRunning() const {
 }
 
 void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_hunter::network::EndPoint& endpoint) {
+    std::string infoHashStr = types::infoHashToString(infoHash);
     try {
-        utility::thread::withLock(m_mutex, [this, &infoHash, &endpoint]() {
+        utility::thread::withLock(m_mutex, [this, &infoHash, &endpoint, &infoHashStr]() {
             // Check if the info hash exists
             auto it = m_peers.find(infoHash);
             if (it == m_peers.end()) {
                 // Create a new entry for the info hash
                 m_peers[infoHash] = std::vector<TimestampedPeer>{TimestampedPeer(endpoint)};
+                unified_event::logInfo("DHT.PeerStorage", "Added first peer for InfoHash: " + infoHashStr +
+                                     ", peer: " + endpoint.toString());
                 return;
             }
 
@@ -100,12 +103,16 @@ void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_h
                 if (peer.endpoint == endpoint) {
                     // Update the timestamp
                     peer.timestamp = std::chrono::steady_clock::now();
+                    unified_event::logDebug("DHT.PeerStorage", "Updated timestamp for existing peer: " +
+                                          endpoint.toString() + " for InfoHash: " + infoHashStr);
                     return;
                 }
             }
 
             // Add the peer to the list
             peers.push_back(TimestampedPeer(endpoint));
+            unified_event::logInfo("DHT.PeerStorage", "Added new peer for InfoHash: " + infoHashStr +
+                                 ", peer: " + endpoint.toString() + ", total peers: " + std::to_string(peers.size()));
         }, "PeerStorage::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
@@ -238,13 +245,92 @@ void dht_hunter::dht::PeerStorage::cleanupExpiredPeers() {
     }
 }
 
+void dht_hunter::dht::PeerStorage::logPeerStatistics() {
+    try {
+        utility::thread::withLock(m_mutex, [this]() {
+            // Get total counts
+            size_t totalInfoHashes = m_peers.size();
+            size_t totalPeers = 0;
+            size_t infoHashesWithMultiplePeers = 0;
+            size_t maxPeersPerInfoHash = 0;
+
+            // Count peers and analyze distribution
+            std::unordered_map<size_t, size_t> peerCountDistribution; // Maps peer count to number of info hashes with that count
+
+            for (const auto& entry : m_peers) {
+                size_t peerCount = entry.second.size();
+                totalPeers += peerCount;
+
+                // Update max peers per info hash
+                if (peerCount > maxPeersPerInfoHash) {
+                    maxPeersPerInfoHash = peerCount;
+                }
+
+                // Count info hashes with multiple peers
+                if (peerCount > 1) {
+                    infoHashesWithMultiplePeers++;
+                }
+
+                // Update distribution
+                peerCountDistribution[peerCount]++;
+            }
+
+            // Log overall statistics
+            unified_event::logInfo("DHT.PeerStorage", "Peer Statistics - InfoHashes: " + std::to_string(totalInfoHashes) +
+                                 ", Total Peers: " + std::to_string(totalPeers) +
+                                 ", InfoHashes with multiple peers: " + std::to_string(infoHashesWithMultiplePeers) +
+                                 ", Max peers per InfoHash: " + std::to_string(maxPeersPerInfoHash));
+
+            // Log distribution
+            std::string distributionStr = "Peer Count Distribution:";
+            for (size_t i = 1; i <= std::min(maxPeersPerInfoHash, static_cast<size_t>(10)); i++) {
+                distributionStr += " " + std::to_string(i) + ":" + std::to_string(peerCountDistribution[i]);
+            }
+
+            if (maxPeersPerInfoHash > 10) {
+                distributionStr += " >10:";
+                size_t countAbove10 = 0;
+                for (size_t i = 11; i <= maxPeersPerInfoHash; i++) {
+                    countAbove10 += peerCountDistribution[i];
+                }
+                distributionStr += std::to_string(countAbove10);
+            }
+
+            unified_event::logInfo("DHT.PeerStorage", distributionStr);
+
+            // Log some examples of info hashes with multiple peers
+            if (infoHashesWithMultiplePeers > 0) {
+                size_t examplesLogged = 0;
+                for (const auto& entry : m_peers) {
+                    if (entry.second.size() > 1 && examplesLogged < 5) {
+                        std::string infoHashStr = types::infoHashToString(entry.first);
+                        unified_event::logInfo("DHT.PeerStorage", "InfoHash with multiple peers: " + infoHashStr +
+                                             " has " + std::to_string(entry.second.size()) + " peers");
+                        examplesLogged++;
+                    }
+                }
+            }
+        }, "PeerStorage::m_mutex");
+    } catch (const utility::thread::LockTimeoutException& e) {
+        unified_event::logError("DHT.PeerStorage", e.what());
+    }
+}
+
 void dht_hunter::dht::PeerStorage::cleanupExpiredPeersPeriodically() {
+    size_t iterationCount = 0;
+
     while (m_running.load(std::memory_order_acquire)) {
         // Sleep for a while
         std::this_thread::sleep_for(std::chrono::seconds(PEER_CLEANUP_INTERVAL));
 
         // Clean up expired peers
         cleanupExpiredPeers();
+
+        // Log statistics every 10 iterations (approximately every 5 minutes if PEER_CLEANUP_INTERVAL is 30 seconds)
+        iterationCount++;
+        if (iterationCount % 10 == 0) {
+            logPeerStatistics();
+        }
     }
 }
 

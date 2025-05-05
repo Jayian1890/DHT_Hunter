@@ -15,6 +15,9 @@ add_library(dht_hunter_utility
         # Filesystem utilities
         filesystem/filesystem_utils.cpp
 
+        # File utilities
+        file/file_utils.cpp
+
         # Thread utilities
         thread/thread_pool.cpp
         thread/thread_utils.cpp

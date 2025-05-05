@@ -88,9 +88,10 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
                                                 const EndPoint& endpoint,
                                                 TransactionResponseCallback responseCallback,
                                                 TransactionErrorCallback errorCallback,
-                                                TransactionTimeoutCallback timeoutCallback) {
+                                                TransactionTimeoutCallback timeoutCallback,
+                                                std::shared_ptr<void> context) {
     try {
-        return utility::thread::withLock(m_mutex, [this, &query, &endpoint, &responseCallback, &errorCallback, &timeoutCallback]() {
+        return utility::thread::withLock(m_mutex, [this, &query, &endpoint, &responseCallback, &errorCallback, &timeoutCallback, &context]() {
             // Check if we have too many transactions
             if (m_transactions.size() >= m_maxTransactions) {
                 unified_event::logWarning("DHT.Transactions." + m_name,
@@ -107,6 +108,11 @@ std::string TransactionManager::createTransaction(std::shared_ptr<QueryMessage> 
 
             // Create the transaction
             Transaction transaction(transactionID, query, endpoint, responseCallback, errorCallback, timeoutCallback);
+
+            // Set the context if provided
+            if (context) {
+                transaction.setContext(context);
+            }
 
             // Add the transaction
             m_transactions.emplace(transactionID, transaction);

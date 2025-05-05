@@ -96,6 +96,22 @@ public:
      */
     bool hasTimedOut(int timeout) const;
 
+    /**
+     * @brief Sets the transaction context
+     * @param context The context
+     */
+    void setContext(std::shared_ptr<void> context) {
+        m_context = context;
+    }
+
+    /**
+     * @brief Gets the transaction context
+     * @return The context
+     */
+    std::shared_ptr<void> getContext() const {
+        return m_context;
+    }
+
 private:
     std::string m_id;
     std::shared_ptr<QueryMessage> m_query;
@@ -104,6 +120,7 @@ private:
     TransactionResponseCallback m_responseCallback;
     TransactionErrorCallback m_errorCallback;
     TransactionTimeoutCallback m_timeoutCallback;
+    std::shared_ptr<void> m_context;
 };
 
 } // namespace dht_hunter::dht::transactions

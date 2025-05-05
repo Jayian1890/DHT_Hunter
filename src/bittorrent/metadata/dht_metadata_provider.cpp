@@ -29,10 +29,18 @@ bool DHTMetadataProvider::acquireMetadata(
     const types::InfoHash& infoHash,
     std::function<void(bool success)> callback) {
 
-    // Check if we already have metadata for this info hash
+    // Check if we already have metadata for this info hash in the persistence store
+    auto persistedMetadata = MetadataPersistence::getInstance().getMetadata(infoHash);
+    if (persistedMetadata && MetadataValidator::validate(persistedMetadata)) {
+        unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Already have metadata for info hash in persistence store: " + types::infoHashToString(infoHash));
+        callback(true);
+        return true;
+    }
+
+    // Check if we already have metadata for this info hash in the utility
     auto metadata = utility::metadata::MetadataUtils::getInfoHashMetadata(infoHash);
     if (metadata && !metadata->getName().empty() && metadata->getTotalSize() > 0) {
-        unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Already have metadata for info hash: " + types::infoHashToString(infoHash));
+        unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Already have metadata for info hash in utility: " + types::infoHashToString(infoHash));
         callback(true);
         return true;
     }
@@ -56,12 +64,32 @@ bool DHTMetadataProvider::acquireMetadata(
         m_tasks[infoHashStr] = task;
     }
 
-    // In a real implementation, we would get the closest nodes to the info hash
-    // For now, we'll just simulate it
+    // Get the closest nodes to the info hash
     std::vector<types::NodeID> closestNodes;
     if (m_dhtNode) {
-        // Simulate getting closest nodes
-        closestNodes.push_back(types::NodeID::random());
+        // Use the new findNodesWithMetadata method to find nodes that might have metadata
+        m_dhtNode->findNodesWithMetadata(infoHash, [&closestNodes, &infoHash](const std::vector<std::shared_ptr<dht::Node>>& nodes) {
+            for (const auto& node : nodes) {
+                closestNodes.push_back(node->getID());
+            }
+
+            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Found " + std::to_string(closestNodes.size()) +
+                                  " nodes that might have metadata for info hash " + types::infoHashToString(infoHash));
+        });
+
+        // If we didn't find any nodes, use bootstrap nodes
+        if (closestNodes.empty()) {
+            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "No nodes found that might have metadata, using bootstrap nodes");
+
+            // Get bootstrap nodes from the DHT config
+            dht::DHTConfig config;
+            auto bootstrapNodes = config.getBootstrapNodes();
+            for (const auto& endpoint [[maybe_unused]] : bootstrapNodes) {
+                // Create a node ID for the bootstrap node
+                auto nodeId = types::NodeID::random();
+                closestNodes.push_back(nodeId);
+            }
+        }
     }
 
     if (closestNodes.empty()) {
@@ -144,32 +172,21 @@ bool DHTMetadataProvider::sendGetMetadataQuery(
         return false;
     }
 
-    // Create the get_metadata query according to BEP 51
-    auto query = std::make_shared<bencode::BencodeValue>(bencode::BencodeValue::Dictionary());
+    // Create a transaction ID for the query
+    std::string transactionId = utility::random::generateRandomHexString(8);
 
-    // Add the query type ("get_metadata")
-    query->setString("q", "get_metadata");
+    // Store the transaction ID in the task
+    task->transactionIds.insert(transactionId);
 
-    // Add the target info hash
-    query->setString("target", std::string(reinterpret_cast<const char*>(infoHash.data()), infoHash.size()));
-
-    // Add our node ID
-    if (m_dhtNode) {
-        auto ourNodeId = m_dhtNode->getNodeID();
-        query->setString("id", std::string(reinterpret_cast<const char*>(ourNodeId.data()), ourNodeId.size()));
-    } else {
-        // Use a random node ID if we don't have a DHT node
-        auto randomId = types::NodeID::random();
-        query->setString("id", std::string(reinterpret_cast<const char*>(randomId.data()), randomId.size()));
-    }
+    // Create a GetMetadataQuery
+    auto query = std::make_shared<dht::GetMetadataQuery>(transactionId, m_dhtNode->getNodeID(), infoHash);
 
     // Add metadata fields we're interested in
-    bencode::BencodeValue::List fieldsList;
-    fieldsList.push_back(std::make_shared<bencode::BencodeValue>("name"));
-    fieldsList.push_back(std::make_shared<bencode::BencodeValue>("length"));
-    fieldsList.push_back(std::make_shared<bencode::BencodeValue>("files"));
-    fieldsList.push_back(std::make_shared<bencode::BencodeValue>("piece length"));
-    query->setList("metadata_fields", fieldsList);
+    std::vector<std::string> fields = {"name", "length", "files", "piece length"};
+    query->addMetadataFields(fields);
+
+    // Add the node to the attempted nodes list
+    task->attemptedNodes.push_back(nodeId);
 
     // Send the query
     std::string infoHashStr = types::infoHashToString(infoHash);
@@ -178,230 +195,104 @@ bool DHTMetadataProvider::sendGetMetadataQuery(
     unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Sending get_metadata query for info hash: " + infoHashStr + " to node: " + nodeIdStr);
 
     // This is a real implementation of the DHT metadata extension protocol (BEP-51)
-    // We'll use the DHT node's findNode method to send a query to the node
-    // The query will include custom fields for the metadata extension
+    // We'll use the DHT node's sendQueryToNode method to send the query directly to the node
 
-    // Create a thread to handle the DHT communication
-    std::thread([this, infoHash, nodeId, task, infoHashStr, nodeIdStr]() {
-        // Convert the info hash to a node ID for the lookup
-        types::NodeID targetID;
-        std::array<uint8_t, 20> bytes;
-        std::copy(infoHash.begin(), infoHash.end(), bytes.begin());
-        targetID = types::NodeID(bytes);
+    // Send the query to the node and register a callback for the response
+    return m_dhtNode->sendQueryToNode(nodeId, query, [this, infoHash, task, infoHashStr, nodeIdStr](std::shared_ptr<dht::ResponseMessage> response, bool success) {
+        if (success && response) {
+            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Received response from node: " + nodeIdStr + " for info hash: " + infoHashStr);
 
-        // Create a custom query for the get_metadata extension
-        auto query = std::make_shared<bencode::BencodeValue>(bencode::BencodeValue::Dictionary());
-        query->setString("q", "get_metadata");
-        query->setString("target", std::string(reinterpret_cast<const char*>(infoHash.data()), infoHash.size()));
+            // Get the metadata from the response
+            auto metadata = response->getMetadata();
+            if (metadata) {
+                // Validate the metadata
+                if (MetadataValidator::validate(metadata)) {
+                    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Received valid metadata for info hash: " + infoHashStr);
 
-        // Add our node ID
-        if (m_dhtNode) {
-            auto ourNodeId = m_dhtNode->getNodeID();
-            query->setString("id", std::string(reinterpret_cast<const char*>(ourNodeId.data()), ourNodeId.size()));
-        } else {
-            // Use a random node ID if we don't have a DHT node
-            auto randomId = types::NodeID::random();
-            query->setString("id", std::string(reinterpret_cast<const char*>(randomId.data()), randomId.size()));
-        }
+                    // Store the metadata in the task
+                    task->metadata = metadata;
 
-        // Add metadata fields we're interested in
-        bencode::BencodeValue::List fieldsList;
-        fieldsList.push_back(std::make_shared<bencode::BencodeValue>("name"));
-        fieldsList.push_back(std::make_shared<bencode::BencodeValue>("length"));
-        fieldsList.push_back(std::make_shared<bencode::BencodeValue>("files"));
-        fieldsList.push_back(std::make_shared<bencode::BencodeValue>("piece length"));
-        query->setList("metadata_fields", fieldsList);
+                    // Save the metadata to the persistence store
+                    MetadataPersistence::getInstance().saveMetadata(infoHash, metadata);
 
-        // Use the DHT node's findClosestNodes method to find nodes that might have the metadata
-        m_dhtNode->findClosestNodes(targetID, [this, infoHash, task, query, nodeId, infoHashStr, nodeIdStr](const std::vector<std::shared_ptr<dht::Node>>& nodes) {
-            bool success = !nodes.empty();
-            if (success) {
-                unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Successfully sent get_metadata query to node: " + nodeIdStr);
+                    // Publish a metadata acquired event
+                    m_eventBus->publish(std::make_shared<events::MetadataAcquiredEvent>("BitTorrent.DHTMetadataProvider", infoHash, metadata));
 
-                // Find the node we're looking for
-                auto it = std::find_if(nodes.begin(), nodes.end(), [&nodeId](const std::shared_ptr<dht::Node>& node) {
-                    return node->getID() == nodeId;
-                });
-
-                // If we didn't find the node, use the closest one
-                std::shared_ptr<dht::Node> targetNode;
-                if (it != nodes.end()) {
-                    targetNode = *it;
-                } else {
-                    targetNode = nodes[0];
-                }
-
-                // Get the endpoint for the node
-                auto endpoint = targetNode->getEndpoint();
-
-                // Create a transaction ID for the query
-                std::string transactionId = utility::random::generateRandomHexString(8);
-
-                // Get the message sender and transaction manager
-                auto messageSender = dht::MessageSender::getInstance(dht::DHTConfig(), nullptr);
-                auto transactionManager = dht::TransactionManager::getInstance(dht::DHTConfig());
-
-                // Register callbacks for the transaction
-                auto responseCallback = [this, task, infoHashStr](std::shared_ptr<dht::ResponseMessage> /*response*/, const types::EndPoint& sender) {
-                    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Received response from " + sender.toString());
-
-                    // Since we can't directly access the response values, we'll create a simulated response
-                    // In a real implementation, we would extract the metadata from the response
-                    auto metadata = std::make_shared<bencode::BencodeValue>(bencode::BencodeValue::Dictionary());
-
-                    // Add metadata fields
-                    metadata->setString("name", "Torrent " + infoHashStr.substr(0, 8));
-
-                    // Add file information (simulated)
-                    if ((std::rand() % 100) < 50) { // 50% chance of multi-file torrent
-                        // Multi-file torrent
-                        bencode::BencodeValue::List filesList;
-
-                        // Add some files
-                        int numFiles = 1 + (std::rand() % 5);
-                        for (int i = 0; i < numFiles; i++) {
-                            auto file = std::make_shared<bencode::BencodeValue>(bencode::BencodeValue::Dictionary());
-                            file->setString("path", "file_" + std::to_string(i + 1) + ".dat");
-                            file->setInteger("length", 1024 * 1024 * (1 + (std::rand() % 100))); // 1-100 MB
-                            filesList.push_back(file);
-                        }
-
-                        metadata->setList("files", filesList);
-                    } else {
-                        // Single-file torrent
-                        metadata->setInteger("length", 1024 * 1024 * (1 + (std::rand() % 1000))); // 1-1000 MB
-                    }
-
-                    // Add piece length
-                    metadata->setInteger("piece length", 16 * 1024); // 16 KB pieces
-
-                    // Process the metadata response
+                    // Process the metadata
                     processMetadataResponse(metadata, task);
-                };
-
-                auto errorCallback = [this, infoHash, task, infoHashStr](std::shared_ptr<dht::ErrorMessage> error, const types::EndPoint& sender) {
-                    unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Received error from " + sender.toString() + ": " + error->getMessage());
-
-                    // Increment the retry count
-                    task->retryCount++;
-
-                    // If we haven't exceeded the maximum retry count, try again
-                    if (task->retryCount < MAX_RETRY_COUNT) {
-                        // Wait a bit before retrying
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-                        // Try again with a different node
-                        auto randomNode = types::NodeID::random();
-                        sendGetMetadataQuery(infoHash, randomNode, task);
-                    } else {
-                        // Call the callback with failure
-                        if (task->callback) {
-                            task->callback(false);
-                        }
-
-                        // Remove the task
-                        {
-                            std::lock_guard<std::mutex> lock(m_tasksMutex);
-                            m_tasks.erase(infoHashStr);
-                        }
-                    }
-                };
-
-                auto timeoutCallback = [this, infoHash, task, infoHashStr]() {
-                    unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Timeout for get_metadata query for info hash: " + infoHashStr);
-
-                    // Increment the retry count
-                    task->retryCount++;
-
-                    // If we haven't exceeded the maximum retry count, try again
-                    if (task->retryCount < MAX_RETRY_COUNT) {
-                        // Wait a bit before retrying
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-                        // Try again with a different node
-                        auto randomNode = types::NodeID::random();
-                        sendGetMetadataQuery(infoHash, randomNode, task);
-                    } else {
-                        // Call the callback with failure
-                        if (task->callback) {
-                            task->callback(false);
-                        }
-
-                        // Remove the task
-                        {
-                            std::lock_guard<std::mutex> lock(m_tasksMutex);
-                            m_tasks.erase(infoHashStr);
-                        }
-                    }
-                };
-
-                // Create a find_node query as a base
-                auto findNodeQuery = std::make_shared<dht::FindNodeQuery>(transactionId, m_dhtNode->getNodeID(), targetNode->getID());
-
-                // Register the transaction
-                transactionManager->createTransaction(findNodeQuery, endpoint, responseCallback, errorCallback, timeoutCallback);
-
-                // Send the query
-                if (!messageSender->sendQuery(findNodeQuery, endpoint)) {
-                    unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Failed to send get_metadata query to node: " + nodeIdStr);
-
-                    // Increment the retry count
-                    task->retryCount++;
-
-                    // If we haven't exceeded the maximum retry count, try again
-                    if (task->retryCount < MAX_RETRY_COUNT) {
-                        // Wait a bit before retrying
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-                        // Try again with a different node
-                        auto randomNode = types::NodeID::random();
-                        sendGetMetadataQuery(infoHash, randomNode, task);
-                    } else {
-                        // Call the callback with failure
-                        if (task->callback) {
-                            task->callback(false);
-                        }
-
-                        // Remove the task
-                        {
-                            std::lock_guard<std::mutex> lock(m_tasksMutex);
-                            m_tasks.erase(infoHashStr);
-                        }
-                    }
+                    return true;
                 } else {
-                    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Sent get_metadata query to node: " + nodeIdStr + " for info hash: " + infoHashStr);
+                    unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Received invalid metadata for info hash: " + infoHashStr);
                 }
             } else {
-                unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Failed to send get_metadata query to node: " + nodeIdStr);
+                unified_event::logWarning("BitTorrent.DHTMetadataProvider", "No metadata in response for info hash: " + infoHashStr);
+            }
+        } else {
+            unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Failed to get response from node: " + nodeIdStr + " for info hash: " + infoHashStr);
+        }
 
-                // Increment the retry count
-                task->retryCount++;
+        // If we get here, the query failed or the response didn't contain valid metadata
+        // Increment the retry count
+        task->retryCount++;
 
-                // If we haven't exceeded the maximum retry count, try again
-                if (task->retryCount < MAX_RETRY_COUNT) {
-                    // Wait a bit before retrying
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+        // If we haven't exceeded the maximum retry count, try again with a different node
+        if (task->retryCount < MAX_RETRY_COUNT) {
+            // Find another node to try
+            m_dhtNode->findNodesWithMetadata(infoHash, [this, task, infoHash](const std::vector<std::shared_ptr<dht::Node>>& nodes) {
+                // Filter out nodes we've already tried
+                std::vector<std::shared_ptr<dht::Node>> untried;
+                for (const auto& node : nodes) {
+                    if (std::find(task->attemptedNodes.begin(), task->attemptedNodes.end(), node->getID()) == task->attemptedNodes.end()) {
+                        untried.push_back(node);
+                    }
+                }
 
-                    // Try again with a different node
-                    auto randomNode = types::NodeID::random();
-                    sendGetMetadataQuery(infoHash, randomNode, task);
+                if (!untried.empty()) {
+                    // Try with a different node
+                    sendGetMetadataQuery(infoHash, untried[0]->getID(), task);
+                } else if (!nodes.empty()) {
+                    // If we've tried all nodes, try again with the first one
+                    sendGetMetadataQuery(infoHash, nodes[0]->getID(), task);
                 } else {
+                    // No nodes to try
+                    unified_event::logWarning("BitTorrent.DHTMetadataProvider", "No more nodes to try for info hash: " + types::infoHashToString(infoHash));
+
+                    // Publish a metadata acquisition failed event
+                    m_eventBus->publish(std::make_shared<events::MetadataAcquisitionFailedEvent>(
+                        "BitTorrent.DHTMetadataProvider", infoHash, "No more nodes to try"));
+
                     // Call the callback with failure
                     if (task->callback) {
                         task->callback(false);
                     }
 
                     // Remove the task
+                    std::string infoHashStr = types::infoHashToString(infoHash);
                     {
                         std::lock_guard<std::mutex> lock(m_tasksMutex);
                         m_tasks.erase(infoHashStr);
                     }
                 }
+            });
+        } else {
+            // Call the callback with failure
+            if (task->callback) {
+                task->callback(false);
             }
-        });
-    }).detach();
 
-    return true;
+            // Publish a metadata acquisition failed event
+            m_eventBus->publish(std::make_shared<events::MetadataAcquisitionFailedEvent>(
+                "BitTorrent.DHTMetadataProvider", infoHash, "Exceeded maximum retry count"));
+
+            // Remove the task
+            {
+                std::lock_guard<std::mutex> lock(m_tasksMutex);
+                m_tasks.erase(types::infoHashToString(infoHash));
+            }
+        }
+
+        return false;
+    });
 }
 
 bool DHTMetadataProvider::processMetadataResponse(
@@ -431,6 +322,21 @@ bool DHTMetadataProvider::processMetadataResponse(
         // Simplified format with metadata directly in the response
         metadataValue = response;
     }
+
+    // Validate the metadata
+    if (!MetadataValidator::validate(metadataValue)) {
+        unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Invalid metadata format for info hash: " + types::infoHashToString(task->infoHash));
+        return false;
+    }
+
+    // Store the metadata in the task
+    task->metadata = metadataValue;
+
+    // Save the metadata to the persistence store
+    MetadataPersistence::getInstance().saveMetadata(task->infoHash, metadataValue);
+
+    // Publish a metadata acquired event
+    m_eventBus->publish(std::make_shared<events::MetadataAcquiredEvent>("BitTorrent.DHTMetadataProvider", task->infoHash, metadataValue));
 
     // Extract the name
     auto name = metadataValue->getString("name");
@@ -593,14 +499,43 @@ void DHTMetadataProvider::cleanupTimedOutTasks() {
                     unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Retrying metadata acquisition for info hash: " + infoHashStr + " (attempt " + std::to_string(task->retryCount) + ")");
 
                     // Retry the acquisition
-                    std::vector<types::NodeID> closestNodes;
                     if (m_dhtNode) {
-                        // Simulate getting closest nodes
-                        closestNodes.push_back(types::NodeID::random());
-                    }
+                        // Use the new findNodesWithMetadata method to find nodes that might have metadata
+                        m_dhtNode->findNodesWithMetadata(task->infoHash, [this, task](const std::vector<std::shared_ptr<dht::Node>>& nodes) {
+                            // Filter out nodes we've already tried
+                            std::vector<std::shared_ptr<dht::Node>> untried;
+                            for (const auto& node : nodes) {
+                                if (std::find(task->attemptedNodes.begin(), task->attemptedNodes.end(), node->getID()) == task->attemptedNodes.end()) {
+                                    untried.push_back(node);
+                                }
+                            }
 
-                    for (const auto& nodeId : closestNodes) {
-                        sendGetMetadataQuery(task->infoHash, nodeId, task);
+                            if (!untried.empty()) {
+                                // Try with a different node
+                                sendGetMetadataQuery(task->infoHash, untried[0]->getID(), task);
+                            } else if (!nodes.empty()) {
+                                // If we've tried all nodes, try again with the first one
+                                sendGetMetadataQuery(task->infoHash, nodes[0]->getID(), task);
+                            } else {
+                                // No nodes to try
+                                unified_event::logWarning("BitTorrent.DHTMetadataProvider", "No more nodes to try for info hash: " + types::infoHashToString(task->infoHash));
+
+                                // Publish a metadata acquisition failed event
+                                m_eventBus->publish(std::make_shared<events::MetadataAcquisitionFailedEvent>(
+                                    "BitTorrent.DHTMetadataProvider", task->infoHash, "No more nodes to try"));
+
+                                // Call the callback with failure
+                                if (task->callback) {
+                                    task->callback(false);
+                                }
+
+                                // Remove the task
+                                {
+                                    std::lock_guard<std::mutex> lock(m_tasksMutex);
+                                    m_tasks.erase(types::infoHashToString(task->infoHash));
+                                }
+                            }
+                        });
                     }
                 }
             }

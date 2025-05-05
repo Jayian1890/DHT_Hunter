@@ -504,7 +504,7 @@ void Crawler::monitorInfoHashes() {
     unified_event::logDebug("DHT.Crawler", "Starting info hash monitoring");
 
     // Limit the number of info hashes to monitor to avoid hanging
-    const size_t MAX_CONCURRENT_LOOKUPS = 3;
+    const size_t MAX_CONCURRENT_LOOKUPS = 5; // Increased from 3 to 5
 
     std::vector<InfoHash> infoHashesToMonitor;
     try {
@@ -537,6 +537,7 @@ void Crawler::monitorInfoHashes() {
             std::string infoHashStr = infoHashToString(infoHash);
             unified_event::logDebug("DHT.Crawler", "Looking up peers for info hash: " + infoHashStr);
 
+            // First lookup to find initial peers
             m_peerLookup->lookup(infoHash, [this, infoHash](const std::vector<network::EndPoint>& peers) {
                 try {
                     std::string infoHashStr = infoHashToString(infoHash);
@@ -546,8 +547,13 @@ void Crawler::monitorInfoHashes() {
 
                         // Add the peers to our info hash peers
                         auto& peerSet = m_infoHashPeers[infoHashStr];
+                        size_t newPeers = 0;
                         for (const auto& peer : peers) {
-                            peerSet.insert(peer.toString());
+                            std::string peerStr = peer.toString();
+                            if (peerSet.find(peerStr) == peerSet.end()) {
+                                peerSet.insert(peerStr);
+                                newPeers++;
+                            }
                         }
 
                         // Update statistics
@@ -558,6 +564,10 @@ void Crawler::monitorInfoHashes() {
                             m_statistics.peersDiscovered += peerSetCount.size();
                         }
 
+                        unified_event::logInfo("DHT.Crawler", "Added " + std::to_string(newPeers) +
+                                             " new peers for InfoHash: " + infoHashStr +
+                                             ", total peers: " + std::to_string(peerSet.size()));
+
                         return peerSet.size();
                     }, "Crawler::m_mutex");
 
@@ -565,6 +575,65 @@ void Crawler::monitorInfoHashes() {
                     completionMessage += " - Found: " + std::to_string(peers.size());
                     completionMessage += ", Total: " + std::to_string(totalPeers);
                     unified_event::logDebug("DHT.Crawler", completionMessage);
+
+                    // Continue searching for more peers even after finding some
+                    // Schedule a second lookup after a short delay to find more peers
+                    if (m_running && !peers.empty()) {
+                        unified_event::logDebug("DHT.Crawler", "Scheduling additional peer lookup for info hash: " + infoHashStr);
+
+                        // Use a separate thread to avoid blocking
+                        std::thread([this, infoHash, infoHashStr]() {
+                            // Wait a bit before doing another lookup
+                            std::this_thread::sleep_for(std::chrono::seconds(5));
+
+                            if (!m_running) return; // Check if still running
+
+                            // Do another lookup to find more peers
+                            if (m_peerLookup) {
+                                m_peerLookup->lookup(infoHash, [this, infoHash, infoHashStr](const std::vector<network::EndPoint>& morePeers) {
+                                    try {
+                                        size_t additionalPeers = utility::thread::withLock(m_mutex, [this, &infoHash, &morePeers, &infoHashStr]() {
+                                            // Add the additional peers
+                                            auto& peerSet = m_infoHashPeers[infoHashStr];
+                                            size_t newPeers = 0;
+                                            for (const auto& peer : morePeers) {
+                                                std::string peerStr = peer.toString();
+                                                if (peerSet.find(peerStr) == peerSet.end()) {
+                                                    peerSet.insert(peerStr);
+                                                    newPeers++;
+                                                }
+                                            }
+
+                                            // Update statistics
+                                            m_statistics.peersDiscovered = 0;
+                                            for (const auto& infoHashPeersPair : m_infoHashPeers) {
+                                                const auto& peerSetCount = infoHashPeersPair.second;
+                                                m_statistics.peersDiscovered += peerSetCount.size();
+                                            }
+
+                                            if (newPeers > 0) {
+                                                unified_event::logInfo("DHT.Crawler", "Additional lookup found " +
+                                                                     std::to_string(newPeers) +
+                                                                     " new peers for InfoHash: " + infoHashStr +
+                                                                     ", total peers: " + std::to_string(peerSet.size()));
+                                            }
+
+                                            return newPeers;
+                                        }, "Crawler::m_mutex");
+
+                                        if (additionalPeers > 0) {
+                                            std::string additionalMessage = "Additional peer lookup for info hash " + infoHashStr + " completed";
+                                            additionalMessage += " - Found: " + std::to_string(morePeers.size());
+                                            additionalMessage += ", New: " + std::to_string(additionalPeers);
+                                            unified_event::logDebug("DHT.Crawler", additionalMessage);
+                                        }
+                                    } catch (const utility::thread::LockTimeoutException& e) {
+                                        unified_event::logError("DHT.Crawler", e.what());
+                                    }
+                                });
+                            }
+                        }).detach(); // Detach the thread so it runs independently
+                    }
                 } catch (const utility::thread::LockTimeoutException& e) {
                     unified_event::logError("DHT.Crawler", e.what());
                 }

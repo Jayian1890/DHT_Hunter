@@ -209,6 +209,19 @@ std::string LoggingProcessor::formatEvent(std::shared_ptr<Event> event) const {
                                 }
                                 break;
                             }
+                            case dht_hunter::dht::QueryMethod::GetMetadata: {
+                                ss << " get_metadata";
+                                auto getMetadataQuery = std::dynamic_pointer_cast<dht_hunter::dht::GetMetadataQuery>(query);
+                                if (getMetadataQuery) {
+                                    std::string infoHashStr = dht_hunter::types::infoHashToString(getMetadataQuery->getInfoHash());
+                                    std::string shortInfoHash = infoHashStr.substr(0, 6);
+                                    ss << ", info_hash: " << shortInfoHash;
+                                }
+                                break;
+                            }
+                            case dht_hunter::dht::QueryMethod::Unknown:
+                                ss << " unknown";
+                                break;
                             case dht_hunter::dht::QueryMethod::GetPeers: {
                                 ss << " get_peers";
                                 auto getPeersQuery = std::dynamic_pointer_cast<dht_hunter::dht::GetPeersQuery>(query);
@@ -294,6 +307,19 @@ std::string LoggingProcessor::formatEvent(std::shared_ptr<Event> event) const {
                         switch (query->getMethod()) {
                             case dht_hunter::dht::QueryMethod::Ping:
                                 ss << " ping";
+                                break;
+                            case dht_hunter::dht::QueryMethod::GetMetadata: {
+                                ss << " get_metadata";
+                                auto getMetadataQuery = std::dynamic_pointer_cast<dht_hunter::dht::GetMetadataQuery>(query);
+                                if (getMetadataQuery) {
+                                    std::string infoHashStr = dht_hunter::types::infoHashToString(getMetadataQuery->getInfoHash());
+                                    std::string shortInfoHash = infoHashStr.substr(0, 6);
+                                    ss << ", info_hash: " << shortInfoHash;
+                                }
+                                break;
+                            }
+                            case dht_hunter::dht::QueryMethod::Unknown:
+                                ss << " unknown";
                                 break;
                             case dht_hunter::dht::QueryMethod::FindNode: {
                                 ss << " find_node";

@@ -102,6 +102,11 @@ private:
     void cleanupExpiredPeers();
 
     /**
+     * @brief Logs statistics about peers
+     */
+    void logPeerStatistics();
+
+    /**
      * @brief Cleans up expired peers periodically
      */
     void cleanupExpiredPeersPeriodically();

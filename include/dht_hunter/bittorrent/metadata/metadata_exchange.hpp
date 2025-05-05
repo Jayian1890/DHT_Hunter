@@ -201,7 +201,11 @@ private:
         std::function<void(bool success)> callback;
         int maxConcurrentPeers;
         std::atomic<int> activeConnections{0};
-        std::atomic<bool> completed{false};
+        std::atomic<int> completedConnections{0}; // Count of successfully completed connections
+        std::atomic<bool> completed{false}; // Whether the task is fully completed
+        std::atomic<bool> hasSucceeded{false}; // Whether at least one peer succeeded
+        std::atomic<bool> callbackCalled{false}; // Whether the callback has been called
+        std::atomic<bool> continueAfterFirstSuccess{false}; // Whether to continue after first success
         std::chrono::steady_clock::time_point startTime;
         std::chrono::steady_clock::time_point lastRetryTime;
         int retryCount{0};

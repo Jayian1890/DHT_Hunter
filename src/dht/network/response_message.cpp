@@ -416,4 +416,26 @@ std::shared_ptr<dht_hunter::bencode::BencodeValue> AnnouncePeerResponse::getResp
     return values;
 }
 
+MetadataResponse::MetadataResponse(const std::string& transactionID, const NodeID& nodeID,
+                                 std::shared_ptr<dht_hunter::bencode::BencodeValue> metadata)
+    : ResponseMessage(transactionID, nodeID), m_metadata(metadata) {
+}
+
+std::shared_ptr<dht_hunter::bencode::BencodeValue> MetadataResponse::getMetadataValues() const {
+    return m_metadata;
+}
+
+std::shared_ptr<dht_hunter::bencode::BencodeValue> MetadataResponse::getResponseValues() const {
+    auto values = std::make_shared<dht_hunter::bencode::BencodeValue>();
+    dht_hunter::bencode::BencodeValue::Dictionary dict;
+    values->setDict(dict);
+
+    // Add the metadata to the response values
+    if (m_metadata) {
+        values->set("metadata", m_metadata);
+    }
+
+    return values;
+}
+
 } // namespace dht_hunter::dht
