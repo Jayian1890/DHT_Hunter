@@ -144,6 +144,27 @@ private:
     network::HttpResponse handleUptimeRequest(const network::HttpRequest& request);
 
     /**
+     * @brief Handle peers API request
+     * @param request The HTTP request
+     * @return The HTTP response
+     */
+    network::HttpResponse handlePeersRequest(const network::HttpRequest& request);
+
+    /**
+     * @brief Handle messages API request
+     * @param request The HTTP request
+     * @return The HTTP response
+     */
+    network::HttpResponse handleMessagesRequest(const network::HttpRequest& request);
+
+    /**
+     * @brief Handle info hash detail API request
+     * @param request The HTTP request
+     * @return The HTTP response
+     */
+    network::HttpResponse handleInfoHashDetailRequest(const network::HttpRequest& request);
+
+    /**
      * @brief Serve a static file
      * @param filePath The path to the file
      * @return The HTTP response

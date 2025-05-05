@@ -1,20 +1,10 @@
 // Dashboard JavaScript
 
-// Global variables for charts
-let networkActivityChart;
-
-// Data for charts
-const networkActivityData = {
-    labels: [],
-    bytesReceived: [],
-    bytesSent: []
-};
+// Global variables
+// No charts needed anymore
 
 // Initialize the dashboard
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize charts
-    initCharts();
-
     // Initialize tabs
     initTabs();
 
@@ -53,70 +43,7 @@ function initTabs() {
     });
 }
 
-// Initialize charts
-function initCharts() {
-    // Network Activity Chart - Now showing network speed over 24 hours
-    const networkCtx = document.getElementById('network-activity-chart').getContext('2d');
-    networkActivityChart = new Chart(networkCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'Download Speed (KB/s)',
-                    data: [],
-                    borderColor: '#3498db',
-                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                },
-                {
-                    label: 'Upload Speed (KB/s)',
-                    data: [],
-                    borderColor: '#2ecc71',
-                    backgroundColor: 'rgba(46, 204, 113, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Speed (KB/s)'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Time (last 24 hours)'
-                    }
-                }
-            },
-            animation: {
-                duration: 500
-            },
-            plugins: {
-                legend: {
-                    position: 'top'
-                },
-                title: {
-                    display: true,
-                    text: 'Network Speed (24 Hours)'
-                }
-            }
-        }
-    });
-
-    // Node Distribution Chart has been removed
-}
+// Charts have been removed
 
 // Fetch data from API
 function fetchData() {
@@ -125,22 +52,13 @@ function fetchData() {
         .then(response => response.json())
         .then(data => {
             updateStatistics(data);
-            updateNetworkActivityChart(data);
         })
         .catch(error => {
             console.error('Error fetching statistics:', error);
             updateStatus(false);
         });
 
-    // Fetch nodes
-    fetch('/api/nodes?limit=10')
-        .then(response => response.json())
-        .then(data => {
-            updateNodesTable(data);
-        })
-        .catch(error => {
-            console.error('Error fetching nodes:', error);
-        });
+    // Nodes fetch removed
 
     // Fetch info hashes
     fetch('/api/infohashes?limit=10')
@@ -155,100 +73,40 @@ function fetchData() {
 
 // Update statistics display
 function updateStatistics(data) {
-    document.getElementById('nodes-discovered').textContent = data.nodesDiscovered.toLocaleString();
+    // Update nodes count - only show nodes in table as 'Total Nodes'
     document.getElementById('nodes-in-table').textContent = data.nodesInTable.toLocaleString();
+
+    // Update peers count
     document.getElementById('peers-discovered').textContent = data.peersDiscovered.toLocaleString();
+
+    // Update messages count
     document.getElementById('messages-received').textContent = data.messagesReceived.toLocaleString();
     document.getElementById('messages-sent').textContent = data.messagesSent.toLocaleString();
+
+    // Update info hashes count
     document.getElementById('info-hashes').textContent = data.infoHashes.toLocaleString();
+
+    // Update current network speed if available
+    if (data.networkSpeed) {
+        if (data.networkSpeed.downloadSpeed) {
+            const downloadSpeed = data.networkSpeed.downloadSpeed || 0;
+            document.getElementById('current-download').textContent = downloadSpeed.toFixed(2) + ' KB/s';
+        }
+
+        if (data.networkSpeed.uploadSpeed) {
+            const uploadSpeed = data.networkSpeed.uploadSpeed || 0;
+            document.getElementById('current-upload').textContent = uploadSpeed.toFixed(2) + ' KB/s';
+        }
+    }
 
     updateStatus(true);
 }
 
-// Update network activity chart
-function updateNetworkActivityChart(data) {
-    const now = new Date();
-    const timeLabel = now.getHours().toString().padStart(2, '0') + ':' +
-                     now.getMinutes().toString().padStart(2, '0');
-
-    // Add new data
-    // For 24-hour display, we'll get data from the API
-    // This assumes the API now returns bytesReceived and bytesSent arrays for the last 24 hours
-    if (data.networkSpeed && data.networkSpeed.labels) {
-        networkActivityData.labels = data.networkSpeed.labels;
-        networkActivityData.bytesReceived = data.networkSpeed.bytesReceived || [];
-        networkActivityData.bytesSent = data.networkSpeed.bytesSent || [];
-    }
-
-    // Update chart
-    networkActivityChart.data.labels = networkActivityData.labels;
-    networkActivityChart.data.datasets[0].data = networkActivityData.bytesReceived;
-    networkActivityChart.data.datasets[1].data = networkActivityData.bytesSent;
-    networkActivityChart.update();
-}
+// Network activity chart has been removed
 
 // Node distribution chart has been removed
 
-// Update nodes table
-function updateNodesTable(nodes) {
-    const tbody = document.querySelector('#nodes-table tbody');
-    tbody.innerHTML = '';
-
-    nodes.forEach(node => {
-        const tr = document.createElement('tr');
-
-        const nodeIdTd = document.createElement('td');
-        nodeIdTd.textContent = formatNodeId(node.nodeId);
-        nodeIdTd.title = node.nodeId; // Show full node ID on hover
-        tr.appendChild(nodeIdTd);
-
-        const ipTd = document.createElement('td');
-        ipTd.textContent = node.ip;
-        tr.appendChild(ipTd);
-
-        const portTd = document.createElement('td');
-        portTd.textContent = node.port;
-        tr.appendChild(portTd);
-
-        const lastSeenTd = document.createElement('td');
-        lastSeenTd.textContent = formatTimeAgo(node.lastSeen);
-
-        // Set tooltip only if timestamp is valid
-        if (node.lastSeen && node.lastSeen > 0 && node.lastSeen <= Date.now() * 10) {
-            lastSeenTd.title = new Date(node.lastSeen).toLocaleString(); // Show exact time on hover
-        } else {
-            lastSeenTd.title = 'Unknown timestamp';
-        }
-
-        tr.appendChild(lastSeenTd);
-
-        // Add status column
-        const statusTd = document.createElement('td');
-
-        // Check if timestamp is valid
-        if (!node.lastSeen || node.lastSeen <= 0 || node.lastSeen > Date.now() * 10) {
-            statusTd.textContent = 'Unknown';
-            statusTd.className = 'status-unknown';
-        } else {
-            const timeSinceLastSeen = Date.now() - node.lastSeen;
-
-            if (timeSinceLastSeen < 300000) { // Less than 5 minutes
-                statusTd.textContent = 'Active';
-                statusTd.className = 'status-complete';
-            } else if (timeSinceLastSeen < 3600000) { // Less than 1 hour
-                statusTd.textContent = 'Recent';
-                statusTd.className = 'status-in-progress';
-            } else {
-                statusTd.textContent = 'Inactive';
-                statusTd.className = 'status-failed';
-            }
-        }
-
-        tr.appendChild(statusTd);
-
-        tbody.appendChild(tr);
-    });
-}
+// Nodes table has been removed
 
 // Update info hashes table
 function updateInfoHashesTable(infoHashes) {
@@ -258,10 +116,14 @@ function updateInfoHashesTable(infoHashes) {
     infoHashes.forEach(infoHash => {
         const tr = document.createElement('tr');
 
-        // Info Hash
+        // Info Hash - make it clickable
         const hashTd = document.createElement('td');
-        hashTd.textContent = formatInfoHash(infoHash.hash);
-        hashTd.title = infoHash.hash; // Show full hash on hover
+        const hashLink = document.createElement('a');
+        hashLink.href = `infohash.html?hash=${infoHash.hash}`;
+        hashLink.textContent = formatInfoHash(infoHash.hash);
+        hashLink.title = `View details for ${infoHash.hash}`;
+        hashLink.className = 'info-hash-link';
+        hashTd.appendChild(hashLink);
         tr.appendChild(hashTd);
 
         // Name

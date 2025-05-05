@@ -72,12 +72,85 @@ void WebBundleManager::registerRoutes() {
         }
     );
 
-    // Register JS file
+    // Register JS files
     m_httpServer->registerRoute(
         network::HttpMethod::GET,
         "/js/dashboard.js",
         [this](const network::HttpRequest& request) {
-            unified_event::logInfo("Web.BundleManager", "Handling JS request");
+            unified_event::logInfo("Web.BundleManager", "Handling dashboard.js request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/js/peers.js",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling peers.js request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/js/infohash.js",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling infohash.js request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/js/infohashes.js",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling infohashes.js request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/js/messages.js",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling messages.js request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    // Register specific routes for HTML files
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/peers.html",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling peers.html request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/infohash.html",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling infohash.html request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/infohashes.html",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling infohashes.html request");
+            return handleBundledFileRequest(request);
+        }
+    );
+
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/messages.html",
+        [this](const network::HttpRequest& request) {
+            unified_event::logInfo("Web.BundleManager", "Handling messages.html request");
             return handleBundledFileRequest(request);
         }
     );
@@ -192,6 +265,12 @@ network::HttpResponse WebBundleManager::handleBundledFileRequest(const network::
 
     unified_event::logInfo("Web.BundleManager", "Looking up file: " + lookupPath);
 
+    // Log all available files for debugging
+    unified_event::logInfo("Web.BundleManager", "Available files:");
+    for (const auto& [filePath, _] : m_files) {
+        unified_event::logInfo("Web.BundleManager", "  - " + filePath);
+    }
+
     // Handle CSS files
     if (lookupPath == "css/styles.css") {
         unified_event::logInfo("Web.BundleManager", "Serving CSS file");
@@ -203,18 +282,66 @@ network::HttpResponse WebBundleManager::handleBundledFileRequest(const network::
 
     // Handle JS files
     if (lookupPath == "js/dashboard.js") {
-        unified_event::logInfo("Web.BundleManager", "Serving JS file");
+        unified_event::logInfo("Web.BundleManager", "Serving dashboard.js file");
         response.statusCode = 200;
         response.body = std::string(js_dashboard_js.begin(), js_dashboard_js.end());
+        response.setContentType("application/javascript");
+        return response;
+    } else if (lookupPath == "js/peers.js") {
+        unified_event::logInfo("Web.BundleManager", "Serving peers.js file");
+        response.statusCode = 200;
+        response.body = std::string(js_peers_js.begin(), js_peers_js.end());
+        response.setContentType("application/javascript");
+        return response;
+    } else if (lookupPath == "js/infohash.js") {
+        unified_event::logInfo("Web.BundleManager", "Serving infohash.js file");
+        response.statusCode = 200;
+        response.body = std::string(js_infohash_js.begin(), js_infohash_js.end());
+        response.setContentType("application/javascript");
+        return response;
+    } else if (lookupPath == "js/infohashes.js") {
+        unified_event::logInfo("Web.BundleManager", "Serving infohashes.js file");
+        response.statusCode = 200;
+        response.body = std::string(js_infohashes_js.begin(), js_infohashes_js.end());
+        response.setContentType("application/javascript");
+        return response;
+    } else if (lookupPath == "js/messages.js") {
+        unified_event::logInfo("Web.BundleManager", "Serving messages.js file");
+        response.statusCode = 200;
+        response.body = std::string(js_messages_js.begin(), js_messages_js.end());
         response.setContentType("application/javascript");
         return response;
     }
 
     // Handle HTML files
     if (lookupPath == "index.html") {
-        unified_event::logInfo("Web.BundleManager", "Serving HTML file");
+        unified_event::logInfo("Web.BundleManager", "Serving index.html file");
         response.statusCode = 200;
         response.body = std::string(index_html.begin(), index_html.end());
+        response.setHtmlContentType();
+        return response;
+    } else if (lookupPath == "peers.html") {
+        unified_event::logInfo("Web.BundleManager", "Serving peers.html file");
+        response.statusCode = 200;
+        response.body = std::string(peers_html.begin(), peers_html.end());
+        response.setHtmlContentType();
+        return response;
+    } else if (lookupPath == "infohash.html") {
+        unified_event::logInfo("Web.BundleManager", "Serving infohash.html file");
+        response.statusCode = 200;
+        response.body = std::string(infohash_html.begin(), infohash_html.end());
+        response.setHtmlContentType();
+        return response;
+    } else if (lookupPath == "infohashes.html") {
+        unified_event::logInfo("Web.BundleManager", "Serving infohashes.html file");
+        response.statusCode = 200;
+        response.body = std::string(infohashes_html.begin(), infohashes_html.end());
+        response.setHtmlContentType();
+        return response;
+    } else if (lookupPath == "messages.html") {
+        unified_event::logInfo("Web.BundleManager", "Serving messages.html file");
+        response.statusCode = 200;
+        response.body = std::string(messages_html.begin(), messages_html.end());
         response.setHtmlContentType();
         return response;
     }

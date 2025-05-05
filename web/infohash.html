@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHT Hunter - Info Hash Details</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-network-wired"></i> DHT Hunter</h1>
+            <div class="status">
+                <span class="status-active" id="status-indicator"></span>
+                <span id="uptime">Uptime: 0d 0h 0m 0s</span>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <div class="breadcrumb">
+                <a href="index.html"><i class="fas fa-home"></i> Dashboard</a>
+                <span class="separator">/</span>
+                <span>Info Hash Details</span>
+            </div>
+
+            <div class="page-header">
+                <h2>Info Hash: <span id="info-hash"></span></h2>
+                <div class="metadata-actions">
+                    <button id="acquire-metadata-btn" class="primary-btn">
+                        <i class="fas fa-download"></i> Acquire Metadata
+                    </button>
+                </div>
+            </div>
+
+            <div class="info-hash-details-container">
+                <div class="detail-card">
+                    <h3>Basic Information</h3>
+                    <div class="detail-item">
+                        <span class="detail-label">Name:</span>
+                        <span id="info-hash-name">Unknown</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Size:</span>
+                        <span id="info-hash-size">Unknown</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Peers:</span>
+                        <span id="peer-count">0</span>
+                        <a id="view-peers-link" href="#" class="detail-action">View All</a>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Metadata Status:</span>
+                        <span id="metadata-status">Unknown</span>
+                    </div>
+                </div>
+
+                <div class="detail-card" id="files-container">
+                    <h3>Files</h3>
+                    <div class="table-responsive">
+                        <table id="files-table">
+                            <thead>
+                                <tr>
+                                    <th>Path</th>
+                                    <th>Size</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Files will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="no-data" id="no-files-message" style="display: none;">
+                        No file information available. Try acquiring metadata.
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-card">
+                <h3>Peers</h3>
+                <div class="table-responsive">
+                    <table id="peers-table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Port</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Peers will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="loading-spinner" id="peers-loading">
+                    Loading peers data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script src="js/infohash.js"></script>
+</body>
+</html>

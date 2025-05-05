@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHT Hunter - Peers</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-network-wired"></i> DHT Hunter</h1>
+            <div class="status">
+                <span class="status-active" id="status-indicator"></span>
+                <span id="uptime">Uptime: 0d 0h 0m 0s</span>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <div class="breadcrumb">
+                <a href="index.html"><i class="fas fa-home"></i> Dashboard</a>
+                <span class="separator">/</span>
+                <span>Peers</span>
+            </div>
+
+            <div class="page-header">
+                <h2>Peers for Info Hash: <span id="info-hash"></span></h2>
+                <div class="info-hash-details">
+                    <div id="info-hash-name"></div>
+                    <div id="info-hash-size"></div>
+                    <div id="peer-count"></div>
+                </div>
+            </div>
+
+            <div class="table-card full-width">
+                <div class="table-responsive">
+                    <table id="peers-table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Port</th>
+                                <th>Status</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Peers will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="loading-spinner" id="peers-loading">
+                    Loading peers data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script src="js/peers.js"></script>
+</body>
+</html>

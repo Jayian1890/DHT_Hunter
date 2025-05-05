@@ -25,27 +25,23 @@
                     </div>
                     <div class="stats-content">
                         <h3>Nodes</h3>
-                        <div class="stats-value">
-                            <span id="nodes-discovered">0</span>
-                            <span class="separator">/</span>
-                            <span id="nodes-in-table">0</span>
-                        </div>
-                        <div class="stats-label">Discovered / In Table</div>
+                        <div class="stats-value" id="nodes-in-table">0</div>
+                        <div class="stats-label">Total</div>
                     </div>
                 </div>
 
-                <div class="stats-card">
+                <div class="stats-card clickable" onclick="window.location.href='peers.html'">
                     <div class="stats-icon">
                         <i class="fas fa-users"></i>
                     </div>
                     <div class="stats-content">
                         <h3>Peers</h3>
                         <div class="stats-value" id="peers-discovered">0</div>
-                        <div class="stats-label">Discovered</div>
+                        <div class="stats-label">Discovered <i class="fas fa-external-link-alt"></i></div>
                     </div>
                 </div>
 
-                <div class="stats-card">
+                <div class="stats-card clickable" onclick="window.location.href='messages.html'">
                     <div class="stats-icon">
                         <i class="fas fa-exchange-alt"></i>
                     </div>
@@ -56,26 +52,35 @@
                             <span class="separator">/</span>
                             <span id="messages-sent">0</span>
                         </div>
-                        <div class="stats-label">Received / Sent</div>
+                        <div class="stats-label">Received / Sent <i class="fas fa-external-link-alt"></i></div>
                     </div>
                 </div>
 
-                <div class="stats-card">
+                <div class="stats-card clickable" onclick="window.location.href='infohashes.html'">
                     <div class="stats-icon">
                         <i class="fas fa-hashtag"></i>
                     </div>
                     <div class="stats-content">
                         <h3>Info Hashes</h3>
                         <div class="stats-value" id="info-hashes">0</div>
-                        <div class="stats-label">Discovered</div>
+                        <div class="stats-label">Discovered <i class="fas fa-external-link-alt"></i></div>
                     </div>
                 </div>
             </div>
 
             <div class="charts-container">
                 <div class="chart-card full-width">
-                    <h3>Network Speed (24 Hours)</h3>
-                    <canvas id="network-activity-chart"></canvas>
+                    <h3>Network Speed</h3>
+                    <div class="network-stats">
+                        <div class="network-stat-item">
+                            <span class="network-stat-label">Current Download:</span>
+                            <span id="current-download" class="network-stat-value">0 KB/s</span>
+                        </div>
+                        <div class="network-stat-item">
+                            <span class="network-stat-label">Current Upload:</span>
+                            <span id="current-upload" class="network-stat-value">0 KB/s</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -83,30 +88,11 @@
                 <div class="table-card full-width">
                     <div class="tabs">
                         <div class="tab-header">
-                            <div class="tab-item active" data-tab="nodes">Recent Nodes</div>
-                            <div class="tab-item" data-tab="infohashes">Recent Info Hashes</div>
+                            <div class="tab-item active" data-tab="infohashes">Recent Info Hashes</div>
                             <div class="tab-item" data-tab="settings">Settings</div>
                         </div>
                         <div class="tab-content">
-                            <div class="tab-pane active" id="nodes-tab">
-                                <div class="table-responsive">
-                                    <table id="nodes-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Node ID</th>
-                                                <th>IP Address</th>
-                                                <th>Port</th>
-                                                <th>Last Seen</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <!-- Nodes will be populated here -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div class="tab-pane" id="infohashes-tab">
+                            <div class="tab-pane active" id="infohashes-tab">
                                 <div class="table-responsive">
                                     <table id="info-hashes-table">
                                         <thead>

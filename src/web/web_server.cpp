@@ -168,6 +168,33 @@ void WebServer::registerApiRoutes() {
         }
     );
 
+    // Peers API
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/api/peers",
+        [this](const network::HttpRequest& request) {
+            return handlePeersRequest(request);
+        }
+    );
+
+    // Messages API
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/api/messages",
+        [this](const network::HttpRequest& request) {
+            return handleMessagesRequest(request);
+        }
+    );
+
+    // Info hash detail API
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/api/infohash",
+        [this](const network::HttpRequest& request) {
+            return handleInfoHashDetailRequest(request);
+        }
+    );
+
     // Initialize the configuration API handler
     m_configApiHandler = std::make_shared<api::ConfigApiHandler>(m_httpServer);
 }
@@ -266,44 +293,25 @@ dht_hunter::network::HttpResponse WebServer::handleStatisticsRequest(const dht_h
         statsObj->set("messagesSent", static_cast<long long>(m_statisticsService->getMessagesSent()));
         statsObj->set("errors", static_cast<long long>(m_statisticsService->getErrors()));
 
-        // Add network speed data for the last 24 hours
+        // Add current network speed data
         auto networkSpeedObj = Json::createObject();
 
-        // Create arrays for the network speed data
-        auto labelsArray = Json::createArray();
-        auto bytesReceivedArray = Json::createArray();
-        auto bytesSentArray = Json::createArray();
+        // Generate current network speed data
+        // In a real implementation, this would come from actual measurements
+        // For now, we'll generate random values
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> downloadDist(10.0, 100.0);
+        std::uniform_real_distribution<> uploadDist(5.0, 50.0);
 
-        // Get current time
-        auto now = std::chrono::system_clock::now();
+        // Current download/upload speeds in KB/s
+        double downloadSpeed = downloadDist(gen);
+        double uploadSpeed = uploadDist(gen);
 
-        // Generate 24 hourly data points
-        for (int i = 23; i >= 0; i--) {
-            // Format the time label (HH:MM)
-            auto timePoint = now - std::chrono::hours(i);
-            auto timeT = std::chrono::system_clock::to_time_t(timePoint);
-            std::tm tm = *std::localtime(&timeT);
-            std::stringstream ss;
-            ss << std::setfill('0') << std::setw(2) << tm.tm_hour << ":"
-               << std::setfill('0') << std::setw(2) << tm.tm_min;
-            labelsArray->add(ss.str());
+        networkSpeedObj->set("downloadSpeed", downloadSpeed);
+        networkSpeedObj->set("uploadSpeed", uploadSpeed);
 
-            // Generate some sample network speed data
-            // In a real implementation, this would come from historical data
-            // For now, we'll generate random values between 10 and 100 KB/s
-            // This should be replaced with actual historical data collection
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_real_distribution<> downloadDist(10.0, 100.0);
-            std::uniform_real_distribution<> uploadDist(5.0, 50.0);
-
-            bytesReceivedArray->add(downloadDist(gen));
-            bytesSentArray->add(uploadDist(gen));
-        }
-
-        networkSpeedObj->set("labels", JsonValue(labelsArray));
-        networkSpeedObj->set("bytesReceived", JsonValue(bytesReceivedArray));
-        networkSpeedObj->set("bytesSent", JsonValue(bytesSentArray));
+        // We've removed the total network usage as requested
 
         statsObj->set("networkSpeed", JsonValue(networkSpeedObj));
     }
@@ -671,6 +679,258 @@ dht_hunter::network::HttpResponse WebServer::handleMetadataStatusRequest(const d
         response.body = utility::json::JsonValue(successObj).toString();
     }
 
+    return response;
+}
+
+dht_hunter::network::HttpResponse WebServer::handlePeersRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
+    response.statusCode = 200;
+    response.setJsonContentType();
+
+    // Parse info hash parameter
+    auto it = request.queryParams.find("infoHash");
+    if (it == request.queryParams.end()) {
+        // No info hash provided, return an error
+        response.statusCode = 400;
+        auto errorObj = Json::createObject();
+        errorObj->set("error", "Missing infoHash parameter");
+        response.body = Json::stringify(JsonValue(errorObj));
+        return response;
+    }
+
+    std::string infoHashStr = it->second;
+    types::InfoHash infoHash;
+
+    if (!types::infoHashFromString(infoHashStr, infoHash)) {
+        // Invalid info hash format
+        response.statusCode = 400;
+        auto errorObj = Json::createObject();
+        errorObj->set("error", "Invalid infoHash format");
+        response.body = Json::stringify(JsonValue(errorObj));
+        return response;
+    }
+
+    // Parse limit parameter
+    size_t limit = 100; // Default to a higher limit for detailed view
+    it = request.queryParams.find("limit");
+    if (it != request.queryParams.end()) {
+        try {
+            limit = std::stoul(it->second);
+        } catch (const std::exception& e) {
+            unified_event::logWarning("Web.Server", "Invalid limit parameter: " + it->second);
+        }
+    }
+
+    auto peersArray = Json::createArray();
+
+    // Get peers for the info hash
+    if (m_peerStorage) {
+        auto peers = m_peerStorage->getPeers(infoHash);
+
+        // Limit the number of peers
+        size_t count = std::min(limit, peers.size());
+
+        for (size_t i = 0; i < count; ++i) {
+            const auto& peer = peers[i];
+            auto peerObj = Json::createObject();
+            peerObj->set("ip", peer.getAddress().toString());
+            peerObj->set("port", static_cast<int>(peer.getPort()));
+
+            // Add additional peer information if available
+            // This could include connection status, download/upload speeds, etc.
+
+            peersArray->add(JsonValue(peerObj));
+        }
+    }
+
+    response.body = Json::stringify(JsonValue(peersArray));
+    return response;
+}
+
+dht_hunter::network::HttpResponse WebServer::handleMessagesRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
+    response.statusCode = 200;
+    response.setJsonContentType();
+
+    // Parse limit parameter
+    size_t limit = 50; // Default to a higher limit for detailed view
+    auto it = request.queryParams.find("limit");
+    if (it != request.queryParams.end()) {
+        try {
+            limit = std::stoul(it->second);
+        } catch (const std::exception& e) {
+            unified_event::logWarning("Web.Server", "Invalid limit parameter: " + it->second);
+        }
+    }
+
+    auto messagesArray = Json::createArray();
+
+    // For now, we'll return some sample message data
+    // In a real implementation, you would get this from a message history service
+    if (m_statisticsService) {
+        // Get the total number of messages (for future use)
+        // We're not using these variables yet, but they'll be useful for future enhancements
+        [[maybe_unused]] size_t totalReceived = m_statisticsService->getMessagesReceived();
+        [[maybe_unused]] size_t totalSent = m_statisticsService->getMessagesSent();
+
+        // Generate some sample messages
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> typeDist(0, 5); // Different message types
+
+        // Message types
+        std::vector<std::string> messageTypes = {
+            "ping", "find_node", "get_peers", "announce_peer", "error", "response"
+        };
+
+        // Current time
+        auto now = std::chrono::system_clock::now();
+
+        for (size_t i = 0; i < limit; ++i) {
+            auto messageObj = Json::createObject();
+
+            // Alternate between sent and received
+            bool isSent = (i % 2 == 0);
+            messageObj->set("direction", isSent ? "sent" : "received");
+
+            // Random message type
+            int typeIndex = typeDist(gen);
+            messageObj->set("type", messageTypes[static_cast<size_t>(typeIndex)]);
+
+            // Random timestamp within the last hour
+            std::uniform_int_distribution<> timeDist(0, 3600);
+            auto timestamp = now - std::chrono::seconds(timeDist(gen));
+            messageObj->set("timestamp", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                timestamp.time_since_epoch()
+            ).count()));
+
+            // Add to array
+            messagesArray->add(JsonValue(messageObj));
+        }
+    }
+
+    response.body = Json::stringify(JsonValue(messagesArray));
+    return response;
+}
+
+dht_hunter::network::HttpResponse WebServer::handleInfoHashDetailRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
+    response.statusCode = 200;
+    response.setJsonContentType();
+
+    // Parse info hash parameter
+    auto it = request.queryParams.find("hash");
+    if (it == request.queryParams.end()) {
+        // No info hash provided, return an error
+        response.statusCode = 400;
+        auto errorObj = Json::createObject();
+        errorObj->set("error", "Missing hash parameter");
+        response.body = Json::stringify(JsonValue(errorObj));
+        return response;
+    }
+
+    std::string infoHashStr = it->second;
+    types::InfoHash infoHash;
+
+    if (!types::infoHashFromString(infoHashStr, infoHash)) {
+        // Invalid info hash format
+        response.statusCode = 400;
+        auto errorObj = Json::createObject();
+        errorObj->set("error", "Invalid hash format");
+        response.body = Json::stringify(JsonValue(errorObj));
+        return response;
+    }
+
+    auto infoHashObj = Json::createObject();
+    infoHashObj->set("hash", infoHashStr);
+
+    // Get peers for the info hash
+    if (m_peerStorage) {
+        auto peers = m_peerStorage->getPeers(infoHash);
+        infoHashObj->set("peerCount", static_cast<long long>(peers.size()));
+
+        // Add a sample of peers (up to 10)
+        auto peersArray = Json::createArray();
+        size_t peerCount = std::min(peers.size(), static_cast<size_t>(10));
+
+        for (size_t i = 0; i < peerCount; ++i) {
+            const auto& peer = peers[i];
+            auto peerObj = Json::createObject();
+            peerObj->set("ip", peer.getAddress().toString());
+            peerObj->set("port", static_cast<int>(peer.getPort()));
+            peersArray->add(JsonValue(peerObj));
+        }
+
+        infoHashObj->set("peers", JsonValue(peersArray));
+    }
+
+    // Add metadata if available
+    if (m_metadataRegistry) {
+        auto metadata = m_metadataRegistry->getMetadata(infoHash);
+        if (metadata) {
+            // Add name if available
+            const std::string& name = metadata->getName();
+            if (!name.empty()) {
+                infoHashObj->set("name", name);
+            }
+
+            // Add total size if available
+            uint64_t totalSize = metadata->getTotalSize();
+            if (totalSize > 0) {
+                infoHashObj->set("size", static_cast<long long>(totalSize));
+            }
+
+            // Add file information if available
+            const auto& files = metadata->getFiles();
+            if (!files.empty()) {
+                auto filesArray = Json::createArray();
+
+                for (const auto& file : files) {
+                    auto fileObj = Json::createObject();
+                    fileObj->set("path", file.path);
+                    fileObj->set("size", static_cast<long long>(file.size));
+                    filesArray->add(JsonValue(fileObj));
+                }
+
+                infoHashObj->set("files", JsonValue(filesArray));
+            }
+        } else {
+            // Try to get metadata using utility
+            std::string name = utility::metadata::MetadataUtils::getInfoHashName(infoHash);
+            if (!name.empty()) {
+                infoHashObj->set("name", name);
+            }
+
+            uint64_t totalSize = utility::metadata::MetadataUtils::getInfoHashTotalSize(infoHash);
+            if (totalSize > 0) {
+                infoHashObj->set("size", static_cast<long long>(totalSize));
+            }
+
+            auto files = utility::metadata::MetadataUtils::getInfoHashFiles(infoHash);
+            if (!files.empty()) {
+                auto filesArray = Json::createArray();
+
+                for (const auto& file : files) {
+                    auto fileObj = Json::createObject();
+                    fileObj->set("path", file.path);
+                    fileObj->set("size", static_cast<long long>(file.size));
+                    filesArray->add(JsonValue(fileObj));
+                }
+
+                infoHashObj->set("files", JsonValue(filesArray));
+            }
+        }
+    }
+
+    // Add metadata acquisition status if available
+    if (m_metadataManager) {
+        std::string status = m_metadataManager->getAcquisitionStatus(infoHash);
+        if (!status.empty()) {
+            infoHashObj->set("metadataStatus", status);
+        }
+    }
+
+    response.body = Json::stringify(JsonValue(infoHashObj));
     return response;
 }
 
