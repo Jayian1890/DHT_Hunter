@@ -545,6 +545,18 @@ dht_hunter::network::HttpResponse WebServer::handleMetadataAcquisitionRequest(co
     dht_hunter::network::HttpResponse response;
     response.headers["Content-Type"] = "application/json";
 
+    // Check if the request body is empty
+    if (request.body.empty()) {
+        response.statusCode = 400;
+
+        auto errorObj = utility::json::JsonValue::createObject();
+        errorObj->set("success", utility::json::JsonValue(false));
+        errorObj->set("error", utility::json::JsonValue("Request body is empty"));
+
+        response.body = utility::json::JsonValue(errorObj).toString();
+        return response;
+    }
+
     // Parse the request body as JSON
     try {
         auto json = utility::json::JsonValue::parse(request.body);
