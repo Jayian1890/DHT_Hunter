@@ -70,7 +70,7 @@ WebServer::WebServer(std::shared_ptr<dht::services::StatisticsService> statistic
     m_port = static_cast<uint16_t>(configManager->getInt("web.port", 8080));
 
     // Check if we should use bundled web files
-    m_useBundledWebFiles = configManager->getBool("web.useBundledFiles", true);
+    m_useBundledWebFiles = false; // Force using files from web directory for development
     unified_event::logInfo("Web.Server", "Using bundled web files: " + std::string(m_useBundledWebFiles ? "true" : "false"));
 
     // Create the web bundle manager
@@ -192,6 +192,15 @@ void WebServer::registerApiRoutes() {
         "/api/infohash",
         [this](const network::HttpRequest& request) {
             return handleInfoHashDetailRequest(request);
+        }
+    );
+
+    // Logs API
+    m_httpServer->registerRoute(
+        network::HttpMethod::GET,
+        "/api/logs",
+        [this](const network::HttpRequest& request) {
+            return handleLogsRequest(request);
         }
     );
 
@@ -943,6 +952,90 @@ dht_hunter::network::HttpResponse WebServer::handleInfoHashDetailRequest(const d
     }
 
     response.body = Json::stringify(JsonValue(infoHashObj));
+    return response;
+}
+
+dht_hunter::network::HttpResponse WebServer::handleLogsRequest(const dht_hunter::network::HttpRequest& request) {
+    dht_hunter::network::HttpResponse response;
+    response.statusCode = 200;
+    response.setJsonContentType();
+
+    // Get the logging processor
+    auto loggingProcessor = unified_event::getLoggingProcessor();
+    if (!loggingProcessor) {
+        auto errorObj = Json::createObject();
+        errorObj->set("error", "Logging processor not available");
+        response.body = Json::stringify(JsonValue(errorObj));
+        return response;
+    }
+
+    // Parse query parameters
+    size_t limit = 100; // Default limit
+    auto limitIt = request.queryParams.find("limit");
+    if (limitIt != request.queryParams.end()) {
+        try {
+            limit = std::stoul(limitIt->second);
+        } catch (const std::exception& e) {
+            unified_event::logWarning("Web.Server", "Invalid limit parameter: " + limitIt->second);
+        }
+    }
+
+    // Parse severity filter
+    unified_event::EventSeverity minSeverity = unified_event::EventSeverity::Trace;
+    auto severityIt = request.queryParams.find("severity");
+    if (severityIt != request.queryParams.end()) {
+        const std::string& severityStr = severityIt->second;
+        if (severityStr == "trace") {
+            minSeverity = unified_event::EventSeverity::Trace;
+        } else if (severityStr == "debug") {
+            minSeverity = unified_event::EventSeverity::Debug;
+        } else if (severityStr == "info") {
+            minSeverity = unified_event::EventSeverity::Info;
+        } else if (severityStr == "warning") {
+            minSeverity = unified_event::EventSeverity::Warning;
+        } else if (severityStr == "error") {
+            minSeverity = unified_event::EventSeverity::Error;
+        } else if (severityStr == "critical") {
+            minSeverity = unified_event::EventSeverity::Critical;
+        }
+    }
+
+    // Parse source filter
+    std::string sourceFilter;
+    auto sourceIt = request.queryParams.find("source");
+    if (sourceIt != request.queryParams.end()) {
+        sourceFilter = sourceIt->second;
+    }
+
+    // Get logs from the logging processor
+    auto logs = loggingProcessor->getRecentLogs(limit, minSeverity, sourceFilter);
+
+    // Convert logs to JSON
+    auto logsArray = Json::createArray();
+    for (const auto& log : logs) {
+        auto logObj = Json::createObject();
+
+        // Convert timestamp to ISO string
+        auto timeT = std::chrono::system_clock::to_time_t(log.timestamp);
+        auto timeInfo = std::localtime(&timeT);
+        std::stringstream ss;
+        ss << std::put_time(timeInfo, "%Y-%m-%dT%H:%M:%S");
+        logObj->set("timestamp", ss.str());
+
+        // Add other log properties
+        logObj->set("severity", unified_event::eventSeverityToString(log.severity));
+        logObj->set("source", log.source);
+        logObj->set("message", log.message);
+        logObj->set("formattedMessage", log.formattedMessage);
+
+        logsArray->add(JsonValue(logObj));
+    }
+
+    auto resultObj = Json::createObject();
+    resultObj->set("logs", JsonValue(logsArray));
+    resultObj->set("count", static_cast<int>(logs.size()));
+
+    response.body = Json::stringify(JsonValue(resultObj));
     return response;
 }
 

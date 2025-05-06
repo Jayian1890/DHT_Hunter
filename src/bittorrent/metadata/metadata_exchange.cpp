@@ -179,6 +179,19 @@ bool MetadataExchange::retryConnection(std::shared_ptr<MetadataExchange::PeerCon
         return false;
     }
 
+    // Check peer health before retrying
+    auto healthTracker = PeerHealthTracker::getInstance();
+    if (!healthTracker->isHealthy(connection->peer)) {
+        unified_event::logWarning("BitTorrent.MetadataExchange", "Not retrying unhealthy peer: " + connection->peerId);
+        return false;
+    }
+
+    // Check if the circuit breaker is open for this peer
+    if (m_connectionPool->isCircuitBroken(connection->peer)) {
+        unified_event::logWarning("BitTorrent.MetadataExchange", "Circuit breaker open for peer: " + connection->peerId + ", not retrying");
+        return false;
+    }
+
     // Increment the retry count
     connection->retryCount++;
 
@@ -190,6 +203,15 @@ bool MetadataExchange::retryConnection(std::shared_ptr<MetadataExchange::PeerCon
     connection->failed = false;
     connection->buffer.clear();
     connection->metadataPieces.clear();
+
+    // Calculate exponential backoff delay
+    int backoffMs = 100 * (1 << (connection->retryCount - 1)); // 100ms, 200ms, 400ms, etc.
+    backoffMs = std::min(backoffMs, 5000); // Cap at 5 seconds
+
+    // Wait before retrying
+    unified_event::logInfo("BitTorrent.MetadataExchange", "Waiting " + std::to_string(backoffMs) + "ms before retrying connection to peer: " + connection->peerId);
+    std::this_thread::sleep_for(std::chrono::milliseconds(backoffMs));
+
     connection->startTime = std::chrono::steady_clock::now();
 
     // Try to connect again
@@ -427,6 +449,21 @@ bool MetadataExchange::connectToPeer(const network::EndPoint& peer, std::shared_
             return false;
         }
 
+        // Check peer health before connecting
+        auto healthTracker = PeerHealthTracker::getInstance();
+        if (!healthTracker->isHealthy(peer)) {
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Skipping unhealthy peer: " + peer.toString() +
+                                   " for info hash: " + types::infoHashToString(connection->infoHash));
+            return false;
+        }
+
+        // Check if the circuit breaker is open for this peer
+        if (m_connectionPool->isCircuitBroken(peer)) {
+            unified_event::logWarning("BitTorrent.MetadataExchange", "Circuit breaker open for peer: " + peer.toString() +
+                                   " for info hash: " + types::infoHashToString(connection->infoHash));
+            return false;
+        }
+
         unified_event::logInfo("BitTorrent.MetadataExchange", "Connecting to peer: " + peer.toString() +
                              " for info hash: " + types::infoHashToString(connection->infoHash));
 
@@ -449,8 +486,19 @@ bool MetadataExchange::connectToPeer(const network::EndPoint& peer, std::shared_
             handleConnectionClosed(connection);
         };
 
-        // Get a connection from the pool
-        auto client = m_connectionPool->getConnection(peer, dataCallback, errorCallback, closedCallback);
+        // Calculate appropriate timeout based on peer health
+        int timeoutSec = 5; // Default timeout
+        float successRate = healthTracker->getSuccessRate(peer);
+        if (successRate > 0.8f) {
+            // For very reliable peers, use a shorter timeout
+            timeoutSec = 3;
+        } else if (successRate < 0.3f) {
+            // For less reliable peers, use a longer timeout
+            timeoutSec = 8;
+        }
+
+        // Get a connection from the pool with appropriate timeout
+        auto client = m_connectionPool->getConnection(peer, dataCallback, errorCallback, closedCallback, timeoutSec);
         if (!client) {
             unified_event::logWarning("BitTorrent.MetadataExchange", "Failed to connect to peer: " +
                                    peer.toString() +

@@ -112,6 +112,12 @@ public:
      */
     size_t getNodeCount() const;
 
+    /**
+     * @brief Refreshes all buckets in the routing table
+     * This is useful after system sleep/wake events to ensure the routing table is up-to-date
+     */
+    void refreshAllBuckets();
+
     // Routing table saving and loading methods have been removed
     // These operations are now handled by the PersistenceManager
 

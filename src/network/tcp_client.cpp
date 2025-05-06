@@ -19,6 +19,9 @@ TCPClient::TCPClient()
 
     // Initialize the receive buffer
     m_receiveBuffer.resize(4096);
+
+    // Initialize connection statistics
+    m_stats.reset();
 }
 
 TCPClient::~TCPClient() {
@@ -39,10 +42,17 @@ TCPClient::~TCPClient() {
     }
 }
 
-bool TCPClient::connect(const std::string& ip, uint16_t port) {
+bool TCPClient::connect(const std::string& ip, uint16_t port, int timeoutSec) {
     // Check if already connected
     if (m_connected) {
         return true;
+    }
+
+    // Reset connection statistics
+    {
+        std::lock_guard<std::mutex> lock(m_statsMutex);
+        m_stats.reset();
+        m_stats.connectTime = std::chrono::steady_clock::now();
     }
 
     // Create a socket
@@ -97,8 +107,11 @@ bool TCPClient::connect(const std::string& ip, uint16_t port) {
         FD_SET(m_socket, &writeSet);
 
         struct timeval timeout;
-        timeout.tv_sec = 5;  // 5 seconds timeout
+        timeout.tv_sec = timeoutSec;
         timeout.tv_usec = 0;
+
+        unified_event::logDebug("Network.TCPClient", "Attempting to connect to " + ip + ":" + std::to_string(port) +
+                              " with " + std::to_string(timeoutSec) + " second timeout");
 
         result = select(m_socket + 1, nullptr, &writeSet, nullptr, &timeout);
         if (result <= 0) {
@@ -139,6 +152,17 @@ bool TCPClient::connect(const std::string& ip, uint16_t port) {
     m_connected = true;
     m_running = true;
     m_receiveThread = std::thread(&TCPClient::receiveData, this);
+
+    // Update connection statistics
+    {
+        std::lock_guard<std::mutex> lock(m_statsMutex);
+        auto now = std::chrono::steady_clock::now();
+        m_stats.connectDuration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_stats.connectTime);
+        m_stats.lastActivityTime = now;
+    }
+
+    unified_event::logDebug("Network.TCPClient", "Successfully connected to " + ip + ":" + std::to_string(port) +
+                          " in " + std::to_string(m_stats.connectDuration.count()) + "ms");
 
     return true;
 }
@@ -194,6 +218,9 @@ bool TCPClient::send(const uint8_t* data, size_t length) {
         totalSent += static_cast<size_t>(sent);
     }
 
+    // Update statistics
+    updateStatsForDataSent(totalSent);
+
     return true;
 }
 
@@ -234,6 +261,9 @@ void TCPClient::receiveData() {
             break;
         }
 
+        // Update statistics
+        updateStatsForDataReceived(static_cast<size_t>(received));
+
         // Call the data received callback
         std::lock_guard<std::mutex> lock(m_callbackMutex);
         if (m_dataReceivedCallback) {
@@ -245,6 +275,13 @@ void TCPClient::receiveData() {
 }
 
 void TCPClient::handleError(const std::string& error) {
+    // Update error statistics
+    {
+        std::lock_guard<std::mutex> lock(m_statsMutex);
+        m_stats.errorCount++;
+        m_stats.lastActivityTime = std::chrono::steady_clock::now();
+    }
+
     std::lock_guard<std::mutex> lock(m_callbackMutex);
     if (m_errorCallback) {
         m_errorCallback(error);
@@ -252,9 +289,52 @@ void TCPClient::handleError(const std::string& error) {
 }
 
 void TCPClient::handleConnectionClosed() {
+    // Update statistics
+    {
+        std::lock_guard<std::mutex> lock(m_statsMutex);
+        m_stats.lastActivityTime = std::chrono::steady_clock::now();
+    }
+
     std::lock_guard<std::mutex> lock(m_callbackMutex);
     if (m_connectionClosedCallback) {
         m_connectionClosedCallback();
+    }
+}
+
+const ConnectionStats& TCPClient::getStats() const {
+    return m_stats;
+}
+
+void TCPClient::updateStatsForDataReceived(size_t bytesCount) {
+    std::lock_guard<std::mutex> lock(m_statsMutex);
+    m_stats.bytesReceived += bytesCount;
+    m_stats.lastActivityTime = std::chrono::steady_clock::now();
+}
+
+void TCPClient::updateStatsForDataSent(size_t bytesCount) {
+    std::lock_guard<std::mutex> lock(m_statsMutex);
+    m_stats.bytesSent += bytesCount;
+    m_stats.lastActivityTime = std::chrono::steady_clock::now();
+}
+
+void TCPClient::updateLatency(float latencyMs) {
+    std::lock_guard<std::mutex> lock(m_statsMutex);
+
+    // Add to history
+    m_latencyHistory.push_back(latencyMs);
+
+    // Keep history size limited
+    if (m_latencyHistory.size() > MAX_LATENCY_HISTORY) {
+        m_latencyHistory.pop_front();
+    }
+
+    // Calculate average latency
+    if (!m_latencyHistory.empty()) {
+        float sum = 0.0f;
+        for (float latency : m_latencyHistory) {
+            sum += latency;
+        }
+        m_stats.latencyMs = sum / m_latencyHistory.size();
     }
 }
 

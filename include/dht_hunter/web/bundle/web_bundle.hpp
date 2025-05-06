@@ -25,17 +25,17 @@ namespace web_bundle {
 // Get all bundled files
 inline std::unordered_map<std::string, const std::vector<unsigned char>*> get_bundled_files() {
     std::unordered_map<std::string, const std::vector<unsigned char>*> files;
-    files["peers.html"] = &peers_html;
-    files["infohashes.html"] = &infohashes_html;
-    files["index.html"] = &index_html;
-    files["infohash.html"] = &infohash_html;
-    files["messages.html"] = &messages_html;
-    files["css/styles.css"] = &css_styles_css;
-    files["js/infohash.js"] = &js_infohash_js;
-    files["js/peers.js"] = &js_peers_js;
-    files["js/infohashes.js"] = &js_infohashes_js;
-    files["js/dashboard.js"] = &js_dashboard_js;
-    files["js/messages.js"] = &js_messages_js;
+    files["peers_html_path"] = &peers_html;
+    files["infohashes_html_path"] = &infohashes_html;
+    files["index_html_path"] = &index_html;
+    files["infohash_html_path"] = &infohash_html;
+    files["messages_html_path"] = &messages_html;
+    files["css_styles_css_path"] = &css_styles_css;
+    files["js_infohash_js_path"] = &js_infohash_js;
+    files["js_peers_js_path"] = &js_peers_js;
+    files["js_infohashes_js_path"] = &js_infohashes_js;
+    files["js_dashboard_js_path"] = &js_dashboard_js;
+    files["js_messages_js_path"] = &js_messages_js;
     return files;
 }
 

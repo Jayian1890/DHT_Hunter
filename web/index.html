@@ -88,29 +88,49 @@
                 <div class="table-card full-width">
                     <div class="tabs">
                         <div class="tab-header">
-                            <div class="tab-item active" data-tab="infohashes">Recent Info Hashes</div>
+                            <div class="tab-item active" data-tab="logs">Logs</div>
                             <div class="tab-item" data-tab="settings">Settings</div>
                         </div>
                         <div class="tab-content">
-                            <div class="tab-pane active" id="infohashes-tab">
-                                <div class="table-responsive">
-                                    <table id="info-hashes-table">
+                            <div class="tab-pane active" id="logs-tab">
+                                <div class="log-controls">
+                                    <div class="log-filter">
+                                        <label for="log-severity">Severity:</label>
+                                        <select id="log-severity">
+                                            <option value="trace">Trace</option>
+                                            <option value="debug">Debug</option>
+                                            <option value="info" selected>Info</option>
+                                            <option value="warning">Warning</option>
+                                            <option value="error">Error</option>
+                                            <option value="critical">Critical</option>
+                                        </select>
+                                    </div>
+                                    <div class="log-filter">
+                                        <label for="log-source">Source:</label>
+                                        <input type="text" id="log-source" placeholder="Filter by source...">
+                                    </div>
+                                    <div class="log-actions">
+                                        <button id="refresh-logs" class="primary-btn"><i class="fas fa-sync"></i> Refresh</button>
+                                        <button id="clear-logs" class="secondary-btn"><i class="fas fa-trash"></i> Clear</button>
+                                    </div>
+                                </div>
+                                <div class="log-window">
+                                    <table id="logs-table">
                                         <thead>
                                             <tr>
-                                                <th>Info Hash</th>
-                                                <th>Name</th>
-                                                <th>Peers</th>
-                                                <th>Size</th>
-                                                <th>Files</th>
-                                                <th>First Seen</th>
-                                                <th>Metadata Status</th>
-                                                <th>Actions</th>
+                                                <th>Time</th>
+                                                <th>Severity</th>
+                                                <th>Source</th>
+                                                <th>Message</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <!-- Info hashes will be populated here -->
+                                            <!-- Logs will be populated here -->
                                         </tbody>
                                     </table>
+                                </div>
+                                <div class="log-pagination">
+                                    <button id="load-more-logs" class="primary-btn">Load More</button>
                                 </div>
                             </div>
                             <div class="tab-pane" id="settings-tab">

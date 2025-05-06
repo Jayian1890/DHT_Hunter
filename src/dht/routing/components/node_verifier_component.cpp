@@ -73,6 +73,13 @@ bool NodeVerifierComponent::verifyNode(std::shared_ptr<Node> node, std::function
     // Check if the node is already in the routing table
     if (m_routingTable && m_routingTable->getNode(node->getID())) {
         unified_event::logDebug("DHT.Routing." + m_name, "Node " + nodeIDToString(node->getID()) + " is already in the routing table");
+
+        // Update the node's last seen time
+        auto existingNode = m_routingTable->getNode(node->getID());
+        if (existingNode) {
+            existingNode->updateLastSeen();
+        }
+
         if (callback) {
             callback(true);
         }
@@ -235,6 +242,21 @@ bool NodeVerifierComponent::addVerifiedNode(std::shared_ptr<Node> node) {
 
     if (!m_routingTable) {
         return false;
+    }
+
+    // Check if the node ID is valid
+    if (!node->getID().isValid()) {
+        unified_event::logWarning("DHT.Routing." + m_name, "Attempted to add node with invalid ID");
+        return false;
+    }
+
+    // Check if we already have this node in the routing table
+    auto existingNode = m_routingTable->getNode(node->getID());
+    if (existingNode) {
+        // Node already exists, just update its last seen time
+        existingNode->updateLastSeen();
+        unified_event::logDebug("DHT.Routing." + m_name, "Updated existing node " + nodeIDToString(node->getID()) + " in routing table");
+        return true;
     }
 
     // Add the node to the routing table

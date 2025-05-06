@@ -92,7 +92,7 @@ void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_h
             if (it == m_peers.end()) {
                 // Create a new entry for the info hash
                 m_peers[infoHash] = std::vector<TimestampedPeer>{TimestampedPeer(endpoint)};
-                unified_event::logInfo("DHT.PeerStorage", "Added first peer for InfoHash: " + infoHashStr +
+                unified_event::logDebug("DHT.PeerStorage", "Added first peer for InfoHash: " + infoHashStr +
                                      ", peer: " + endpoint.toString());
                 return;
             }
@@ -111,7 +111,7 @@ void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_h
 
             // Add the peer to the list
             peers.push_back(TimestampedPeer(endpoint));
-            unified_event::logInfo("DHT.PeerStorage", "Added new peer for InfoHash: " + infoHashStr +
+            unified_event::logDebug("DHT.PeerStorage", "Added new peer for InfoHash: " + infoHashStr +
                                  ", peer: " + endpoint.toString() + ", total peers: " + std::to_string(peers.size()));
         }, "PeerStorage::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {

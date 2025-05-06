@@ -391,7 +391,7 @@ void HttpServer::serverLoop(uint16_t port) {
 }
 
 HttpResponse HttpServer::handleRequest(const HttpRequest& request) {
-    unified_event::logInfo("Network.HttpServer", "Handling request: " + httpMethodToString(request.method) + " " + request.path);
+    unified_event::logDebug("Network.HttpServer", "Handling request: " + httpMethodToString(request.method) + " " + request.path);
 
     // Check for static file handlers
     {
@@ -418,7 +418,7 @@ HttpResponse HttpServer::handleRequest(const HttpRequest& request) {
                 }
 
                 std::string fullPath = dirPath + relativePath;
-                unified_event::logInfo("Network.HttpServer", "Serving file from directory: " + fullPath);
+                unified_event::logDebug("Network.HttpServer", "Serving file from directory: " + fullPath);
 
                 // Check if the file exists
                 if (!std::filesystem::exists(fullPath)) {
@@ -431,7 +431,7 @@ HttpResponse HttpServer::handleRequest(const HttpRequest& request) {
                     // Try to serve index.html from the directory
                     std::string indexPath = fullPath + "/index.html";
                     if (std::filesystem::exists(indexPath)) {
-                        unified_event::logInfo("Network.HttpServer", "Serving index.html from directory: " + indexPath);
+                        unified_event::logDebug("Network.HttpServer", "Serving index.html from directory: " + indexPath);
                         return serveStaticFile(indexPath);
                     }
 

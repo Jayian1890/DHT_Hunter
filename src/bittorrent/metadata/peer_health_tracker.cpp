@@ -19,24 +19,40 @@ PeerHealthTracker::PeerHealthTracker() {
     unified_event::logInfo("BitTorrent.PeerHealthTracker", "Initialized peer health tracker");
 }
 
-void PeerHealthTracker::recordSuccess(const dht_hunter::network::EndPoint& peer) {
+void PeerHealthTracker::recordSuccess(const dht_hunter::network::EndPoint& peer, int latencyMs) {
     std::lock_guard<std::mutex> lock(m_mutex);
     std::string peerKey = peer.toString();
     auto& health = m_peerHealth[peerKey];
-    health.successCount++;
-    health.lastSeenTime = std::chrono::system_clock::now();
+
+    // Use the enhanced update method
+    health.updateWithResult(true, latencyMs);
+
+    // Log significant improvements
+    if (health.consecutiveSuccesses == 3 && health.failureCount > 0) {
+        unified_event::logInfo("BitTorrent.PeerHealthTracker", "Peer " + peerKey +
+                             " has become reliable with 3 consecutive successes");
+    }
 }
 
 void PeerHealthTracker::recordFailure(const dht_hunter::network::EndPoint& peer, const std::string& reason) {
     std::lock_guard<std::mutex> lock(m_mutex);
     std::string peerKey = peer.toString();
     auto& health = m_peerHealth[peerKey];
-    health.failureCount++;
-    health.lastSeenTime = std::chrono::system_clock::now();
+
+    // Store the failure reason
     health.lastFailureReason = reason;
+
+    // Use the enhanced update method
+    health.updateWithResult(false);
+
+    // Log significant degradation
+    if (health.consecutiveFailures == 3) {
+        unified_event::logWarning("BitTorrent.PeerHealthTracker", "Peer " + peerKey +
+                               " has become unreliable with 3 consecutive failures: " + reason);
+    }
 }
 
-float PeerHealthTracker::getSuccessRate(const dht_hunter::network::EndPoint& peer) {
+float PeerHealthTracker::getSuccessRate(const dht_hunter::network::EndPoint& peer, bool useWeighted) {
     std::lock_guard<std::mutex> lock(m_mutex);
     std::string peerKey = peer.toString();
     auto it = m_peerHealth.find(peerKey);
@@ -45,12 +61,40 @@ float PeerHealthTracker::getSuccessRate(const dht_hunter::network::EndPoint& pee
     }
 
     const auto& health = it->second;
-    int totalAttempts = health.successCount + health.failureCount;
-    if (totalAttempts == 0) {
-        return 0.5f; // Default to 50% success rate if no attempts
+
+    if (useWeighted) {
+        // Return the pre-calculated weighted success rate
+        return health.weightedSuccessRate;
+    } else {
+        // Calculate traditional success rate
+        int totalAttempts = health.successCount + health.failureCount;
+        if (totalAttempts == 0) {
+            return 0.5f; // Default to 50% success rate if no attempts
+        }
+        return static_cast<float>(health.successCount) / totalAttempts;
+    }
+}
+
+float PeerHealthTracker::getHealthScore(const dht_hunter::network::EndPoint& peer) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::string peerKey = peer.toString();
+    auto it = m_peerHealth.find(peerKey);
+    if (it == m_peerHealth.end()) {
+        return 0.5f; // Default health score for unknown peers
     }
 
-    return static_cast<float>(health.successCount) / totalAttempts;
+    return it->second.getHealthScore();
+}
+
+float PeerHealthTracker::getAverageLatency(const dht_hunter::network::EndPoint& peer) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::string peerKey = peer.toString();
+    auto it = m_peerHealth.find(peerKey);
+    if (it == m_peerHealth.end() || it->second.latencyHistory.empty()) {
+        return 0.0f; // No latency data available
+    }
+
+    return it->second.averageLatencyMs;
 }
 
 std::chrono::system_clock::time_point PeerHealthTracker::getLastSeenTime(const dht_hunter::network::EndPoint& peer) {
@@ -74,14 +118,23 @@ bool PeerHealthTracker::isHealthy(const dht_hunter::network::EndPoint& peer) {
 
     const auto& health = it->second;
 
-    // If we've never succeeded with this peer and failed more than 3 times, consider it unhealthy
+    // Use the health score for a more comprehensive evaluation
+    float healthScore = health.getHealthScore();
+
+    // Consider a peer unhealthy if:
+    // 1. Health score is below 0.3
+    // 2. We've never succeeded with this peer and failed more than 3 times
+    // 3. We have 5 or more consecutive failures
+
+    if (healthScore < 0.3f) {
+        return false;
+    }
+
     if (health.successCount == 0 && health.failureCount > 3) {
         return false;
     }
 
-    // If the success rate is less than 20%, consider it unhealthy
-    float successRate = static_cast<float>(health.successCount) / (health.successCount + health.failureCount);
-    if (successRate < 0.2f && health.failureCount > 2) {
+    if (health.consecutiveFailures >= 5) {
         return false;
     }
 
@@ -89,10 +142,14 @@ bool PeerHealthTracker::isHealthy(const dht_hunter::network::EndPoint& peer) {
 }
 
 std::vector<dht_hunter::network::EndPoint> PeerHealthTracker::prioritizePeers(const std::vector<dht_hunter::network::EndPoint>& peers) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // Create vectors for different peer categories
     std::vector<dht_hunter::network::EndPoint> prioritizedPeers;
     std::vector<dht_hunter::network::EndPoint> unknownPeers;
     std::vector<dht_hunter::network::EndPoint> healthyPeers;
     std::vector<dht_hunter::network::EndPoint> unhealthyPeers;
+    std::vector<std::pair<dht_hunter::network::EndPoint, float>> scoredPeers; // For sorting by health score
 
     // Categorize peers
     for (const auto& peer : peers) {
@@ -101,17 +158,30 @@ std::vector<dht_hunter::network::EndPoint> PeerHealthTracker::prioritizePeers(co
 
         if (it == m_peerHealth.end()) {
             unknownPeers.push_back(peer);
-        } else if (isHealthy(peer)) {
-            healthyPeers.push_back(peer);
         } else {
-            unhealthyPeers.push_back(peer);
+            // Get health score and categorize
+            float score = it->second.getHealthScore();
+            scoredPeers.emplace_back(peer, score);
+
+            if (isHealthy(peer)) {
+                healthyPeers.push_back(peer);
+            } else {
+                unhealthyPeers.push_back(peer);
+            }
         }
     }
 
-    // Sort healthy peers by success rate
-    std::sort(healthyPeers.begin(), healthyPeers.end(), [this](const network::EndPoint& a, const network::EndPoint& b) {
-        return getSuccessRate(a) > getSuccessRate(b);
-    });
+    // Sort peers by health score (best first)
+    std::sort(scoredPeers.begin(), scoredPeers.end(),
+        [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    // Extract sorted peers
+    std::vector<dht_hunter::network::EndPoint> sortedHealthyPeers;
+    for (const auto& [peer, score] : scoredPeers) {
+        if (score >= 0.3f) { // Only include reasonably healthy peers
+            sortedHealthyPeers.push_back(peer);
+        }
+    }
 
     // Shuffle unknown peers to try different ones each time
     std::random_device rd;
@@ -119,12 +189,35 @@ std::vector<dht_hunter::network::EndPoint> PeerHealthTracker::prioritizePeers(co
     std::shuffle(unknownPeers.begin(), unknownPeers.end(), g);
 
     // Combine the lists: healthy peers first, then unknown peers, then unhealthy peers
-    prioritizedPeers.insert(prioritizedPeers.end(), healthyPeers.begin(), healthyPeers.end());
+    prioritizedPeers.insert(prioritizedPeers.end(), sortedHealthyPeers.begin(), sortedHealthyPeers.end());
     prioritizedPeers.insert(prioritizedPeers.end(), unknownPeers.begin(), unknownPeers.end());
 
     // Only include unhealthy peers if we have very few options
     if (prioritizedPeers.size() < 3) {
-        prioritizedPeers.insert(prioritizedPeers.end(), unhealthyPeers.begin(), unhealthyPeers.end());
+        // Sort unhealthy peers by score (best first)
+        std::vector<std::pair<dht_hunter::network::EndPoint, float>> sortedUnhealthy;
+        for (const auto& peer : unhealthyPeers) {
+            auto it = m_peerHealth.find(peer.toString());
+            if (it != m_peerHealth.end()) {
+                sortedUnhealthy.emplace_back(peer, it->second.getHealthScore());
+            }
+        }
+
+        std::sort(sortedUnhealthy.begin(), sortedUnhealthy.end(),
+            [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        // Add sorted unhealthy peers
+        for (const auto& [peer, _] : sortedUnhealthy) {
+            prioritizedPeers.push_back(peer);
+        }
+    }
+
+    // Log prioritization results
+    if (!peers.empty()) {
+        unified_event::logDebug("BitTorrent.PeerHealthTracker", "Prioritized " + std::to_string(peers.size()) +
+                              " peers: " + std::to_string(sortedHealthyPeers.size()) + " healthy, " +
+                              std::to_string(unknownPeers.size()) + " unknown, " +
+                              std::to_string(unhealthyPeers.size()) + " unhealthy");
     }
 
     return prioritizedPeers;

@@ -31,6 +31,10 @@
                     <div id="info-hash-size"></div>
                     <div id="peer-count"></div>
                 </div>
+                <div id="no-hash-selected" style="display: none;">
+                    <p class="info-message">Select an info hash from the dashboard to view its peers.</p>
+                    <a href="index.html" class="primary-btn"><i class="fas fa-home"></i> Go to Dashboard</a>
+                </div>
             </div>
 
             <div class="table-card full-width">
@@ -54,10 +58,166 @@
                     Loading peers data...
                 </div>
             </div>
+
+            <!-- Log Window -->
+            <div class="table-card full-width">
+                <h3>Logs</h3>
+                <div class="log-controls">
+                    <div class="log-filter">
+                        <label for="log-severity">Severity:</label>
+                        <select id="log-severity">
+                            <option value="trace">Trace</option>
+                            <option value="debug">Debug</option>
+                            <option value="info" selected>Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="log-filter">
+                        <label for="log-source">Source:</label>
+                        <input type="text" id="log-source" placeholder="Filter by source...">
+                    </div>
+                    <div class="log-actions">
+                        <button id="refresh-logs" class="primary-btn"><i class="fas fa-sync"></i> Refresh</button>
+                        <button id="clear-logs" class="secondary-btn"><i class="fas fa-trash"></i> Clear</button>
+                    </div>
+                </div>
+                <div class="log-window">
+                    <table id="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Severity</th>
+                                <th>Source</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Logs will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="log-pagination">
+                    <button id="load-more-logs" class="primary-btn">Load More</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
     <script src="js/peers.js"></script>
+    <script>
+        // Global variables for logs
+        let currentLogPage = 1;
+        let logsPerPage = 50;
+        let currentLogSeverity = 'info';
+        let currentLogSource = '';
+        let autoRefreshLogs = true;
+
+        // Initialize logs functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up event listeners for log controls
+            document.getElementById('log-severity').addEventListener('change', function() {
+                currentLogSeverity = this.value;
+                fetchLogs();
+            });
+
+            document.getElementById('log-source').addEventListener('input', function() {
+                currentLogSource = this.value;
+                fetchLogs();
+            });
+
+            document.getElementById('refresh-logs').addEventListener('click', function() {
+                fetchLogs();
+            });
+
+            document.getElementById('clear-logs').addEventListener('click', function() {
+                document.querySelector('#logs-table tbody').innerHTML = '';
+            });
+
+            document.getElementById('load-more-logs').addEventListener('click', function() {
+                currentLogPage++;
+                fetchLogs(true); // Append mode
+            });
+
+            // Initial fetch
+            fetchLogs();
+
+            // Auto-refresh logs
+            setInterval(function() {
+                if (autoRefreshLogs) {
+                    fetchLogs();
+                }
+            }, 5000); // Refresh logs every 5 seconds
+        });
+
+        // Fetch logs from API
+        function fetchLogs(append = false) {
+            const limit = logsPerPage;
+            const offset = append ? (currentLogPage - 1) * logsPerPage : 0;
+
+            let url = `/api/logs?limit=${limit}`;
+            if (currentLogSeverity) {
+                url += `&severity=${currentLogSeverity}`;
+            }
+            if (currentLogSource) {
+                url += `&source=${encodeURIComponent(currentLogSource)}`;
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    updateLogsTable(data, append);
+                })
+                .catch(error => {
+                    console.error('Error fetching logs:', error);
+                });
+        }
+
+        // Update logs table
+        function updateLogsTable(data, append = false) {
+            const tbody = document.querySelector('#logs-table tbody');
+
+            // Clear table if not in append mode
+            if (!append) {
+                tbody.innerHTML = '';
+            }
+
+            // Check if we have logs
+            if (!data.logs || data.logs.length === 0) {
+                if (!append) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td colspan="4" class="no-data">No logs found</td>`;
+                    tbody.appendChild(tr);
+                }
+                return;
+            }
+
+            // Add logs to table
+            data.logs.forEach(log => {
+                const tr = document.createElement('tr');
+
+                // Format timestamp
+                const timestamp = new Date(log.timestamp);
+                const formattedTime = timestamp.toLocaleTimeString();
+
+                tr.innerHTML = `
+                    <td>${formattedTime}</td>
+                    <td class="log-${log.severity.toLowerCase()}">${log.severity}</td>
+                    <td>${log.source}</td>
+                    <td>${log.formattedMessage}</td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+
+            // Scroll to bottom if not in append mode
+            if (!append) {
+                const logWindow = document.querySelector('.log-window');
+                logWindow.scrollTop = logWindow.scrollHeight;
+            }
+        }
+    </script>
 </body>
 </html>

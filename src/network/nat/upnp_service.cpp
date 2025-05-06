@@ -327,99 +327,148 @@ bool UPnPService::discoverDevices() {
         return false;
     }
 
-    // Create a UDP socket for SSDP discovery
-    int ssdpSocket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (ssdpSocket < 0) {
-        unified_event::logError("Network.UPnP", "Failed to create SSDP socket: " + std::string(strerror(errno)));
-        return false;
-    }
-
-    // Set socket options
-    int optval = 1;
-    if (setsockopt(ssdpSocket, SOL_SOCKET, SO_REUSEADDR, static_cast<void*>(&optval), sizeof(optval)) < 0) {
-        unified_event::logWarning("Network.UPnP", "Failed to set socket options: " + std::string(strerror(errno)));
-        close(ssdpSocket);
-        return false;
-    }
-
-    // Set timeout for receiving responses
-    struct timeval tv;
-    tv.tv_sec = DISCOVERY_TIMEOUT_SECONDS;
-    tv.tv_usec = 0;
-    if (setsockopt(ssdpSocket, SOL_SOCKET, SO_RCVTIMEO, static_cast<void*>(&tv), sizeof(tv)) < 0) {
-        unified_event::logWarning("Network.UPnP", "Failed to set socket timeout: " + std::string(strerror(errno)));
-        close(ssdpSocket);
-        return false;
-    }
-
-    // Prepare the multicast address
-    struct sockaddr_in multicastAddr;
-    memset(&multicastAddr, 0, sizeof(multicastAddr));
-    multicastAddr.sin_family = AF_INET;
-    multicastAddr.sin_port = htons(1900); // SSDP port
-    multicastAddr.sin_addr.s_addr = inet_addr("239.255.255.250"); // SSDP multicast address
-
-    // Prepare the SSDP discovery message
-    std::string ssdpRequest =
-        "M-SEARCH * HTTP/1.1\r\n"
-        "HOST: 239.255.255.250:1900\r\n"
-        "MAN: \"ssdp:discover\"\r\n"
-        "MX: " + std::to_string(DISCOVERY_TIMEOUT_SECONDS) + "\r\n"
-        "ST: urn:schemas-upnp-org:service:WANIPConnection:1\r\n"
-        "\r\n";
-
-    // Send the discovery message
-    if (sendto(ssdpSocket, ssdpRequest.c_str(), ssdpRequest.length(), 0, reinterpret_cast<struct sockaddr*>(&multicastAddr), sizeof(multicastAddr)) < 0) {
-        unified_event::logError("Network.UPnP", "Failed to send SSDP discovery message: " + std::string(strerror(errno)));
-        close(ssdpSocket);
-        return false;
-    }
-
-    unified_event::logInfo("Network.UPnP", "Sent SSDP discovery message, waiting for responses...");
-
-    // Receive responses
-    char buffer[4096];
-    struct sockaddr_in senderAddr;
-    socklen_t senderAddrLen = sizeof(senderAddr);
     std::vector<std::string> deviceLocations;
+    bool discoverySuccess = false;
 
-    // Keep receiving responses until timeout
-    while (true) {
-        memset(buffer, 0, sizeof(buffer));
-        ssize_t bytesReceived = recvfrom(ssdpSocket, buffer, sizeof(buffer) - 1, 0, reinterpret_cast<struct sockaddr*>(&senderAddr), &senderAddrLen);
+    // Try multiple discovery attempts
+    for (int attempt = 1; attempt <= DISCOVERY_RETRY_COUNT; attempt++) {
+        unified_event::logInfo("Network.UPnP", "Discovery attempt " + std::to_string(attempt) + " of " + std::to_string(DISCOVERY_RETRY_COUNT));
 
-        if (bytesReceived < 0) {
-            // Check if it's a timeout
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                break; // Timeout, no more responses
-            }
-
-            unified_event::logWarning("Network.UPnP", "Error receiving SSDP response: " + std::string(strerror(errno)));
-            continue;
+        // Create a UDP socket for SSDP discovery
+        int ssdpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+        if (ssdpSocket < 0) {
+            unified_event::logError("Network.UPnP", "Failed to create SSDP socket: " + std::string(strerror(errno)));
+            continue; // Try again
         }
 
-        buffer[bytesReceived] = '\0';
-        std::string response(buffer);
+        // Set socket options
+        int optval = 1;
+        if (setsockopt(ssdpSocket, SOL_SOCKET, SO_REUSEADDR, static_cast<void*>(&optval), sizeof(optval)) < 0) {
+            unified_event::logWarning("Network.UPnP", "Failed to set socket options: " + std::string(strerror(errno)));
+            close(ssdpSocket);
+            continue; // Try again
+        }
 
-        // Parse the response to get the location of the device description
-        if (response.find("HTTP/1.1 200 OK") != std::string::npos) {
-            size_t locPos = response.find("LOCATION:");
-            if (locPos != std::string::npos) {
-                size_t locEndPos = response.find("\r\n", locPos);
-                if (locEndPos != std::string::npos) {
-                    std::string location = response.substr(locPos + 9, locEndPos - locPos - 9);
-                    location.erase(0, location.find_first_not_of(" \t")); // Trim leading whitespace
-                    deviceLocations.push_back(location);
-                    unified_event::logInfo("Network.UPnP", "Found UPnP device at: " + location);
+        // Set timeout for receiving responses
+        struct timeval tv;
+        tv.tv_sec = DISCOVERY_TIMEOUT_SECONDS;
+        tv.tv_usec = 0;
+        if (setsockopt(ssdpSocket, SOL_SOCKET, SO_RCVTIMEO, static_cast<void*>(&tv), sizeof(tv)) < 0) {
+            unified_event::logWarning("Network.UPnP", "Failed to set socket timeout: " + std::string(strerror(errno)));
+            close(ssdpSocket);
+            continue; // Try again
+        }
+
+        // Try to bind to the local IP address
+        struct sockaddr_in localAddr;
+        memset(&localAddr, 0, sizeof(localAddr));
+        localAddr.sin_family = AF_INET;
+        localAddr.sin_port = htons(0); // Let the OS choose a port
+        localAddr.sin_addr.s_addr = htonl(INADDR_ANY); // Bind to any address
+
+        if (bind(ssdpSocket, reinterpret_cast<struct sockaddr*>(&localAddr), sizeof(localAddr)) < 0) {
+            unified_event::logWarning("Network.UPnP", "Failed to bind socket: " + std::string(strerror(errno)));
+            // Continue anyway, it might still work
+        }
+
+        // Prepare the multicast address
+        struct sockaddr_in multicastAddr;
+        memset(&multicastAddr, 0, sizeof(multicastAddr));
+        multicastAddr.sin_family = AF_INET;
+        multicastAddr.sin_port = htons(1900); // SSDP port
+        multicastAddr.sin_addr.s_addr = inet_addr("239.255.255.250"); // SSDP multicast address
+
+        // Try different service types
+        std::vector<std::string> serviceTypes = {
+            "urn:schemas-upnp-org:service:WANIPConnection:1",
+            "urn:schemas-upnp-org:service:WANIPConnection:2",
+            "urn:schemas-upnp-org:service:WANPPPConnection:1",
+            "upnp:rootdevice"
+        };
+
+        for (const auto& serviceType : serviceTypes) {
+            // Prepare the SSDP discovery message
+            std::string ssdpRequest =
+                "M-SEARCH * HTTP/1.1\r\n"
+                "HOST: 239.255.255.250:1900\r\n"
+                "MAN: \"ssdp:discover\"\r\n"
+                "MX: " + std::to_string(DISCOVERY_TIMEOUT_SECONDS) + "\r\n"
+                "ST: " + serviceType + "\r\n"
+                "\r\n";
+
+            // Send the discovery message
+            if (sendto(ssdpSocket, ssdpRequest.c_str(), ssdpRequest.length(), 0, reinterpret_cast<struct sockaddr*>(&multicastAddr), sizeof(multicastAddr)) < 0) {
+                unified_event::logWarning("Network.UPnP", "Failed to send SSDP discovery message for " + serviceType + ": " + std::string(strerror(errno)));
+                continue; // Try the next service type
+            }
+
+            unified_event::logInfo("Network.UPnP", "Sent SSDP discovery message for " + serviceType + ", waiting for responses...");
+
+            // Receive responses
+            char buffer[4096];
+            struct sockaddr_in senderAddr;
+            socklen_t senderAddrLen = sizeof(senderAddr);
+
+            // Keep receiving responses until timeout
+            auto startTime = std::chrono::steady_clock::now();
+            while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - startTime).count() < DISCOVERY_TIMEOUT_SECONDS) {
+                memset(buffer, 0, sizeof(buffer));
+                ssize_t bytesReceived = recvfrom(ssdpSocket, buffer, sizeof(buffer) - 1, 0, reinterpret_cast<struct sockaddr*>(&senderAddr), &senderAddrLen);
+
+                if (bytesReceived < 0) {
+                    // Check if it's a timeout
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        break; // Timeout, no more responses
+                    }
+
+                    unified_event::logWarning("Network.UPnP", "Error receiving SSDP response: " + std::string(strerror(errno)));
+                    continue;
+                }
+
+                buffer[bytesReceived] = '\0';
+                std::string response(buffer);
+
+                // Parse the response to get the location of the device description
+                if (response.find("HTTP/1.1 200 OK") != std::string::npos || response.find("HTTP/1.0 200 OK") != std::string::npos) {
+                    size_t locPos = response.find("LOCATION:");
+                    if (locPos == std::string::npos) {
+                        locPos = response.find("Location:"); // Try case-insensitive match
+                    }
+
+                    if (locPos != std::string::npos) {
+                        size_t locEndPos = response.find("\r\n", locPos);
+                        if (locEndPos != std::string::npos) {
+                            std::string location = response.substr(locPos + 9, locEndPos - locPos - 9);
+                            location.erase(0, location.find_first_not_of(" \t")); // Trim leading whitespace
+
+                            // Check if this location is already in our list
+                            if (std::find(deviceLocations.begin(), deviceLocations.end(), location) == deviceLocations.end()) {
+                                deviceLocations.push_back(location);
+                                unified_event::logInfo("Network.UPnP", "Found UPnP device at: " + location);
+                                discoverySuccess = true;
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        close(ssdpSocket);
+
+        // If we found devices, no need to retry
+        if (discoverySuccess) {
+            break;
+        }
+
+        // Wait before retrying
+        if (attempt < DISCOVERY_RETRY_COUNT) {
+            unified_event::logInfo("Network.UPnP", "No devices found, retrying in " + std::to_string(DISCOVERY_RETRY_DELAY_MS) + "ms...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(DISCOVERY_RETRY_DELAY_MS));
+        }
     }
 
-    close(ssdpSocket);
-
     if (deviceLocations.empty()) {
-        unified_event::logWarning("Network.UPnP", "No UPnP devices found");
+        unified_event::logWarning("Network.UPnP", "No UPnP devices found after " + std::to_string(DISCOVERY_RETRY_COUNT) + " attempts");
         return false;
     }
 
@@ -437,20 +486,166 @@ bool UPnPService::selectDevice() {
         return false;
     }
 
-    // Try each device location until we find a suitable one
+    // Store potential devices for evaluation
+    struct PotentialDevice {
+        std::string location;
+        std::string name;
+        std::string serviceType;
+        std::string controlURL;
+        bool isRouter;
+    };
+    std::vector<PotentialDevice> potentialDevices;
+
+    // Try each device location
     for (const auto& location : m_deviceLocations) {
-        if (parseDeviceDescription(location)) {
-            unified_event::logInfo("Network.UPnP", "Selected UPnP device: " + m_deviceName);
-            return true;
+        unified_event::logInfo("Network.UPnP", "Trying device at: " + location);
+
+        // Temporary variables to store device info
+        std::string deviceName;
+        std::string serviceType;
+        std::string controlURL;
+        bool isRouter = false;
+
+        // Download and parse the device description
+        std::string response;
+        if (!httpGet(location, response)) {
+            unified_event::logWarning("Network.UPnP", "Failed to download device description from: " + location);
+            continue;
+        }
+
+        // Find the device name
+        size_t friendlyNameStart = response.find("<friendlyName>");
+        size_t friendlyNameEnd = response.find("</friendlyName>");
+        if (friendlyNameStart != std::string::npos && friendlyNameEnd != std::string::npos) {
+            deviceName = response.substr(friendlyNameStart + 14, friendlyNameEnd - friendlyNameStart - 14);
+        } else {
+            deviceName = "Unknown Device";
+        }
+
+        // Check if it's a router or gateway
+        isRouter = (deviceName.find("Router") != std::string::npos ||
+                   deviceName.find("Gateway") != std::string::npos ||
+                   response.find("InternetGatewayDevice") != std::string::npos);
+
+        // Find the WANIPConnection service
+        size_t serviceTypeStart = response.find("<serviceType>urn:schemas-upnp-org:service:WANIPConnection:");
+        if (serviceTypeStart == std::string::npos) {
+            // Try WANPPPConnection as an alternative
+            serviceTypeStart = response.find("<serviceType>urn:schemas-upnp-org:service:WANPPPConnection:");
+        }
+
+        if (serviceTypeStart != std::string::npos) {
+            // Extract the service type
+            size_t serviceTypeEnd = response.find("</serviceType>", serviceTypeStart);
+            if (serviceTypeEnd != std::string::npos) {
+                serviceType = response.substr(serviceTypeStart + 12, serviceTypeEnd - serviceTypeStart - 12);
+
+                // Find the control URL for this service
+                size_t controlURLStart = response.find("<controlURL>", serviceTypeEnd);
+                size_t controlURLEnd = response.find("</controlURL>", controlURLStart);
+                if (controlURLStart != std::string::npos && controlURLEnd != std::string::npos) {
+                    controlURL = response.substr(controlURLStart + 12, controlURLEnd - controlURLStart - 12);
+
+                    // Add to potential devices
+                    potentialDevices.push_back({location, deviceName, serviceType, controlURL, isRouter});
+                    unified_event::logInfo("Network.UPnP", "Found potential device: " + deviceName + ", service: " + serviceType);
+                }
+            }
         }
     }
 
+    // If we have potential devices, prioritize them
+    if (!potentialDevices.empty()) {
+        // First priority: Routers/Gateways with WANIPConnection
+        for (const auto& device : potentialDevices) {
+            if (device.isRouter && device.serviceType.find("WANIPConnection") != std::string::npos) {
+                m_deviceName = device.name;
+                m_serviceType = device.serviceType;
+                m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
+                unified_event::logInfo("Network.UPnP", "Selected router with WANIPConnection: " + m_deviceName);
+                return true;
+            }
+        }
+
+        // Second priority: Any device with WANIPConnection
+        for (const auto& device : potentialDevices) {
+            if (device.serviceType.find("WANIPConnection") != std::string::npos) {
+                m_deviceName = device.name;
+                m_serviceType = device.serviceType;
+                m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
+                unified_event::logInfo("Network.UPnP", "Selected device with WANIPConnection: " + m_deviceName);
+                return true;
+            }
+        }
+
+        // Third priority: Routers/Gateways with WANPPPConnection
+        for (const auto& device : potentialDevices) {
+            if (device.isRouter && device.serviceType.find("WANPPPConnection") != std::string::npos) {
+                m_deviceName = device.name;
+                m_serviceType = device.serviceType;
+                m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
+                unified_event::logInfo("Network.UPnP", "Selected router with WANPPPConnection: " + m_deviceName);
+                return true;
+            }
+        }
+
+        // Last resort: Any device with WANPPPConnection
+        for (const auto& device : potentialDevices) {
+            if (device.serviceType.find("WANPPPConnection") != std::string::npos) {
+                m_deviceName = device.name;
+                m_serviceType = device.serviceType;
+                m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
+                unified_event::logInfo("Network.UPnP", "Selected device with WANPPPConnection: " + m_deviceName);
+                return true;
+            }
+        }
+    }
+
+    // If we get here, we couldn't find a suitable device
     unified_event::logWarning("Network.UPnP", "Failed to select a suitable UPnP device");
     return false;
 }
 
+// Helper method to make a relative URL absolute
+std::string UPnPService::makeAbsoluteURL(const std::string& baseURL, const std::string& relativeURL) {
+    // If the URL is already absolute, return it
+    if (relativeURL.find("http://") == 0 || relativeURL.find("https://") == 0) {
+        return relativeURL;
+    }
+
+    // Parse the base URL
+    size_t hostStart = baseURL.find("://");
+    if (hostStart == std::string::npos) {
+        return relativeURL; // Invalid base URL, return as is
+    }
+    hostStart += 3;
+
+    size_t hostEnd = baseURL.find("/", hostStart);
+    if (hostEnd == std::string::npos) {
+        return baseURL + "/" + relativeURL; // Base URL has no path
+    }
+
+    std::string baseHost = baseURL.substr(0, hostEnd);
+
+    // If the relative URL starts with a slash, append it to the base host
+    if (relativeURL[0] == '/') {
+        return baseHost + relativeURL;
+    }
+
+    // Otherwise, append it to the base URL's directory
+    size_t lastSlash = baseURL.rfind("/");
+    if (lastSlash == std::string::npos || lastSlash < hostEnd) {
+        return baseHost + "/" + relativeURL;
+    }
+
+    return baseURL.substr(0, lastSlash + 1) + relativeURL;
+}
+
 bool UPnPService::getLocalIPAddress() {
     unified_event::logInfo("Network.UPnP", "Getting local IP address");
+
+    // Store potential local IPs for evaluation
+    std::vector<std::string> potentialIPs;
 
 #ifdef _WIN32
     // Windows implementation
@@ -486,8 +681,8 @@ bool UPnPService::getLocalIPAddress() {
 
         // Skip loopback addresses
         if (ip != "127.0.0.1") {
-            m_localIP = ip;
-            break;
+            unified_event::logInfo("Network.UPnP", "Found potential local IP: " + ip);
+            potentialIPs.push_back(ip);
         }
     }
 
@@ -515,8 +710,11 @@ bool UPnPService::getLocalIPAddress() {
                 void* tmpAddrPtr = &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr))->sin_addr;
                 char addressBuffer[INET_ADDRSTRLEN];
                 inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
-                m_localIP = addressBuffer;
-                break;
+                std::string ip = addressBuffer;
+
+                // Log the interface name and IP
+                unified_event::logInfo("Network.UPnP", "Found interface: " + std::string(ifa->ifa_name) + " with IP: " + ip);
+                potentialIPs.push_back(ip);
             }
         }
     }
@@ -526,12 +724,59 @@ bool UPnPService::getLocalIPAddress() {
     }
 #endif
 
-    if (m_localIP.empty()) {
-        unified_event::logWarning("Network.UPnP", "Failed to get local IP address");
+    if (potentialIPs.empty()) {
+        unified_event::logWarning("Network.UPnP", "Failed to find any local IP addresses");
         return false;
     }
 
-    unified_event::logInfo("Network.UPnP", "Local IP address: " + m_localIP);
+    // Helper function to check if an IP is in a specific range
+    auto isInRange = [](const std::string& ip, const std::string& prefix) {
+        return ip.substr(0, prefix.length()) == prefix;
+    };
+
+    // First priority: 192.168.x.x (most common home network)
+    for (const auto& ip : potentialIPs) {
+        if (isInRange(ip, "192.168.")) {
+            m_localIP = ip;
+            unified_event::logInfo("Network.UPnP", "Selected 192.168.x.x local IP: " + m_localIP);
+            return true;
+        }
+    }
+
+    // Second priority: 10.x.x.x (common for larger networks)
+    for (const auto& ip : potentialIPs) {
+        if (isInRange(ip, "10.")) {
+            m_localIP = ip;
+            unified_event::logInfo("Network.UPnP", "Selected 10.x.x.x local IP: " + m_localIP);
+            return true;
+        }
+    }
+
+    // Third priority: 172.16-31.x.x (less common private range)
+    for (const auto& ip : potentialIPs) {
+        if (isInRange(ip, "172.")) {
+            // Check if it's in the private range (172.16.x.x to 172.31.x.x)
+            int secondOctet = std::stoi(ip.substr(4, ip.find('.', 4) - 4));
+            if (secondOctet >= 16 && secondOctet <= 31) {
+                m_localIP = ip;
+                unified_event::logInfo("Network.UPnP", "Selected 172.16-31.x.x local IP: " + m_localIP);
+                return true;
+            }
+        }
+    }
+
+    // Last resort: Use any non-VPN IP (avoid 100.x.x.x Tailscale addresses)
+    for (const auto& ip : potentialIPs) {
+        if (!isInRange(ip, "100.")) {
+            m_localIP = ip;
+            unified_event::logInfo("Network.UPnP", "Selected non-VPN local IP: " + m_localIP);
+            return true;
+        }
+    }
+
+    // If we still don't have an IP, use the first one as a last resort
+    m_localIP = potentialIPs[0];
+    unified_event::logWarning("Network.UPnP", "Using first available IP as last resort: " + m_localIP);
     return true;
 }
 

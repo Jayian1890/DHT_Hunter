@@ -5,6 +5,11 @@
 #include <random>
 #include <cstring>
 
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#include <SystemConfiguration/SystemConfiguration.h>
+#endif
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -224,8 +229,8 @@ uint16_t NATPMPService::addPortMapping(uint16_t internalPort, uint16_t externalP
         (static_cast<uint32_t>(response[6]) << 8) |
         static_cast<uint32_t>(response[7]));
 
-    // Extract the internal port
-    uint16_t mappedInternalPort = static_cast<uint16_t>(
+    // Extract the internal port (unused but kept for completeness)
+    [[maybe_unused]] uint16_t mappedInternalPort = static_cast<uint16_t>(
         (static_cast<uint16_t>(response[8]) << 8) |
         static_cast<uint16_t>(response[9]));
 
@@ -486,8 +491,179 @@ bool NATPMPService::discoverGateway() {
         unified_event::logError("Network.NATPMP", "GetIpForwardTable failed: " + std::to_string(dwRetVal));
         return false;
     }
+#elif defined(__APPLE__)
+    // macOS implementation
+    unified_event::logInfo("Network.NATPMP", "Using macOS-specific gateway discovery");
+
+    // Store potential gateways for evaluation
+    std::vector<std::string> potentialGateways;
+
+    // First try using SystemConfiguration framework
+    #ifdef __APPLE__
+    unified_event::logInfo("Network.NATPMP", "Trying SystemConfiguration framework");
+
+    SCDynamicStoreRef store = SCDynamicStoreCreate(nullptr, CFSTR("dht_hunter"), nullptr, nullptr);
+    if (store) {
+        // Get all network services
+        CFArrayRef services = SCDynamicStoreCopyKeyList(store, CFSTR("State:/Network/Service/[^/]+/IPv4"));
+        if (services) {
+            CFIndex count = CFArrayGetCount(services);
+            unified_event::logInfo("Network.NATPMP", "Found " + std::to_string(count) + " network services");
+
+            for (CFIndex i = 0; i < count; i++) {
+                CFStringRef serviceKey = static_cast<CFStringRef>(CFArrayGetValueAtIndex(services, i));
+                CFDictionaryRef serviceDict = static_cast<CFDictionaryRef>(SCDynamicStoreCopyValue(store, serviceKey));
+
+                if (serviceDict) {
+                    // Get router address
+                    CFStringRef routerAddress = static_cast<CFStringRef>(CFDictionaryGetValue(serviceDict, kSCPropNetIPv4Router));
+                    if (routerAddress) {
+                        char gatewayBuffer[16]; // IPv4 address max length
+                        if (CFStringGetCString(routerAddress, gatewayBuffer, sizeof(gatewayBuffer), kCFStringEncodingUTF8)) {
+                            std::string gateway = gatewayBuffer;
+                            unified_event::logInfo("Network.NATPMP", "Found potential gateway IP: " + gateway);
+                            potentialGateways.push_back(gateway);
+                        }
+                    }
+                    CFRelease(serviceDict);
+                }
+            }
+            CFRelease(services);
+        }
+
+        // Also try the global route
+        CFStringRef routeKey = SCDynamicStoreKeyCreateNetworkGlobalEntity(nullptr, kSCDynamicStoreDomainState, kSCEntNetIPv4);
+        if (routeKey) {
+            CFDictionaryRef routeDict = static_cast<CFDictionaryRef>(SCDynamicStoreCopyValue(store, routeKey));
+            if (routeDict) {
+                CFStringRef routerAddress = static_cast<CFStringRef>(CFDictionaryGetValue(routeDict, kSCPropNetIPv4Router));
+                if (routerAddress) {
+                    char gatewayBuffer[16]; // IPv4 address max length
+                    if (CFStringGetCString(routerAddress, gatewayBuffer, sizeof(gatewayBuffer), kCFStringEncodingUTF8)) {
+                        std::string gateway = gatewayBuffer;
+                        unified_event::logInfo("Network.NATPMP", "Found global gateway IP: " + gateway);
+                        potentialGateways.push_back(gateway);
+                    }
+                }
+                CFRelease(routeDict);
+            }
+            CFRelease(routeKey);
+        }
+        CFRelease(store);
+    }
+    #endif
+
+    // Try using command line tools to find more potential gateways
+    unified_event::logInfo("Network.NATPMP", "Trying command line tools for gateway discovery");
+
+    // Try using route command
+    FILE* fp = popen("route -n get default | grep gateway | awk '{print $2}'", "r");
+    if (fp != nullptr) {
+        char buffer[16];
+        if (fgets(buffer, sizeof(buffer), fp) != nullptr) {
+            // Remove trailing newline
+            buffer[strcspn(buffer, "\n")] = 0;
+            std::string gateway = buffer;
+            unified_event::logInfo("Network.NATPMP", "Found gateway IP using route command: " + gateway);
+            potentialGateways.push_back(gateway);
+        }
+        pclose(fp);
+    }
+
+    // Try alternative method using netstat
+    fp = popen("netstat -nr | grep default | awk '{print $2}' | head -n 1", "r");
+    if (fp != nullptr) {
+        char buffer[16];
+        if (fgets(buffer, sizeof(buffer), fp) != nullptr) {
+            // Remove trailing newline
+            buffer[strcspn(buffer, "\n")] = 0;
+            std::string gateway = buffer;
+            unified_event::logInfo("Network.NATPMP", "Found gateway IP using netstat command: " + gateway);
+            potentialGateways.push_back(gateway);
+        }
+        pclose(fp);
+    }
+
+    // Try to find all gateways using netstat
+    fp = popen("netstat -nr | grep -v 'default' | grep -E '^[0-9]' | awk '{print $2}' | grep -v '0.0.0.0'", "r");
+    if (fp != nullptr) {
+        char buffer[16];
+        while (fgets(buffer, sizeof(buffer), fp) != nullptr) {
+            // Remove trailing newline
+            buffer[strcspn(buffer, "\n")] = 0;
+            std::string gateway = buffer;
+            if (!gateway.empty() && gateway != "0.0.0.0") {
+                unified_event::logDebug("Network.NATPMP", "Found additional gateway IP: " + gateway);
+                potentialGateways.push_back(gateway);
+            }
+        }
+        pclose(fp);
+    }
+
+    // If we have potential gateways, prioritize them based on common home network patterns
+    if (!potentialGateways.empty()) {
+        // Remove duplicates
+        std::sort(potentialGateways.begin(), potentialGateways.end());
+        potentialGateways.erase(std::unique(potentialGateways.begin(), potentialGateways.end()), potentialGateways.end());
+
+        unified_event::logInfo("Network.NATPMP", "Found " + std::to_string(potentialGateways.size()) + " unique potential gateways");
+
+        // Helper function to check if an IP is in a specific range
+        auto isInRange = [](const std::string& ip, const std::string& prefix) {
+            return ip.substr(0, prefix.length()) == prefix;
+        };
+
+        // First priority: 192.168.x.x (most common home network)
+        for (const auto& gateway : potentialGateways) {
+            if (isInRange(gateway, "192.168.")) {
+                m_gatewayIP = gateway;
+                unified_event::logInfo("Network.NATPMP", "Selected 192.168.x.x gateway: " + m_gatewayIP);
+                return true;
+            }
+        }
+
+        // Second priority: 10.x.x.x (common for larger networks)
+        for (const auto& gateway : potentialGateways) {
+            if (isInRange(gateway, "10.")) {
+                m_gatewayIP = gateway;
+                unified_event::logInfo("Network.NATPMP", "Selected 10.x.x.x gateway: " + m_gatewayIP);
+                return true;
+            }
+        }
+
+        // Third priority: 172.16-31.x.x (less common private range)
+        for (const auto& gateway : potentialGateways) {
+            if (isInRange(gateway, "172.")) {
+                // Check if it's in the private range (172.16.x.x to 172.31.x.x)
+                int secondOctet = std::stoi(gateway.substr(4, gateway.find('.', 4) - 4));
+                if (secondOctet >= 16 && secondOctet <= 31) {
+                    m_gatewayIP = gateway;
+                    unified_event::logInfo("Network.NATPMP", "Selected 172.16-31.x.x gateway: " + m_gatewayIP);
+                    return true;
+                }
+            }
+        }
+
+        // Last resort: Use any gateway that's not a VPN (avoid 100.x.x.x Tailscale addresses)
+        for (const auto& gateway : potentialGateways) {
+            if (!isInRange(gateway, "100.")) {
+                m_gatewayIP = gateway;
+                unified_event::logInfo("Network.NATPMP", "Selected non-VPN gateway: " + m_gatewayIP);
+                return true;
+            }
+        }
+
+        // If we still don't have a gateway, use the first one as a last resort
+        m_gatewayIP = potentialGateways[0];
+        unified_event::logWarning("Network.NATPMP", "Using first available gateway as last resort: " + m_gatewayIP);
+        return true;
+    }
+
+    // If we get here, we couldn't find any gateway
+    unified_event::logError("Network.NATPMP", "Failed to find any gateway IP addresses");
+    return false;
 #else
-    // Unix/Linux/macOS implementation
+    // Unix/Linux implementation
     FILE* fp = popen("ip route | grep default | awk '{print $3}'", "r");
     if (fp == nullptr) {
         unified_event::logError("Network.NATPMP", "Failed to execute command to get default gateway");
@@ -499,24 +675,11 @@ bool NATPMPService::discoverGateway() {
         // Remove trailing newline
         buffer[strcspn(buffer, "\n")] = 0;
         m_gatewayIP = buffer;
+        unified_event::logInfo("Network.NATPMP", "Found gateway IP using ip route command: " + m_gatewayIP);
     } else {
-        // Try alternative command for macOS
         pclose(fp);
-        fp = popen("route -n get default | grep gateway | awk '{print $2}'", "r");
-        if (fp == nullptr) {
-            unified_event::logError("Network.NATPMP", "Failed to execute command to get default gateway");
-            return false;
-        }
-
-        if (fgets(buffer, sizeof(buffer), fp) != nullptr) {
-            // Remove trailing newline
-            buffer[strcspn(buffer, "\n")] = 0;
-            m_gatewayIP = buffer;
-        } else {
-            pclose(fp);
-            unified_event::logError("Network.NATPMP", "Failed to get default gateway");
-            return false;
-        }
+        unified_event::logError("Network.NATPMP", "Failed to get default gateway using ip route command");
+        return false;
     }
 
     pclose(fp);
@@ -688,7 +851,7 @@ void NATPMPService::refreshPortMappingsPeriodically() {
         for (const auto& key : mappingsToRefresh) {
             size_t pos = key.find(':');
             if (pos != std::string::npos) {
-                uint16_t externalPort = static_cast<uint16_t>(std::stoi(key.substr(0, pos)));
+                [[maybe_unused]] uint16_t externalPort = static_cast<uint16_t>(std::stoi(key.substr(0, pos)));
                 std::string protocol = key.substr(pos + 1);
 
                 // Get the mapping

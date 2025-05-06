@@ -37,5 +37,11 @@ if (WIN32)
             PUBLIC
             ws2_32
     )
+elseif (APPLE)
+    target_link_libraries(dht_hunter_network
+            PUBLIC
+            "-framework SystemConfiguration"
+            "-framework CoreFoundation"
+    )
 endif ()
 

@@ -151,6 +151,23 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
 
     // Calculate node information for later use
     NodeID nodeID = node->getID();
+
+    // Check if the node ID is valid
+    if (!nodeID.isValid()) {
+        unified_event::logWarning("DHT.RoutingManager", "Attempted to add node with invalid ID");
+        return false;
+    }
+
+    // Check if we already have this node in the routing table
+    if (m_routingTable->getNode(nodeID) != nullptr) {
+        // Node already exists, just update its last seen time
+        auto existingNode = m_routingTable->getNode(nodeID);
+        if (existingNode) {
+            existingNode->updateLastSeen();
+            return true;
+        }
+    }
+
     size_t bucketIndex = m_routingTable ? m_routingTable->getBucketIndex(nodeID) : 0;
 
     // Add the node to the verification queue with the bucket index
@@ -218,6 +235,27 @@ size_t RoutingManager::getNodeCount() const {
     }
 
     return m_routingTable->getNodeCount();
+}
+
+void RoutingManager::refreshAllBuckets() {
+    if (!m_routingTable || !m_running) {
+        return;
+    }
+
+    unified_event::logInfo("DHT.RoutingManager", "Refreshing all buckets in routing table");
+
+    // Get the number of buckets
+    size_t bucketCount = m_routingTable->getBucketCount();
+
+    // Refresh each bucket
+    for (size_t i = 0; i < bucketCount; ++i) {
+        m_routingTable->refreshBucket(i, [this](const std::vector<std::shared_ptr<Node>>& nodes) {
+            // Add the nodes to the routing table
+            for (const auto& node : nodes) {
+                this->addNode(node);
+            }
+        });
+    }
 }
 
 // Routing table saving and loading methods have been removed

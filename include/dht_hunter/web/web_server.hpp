@@ -165,6 +165,13 @@ private:
     network::HttpResponse handleInfoHashDetailRequest(const network::HttpRequest& request);
 
     /**
+     * @brief Handle logs API request
+     * @param request The HTTP request
+     * @return The HTTP response
+     */
+    network::HttpResponse handleLogsRequest(const network::HttpRequest& request);
+
+    /**
      * @brief Serve a static file
      * @param filePath The path to the file
      * @return The HTTP response

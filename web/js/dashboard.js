@@ -3,6 +3,13 @@
 // Global variables
 // No charts needed anymore
 
+// Global variables for logs
+let currentLogPage = 1;
+let logsPerPage = 50;
+let currentLogSeverity = 'info';
+let currentLogSource = '';
+let autoRefreshLogs = true;
+
 // Initialize the dashboard
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize tabs
@@ -11,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize settings
     initSettings();
 
+    // Initialize logs
+    initLogs();
+
     // Start data polling
     fetchData();
     setInterval(fetchData, 1000);
@@ -18,6 +28,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update uptime
     updateUptime();
     setInterval(updateUptime, 1000);
+
+    // Auto-refresh logs
+    setInterval(function() {
+        if (autoRefreshLogs && document.getElementById('logs-tab').classList.contains('active')) {
+            fetchLogs();
+        }
+    }, 5000); // Refresh logs every 5 seconds
 });
 
 // Initialize tabs
@@ -45,6 +62,103 @@ function initTabs() {
 
 // Charts have been removed
 
+// Initialize logs functionality
+function initLogs() {
+    // Set up event listeners for log controls
+    document.getElementById('log-severity').addEventListener('change', function() {
+        currentLogSeverity = this.value;
+        fetchLogs();
+    });
+
+    document.getElementById('log-source').addEventListener('input', function() {
+        currentLogSource = this.value;
+        fetchLogs();
+    });
+
+    document.getElementById('refresh-logs').addEventListener('click', function() {
+        fetchLogs();
+    });
+
+    document.getElementById('clear-logs').addEventListener('click', function() {
+        document.querySelector('#logs-table tbody').innerHTML = '';
+    });
+
+    document.getElementById('load-more-logs').addEventListener('click', function() {
+        currentLogPage++;
+        fetchLogs(true); // Append mode
+    });
+
+    // Initial fetch
+    fetchLogs();
+}
+
+// Fetch logs from API
+function fetchLogs(append = false) {
+    const limit = logsPerPage;
+    const offset = append ? (currentLogPage - 1) * logsPerPage : 0;
+
+    let url = `/api/logs?limit=${limit}`;
+    if (currentLogSeverity) {
+        url += `&severity=${currentLogSeverity}`;
+    }
+    if (currentLogSource) {
+        url += `&source=${encodeURIComponent(currentLogSource)}`;
+    }
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            updateLogsTable(data, append);
+        })
+        .catch(error => {
+            console.error('Error fetching logs:', error);
+        });
+}
+
+// Update logs table
+function updateLogsTable(data, append = false) {
+    const tbody = document.querySelector('#logs-table tbody');
+
+    // Clear table if not in append mode
+    if (!append) {
+        tbody.innerHTML = '';
+    }
+
+    // Check if we have logs
+    if (!data.logs || data.logs.length === 0) {
+        if (!append) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="4" class="no-data">No logs found</td>`;
+            tbody.appendChild(tr);
+        }
+        return;
+    }
+
+    // Add logs to table
+    data.logs.forEach(log => {
+        const tr = document.createElement('tr');
+
+        // Format timestamp
+        const timestamp = new Date(log.timestamp);
+        const formattedTime = timestamp.toLocaleTimeString();
+
+        tr.innerHTML = `
+            <td>${formattedTime}</td>
+            <td class="log-${log.severity.toLowerCase()}">${log.severity}</td>
+            <td>${log.source}</td>
+            <td>${log.formattedMessage}</td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+    // Scroll to bottom if not in append mode
+    if (!append) {
+        const logWindow = document.querySelector('.log-window');
+        logWindow.scrollTop = logWindow.scrollHeight;
+    }
+}
+
 // Fetch data from API
 function fetchData() {
     // Fetch statistics
@@ -56,18 +170,6 @@ function fetchData() {
         .catch(error => {
             console.error('Error fetching statistics:', error);
             updateStatus(false);
-        });
-
-    // Nodes fetch removed
-
-    // Fetch info hashes
-    fetch('/api/infohashes?limit=10')
-        .then(response => response.json())
-        .then(data => {
-            updateInfoHashesTable(data);
-        })
-        .catch(error => {
-            console.error('Error fetching info hashes:', error);
         });
 }
 
@@ -198,7 +300,7 @@ function updateInfoHashesTable(infoHashes) {
 
         // Add a details button
         const detailsBtn = document.createElement('button');
-        detailsBtn.textContent = 'Details';
+        detailsBtn.innerHTML = '<i class="fas fa-info-circle"></i> Details';
         detailsBtn.className = 'details-btn';
         detailsBtn.onclick = function() {
             // Format first seen date
@@ -217,6 +319,17 @@ function updateInfoHashesTable(infoHashes) {
                   'Status: ' + (infoHash.metadataStatus || 'Not Started'));
         };
         actionsTd.appendChild(detailsBtn);
+
+        // Add a view peers button
+        if (infoHash.peers > 0) {
+            const peersBtn = document.createElement('button');
+            peersBtn.innerHTML = '<i class="fas fa-users"></i> Peers';
+            peersBtn.className = 'peers-btn';
+            peersBtn.onclick = function() {
+                window.location.href = 'peers.html?infoHash=' + encodeURIComponent(infoHash.hash);
+            };
+            actionsTd.appendChild(peersBtn);
+        }
 
         tr.appendChild(actionsTd);
 

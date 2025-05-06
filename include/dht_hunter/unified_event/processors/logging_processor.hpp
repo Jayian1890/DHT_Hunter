@@ -9,6 +9,9 @@
 #include <fstream>
 #include <mutex>
 #include <unordered_map>
+#include <deque>
+#include <vector>
+#include <chrono>
 
 namespace dht_hunter::unified_event {
 
@@ -23,6 +26,7 @@ struct LoggingProcessorConfig {
     bool includeTimestamp = true;
     bool includeSeverity = true;
     bool includeSource = true;
+    size_t maxLogBufferSize = 1000; // Maximum number of log entries to keep in memory
 };
 
 /**
@@ -102,6 +106,28 @@ public:
      */
     void setFileOutput(bool enable, const std::string& filePath = "");
 
+    /**
+     * @brief Structure to represent a log entry
+     */
+    struct LogEntry {
+        std::chrono::system_clock::time_point timestamp;
+        EventSeverity severity;
+        std::string source;
+        std::string message;
+        std::string formattedMessage;
+    };
+
+    /**
+     * @brief Gets recent log entries
+     * @param maxEntries Maximum number of entries to return (0 for all)
+     * @param minSeverity Minimum severity level to include
+     * @param sourceFilter Filter by source (empty for all sources)
+     * @return Vector of log entries
+     */
+    std::vector<LogEntry> getRecentLogs(size_t maxEntries = 0,
+                                       EventSeverity minSeverity = EventSeverity::Trace,
+                                       const std::string& sourceFilter = "") const;
+
 private:
     /**
      * @brief Formats an event for logging
@@ -133,6 +159,10 @@ private:
     LoggingProcessorConfig m_config;
     std::ofstream m_logFile;
     mutable std::mutex m_logFileMutex;
+
+    // Log buffer for recent logs
+    mutable std::mutex m_logBufferMutex;
+    std::deque<LogEntry> m_logBuffer;
 
     // ANSI color codes for console output
     static const std::unordered_map<EventSeverity, std::string> SEVERITY_COLORS;

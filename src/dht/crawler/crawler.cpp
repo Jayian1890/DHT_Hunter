@@ -564,7 +564,7 @@ void Crawler::monitorInfoHashes() {
                             m_statistics.peersDiscovered += peerSetCount.size();
                         }
 
-                        unified_event::logInfo("DHT.Crawler", "Added " + std::to_string(newPeers) +
+                        unified_event::logDebug("DHT.Crawler", "Added " + std::to_string(newPeers) +
                                              " new peers for InfoHash: " + infoHashStr +
                                              ", total peers: " + std::to_string(peerSet.size()));
 
@@ -706,7 +706,7 @@ void Crawler::monitorInfoHashes() {
                     if (!peers.empty()) {
                         std::string activeTorrentMessage = "Found active torrent - Info hash: " + randomInfoHashStr;
                         activeTorrentMessage += ", Peers: " + std::to_string(peers.size());
-                        unified_event::logInfo("DHT.Crawler", activeTorrentMessage);
+                        unified_event::logDebug("DHT.Crawler", activeTorrentMessage);
                     } else {
                         std::string noPeersMessage = "No peers found for random info hash: " + randomInfoHashStr;
                         unified_event::logDebug("DHT.Crawler", noPeersMessage);
@@ -821,7 +821,7 @@ void Crawler::handleNodeDiscoveredEvent(const std::shared_ptr<unified_event::Eve
 
                 std::string logMessage = "Node discovered - ID: " + nodeIDStr;
                 logMessage += ", endpoint: " + endpoint + bucketInfo + methodInfo;
-                unified_event::logInfo("DHT.Crawler", logMessage);
+                unified_event::logDebug("DHT.Crawler", logMessage);
             }
         }, "Crawler::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
@@ -877,7 +877,7 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
 
                 std::string logMessage = "New peer discovered - Hash: " + infoHashStr;
                 logMessage += monitoredStr + ", peer: " + peerStr;
-                unified_event::logInfo("DHT.Crawler", logMessage);
+                unified_event::logDebug("DHT.Crawler", logMessage);
             }
         }, "Crawler::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {

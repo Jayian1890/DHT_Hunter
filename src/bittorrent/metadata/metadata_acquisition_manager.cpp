@@ -147,7 +147,7 @@ bool MetadataAcquisitionManager::start() {
     auto startedEvent = std::make_shared<unified_event::SystemStartedEvent>("BitTorrent.MetadataAcquisitionManager");
     m_eventBus->publish(startedEvent);
 
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Started metadata acquisition manager");
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Started metadata acquisition manager");
     return true;
 }
 
@@ -190,7 +190,7 @@ void MetadataAcquisitionManager::stop() {
     auto stoppedEvent = std::make_shared<unified_event::SystemStoppedEvent>("BitTorrent.MetadataAcquisitionManager");
     m_eventBus->publish(stoppedEvent);
 
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Stopped metadata acquisition manager");
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Stopped metadata acquisition manager");
 }
 
 bool MetadataAcquisitionManager::isRunning() const {
@@ -464,7 +464,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
                 m_acquisitionQueue.erase(it);
                 hasNext = true;
 
-                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Dequeued info hash for metadata acquisition: " +
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Dequeued info hash for metadata acquisition: " +
                                      types::infoHashToString(infoHash) +
                                      ", queue size: " +
                                      std::to_string(m_acquisitionQueue.size()));
@@ -641,7 +641,7 @@ void MetadataAcquisitionManager::loadConfiguration() {
     m_maxRetryCount = configManager->getInt("metadata.maxRetryCount", 3);
     m_retryDelayBaseSeconds = configManager->getInt("metadata.retryDelayBase", 300);
 
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Loaded configuration: processingInterval=" + std::to_string(m_processingIntervalSeconds) +
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Loaded configuration: processingInterval=" + std::to_string(m_processingIntervalSeconds) +
                           ", maxConcurrentAcquisitions=" + std::to_string(m_maxConcurrentAcquisitions) +
                           ", acquisitionTimeout=" + std::to_string(m_acquisitionTimeoutSeconds) +
                           ", maxRetryCount=" + std::to_string(m_maxRetryCount) +
@@ -671,14 +671,14 @@ void MetadataAcquisitionManager::handleInfoHashDiscoveredEvent(const std::shared
         return;
     }
 
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Processing InfoHashDiscoveredEvent for " +
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Processing InfoHashDiscoveredEvent for " +
                          types::infoHashToString(event->getInfoHash()));
 
     // Automatically acquire metadata for newly discovered info hashes
     bool result = acquireMetadata(event->getInfoHash());
 
     std::string resultStr = result ? "started" : "failed";
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition " + resultStr + " for " + types::infoHashToString(event->getInfoHash()));
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition " + resultStr + " for " + types::infoHashToString(event->getInfoHash()));
 }
 
 void MetadataAcquisitionManager::processFailedAcquisitions() {
@@ -708,13 +708,13 @@ void MetadataAcquisitionManager::processFailedAcquisitions() {
 
     // Retry acquisitions
     for (const auto& infoHash : readyForRetry) {
-        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Retrying metadata acquisition for info hash: " + types::infoHashToString(infoHash));
+        unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Retrying metadata acquisition for info hash: " + types::infoHashToString(infoHash));
         acquireMetadata(infoHash);
     }
 }
 
 void MetadataAcquisitionManager::handleSuccessfulAcquisition(const types::InfoHash& infoHash) {
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Successfully acquired metadata for info hash: " + types::infoHashToString(infoHash));
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Successfully acquired metadata for info hash: " + types::infoHashToString(infoHash));
 
     // Remove from active acquisitions
     try {

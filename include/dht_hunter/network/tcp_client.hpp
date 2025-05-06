@@ -8,11 +8,37 @@
 #include <mutex>
 #include <atomic>
 #include <thread>
+#include <chrono>
+#include <deque>
 
 namespace dht_hunter::network {
 
 /**
- * @brief A simple TCP client
+ * @brief Connection statistics for monitoring connection quality
+ */
+struct ConnectionStats {
+    std::chrono::steady_clock::time_point connectTime;       // When the connection was established
+    std::chrono::steady_clock::time_point lastActivityTime;  // Last time data was sent or received
+    std::chrono::milliseconds connectDuration{0};           // How long it took to establish the connection
+    size_t bytesSent{0};                                    // Total bytes sent
+    size_t bytesReceived{0};                               // Total bytes received
+    int errorCount{0};                                      // Number of errors encountered
+    int reconnectCount{0};                                  // Number of reconnection attempts
+    float latencyMs{0.0f};                                  // Average latency in milliseconds
+
+    // Reset statistics but keep history
+    void reset() {
+        connectTime = std::chrono::steady_clock::now();
+        lastActivityTime = connectTime;
+        connectDuration = std::chrono::milliseconds(0);
+        bytesSent = 0;
+        bytesReceived = 0;
+        errorCount = 0;
+    }
+};
+
+/**
+ * @brief A TCP client with enhanced connection management
  */
 class TCPClient {
 public:
@@ -27,12 +53,19 @@ public:
     ~TCPClient();
 
     /**
-     * @brief Connects to a server
+     * @brief Connects to a server with configurable timeout
      * @param ip The IP address
      * @param port The port
+     * @param timeoutSec Connection timeout in seconds (default: 5)
      * @return True if the connection was established, false otherwise
      */
-    bool connect(const std::string& ip, uint16_t port);
+    bool connect(const std::string& ip, uint16_t port, int timeoutSec = 5);
+
+    /**
+     * @brief Gets the connection statistics
+     * @return The connection statistics
+     */
+    const ConnectionStats& getStats() const;
 
     /**
      * @brief Disconnects from the server
@@ -88,6 +121,24 @@ private:
      */
     void handleConnectionClosed();
 
+    /**
+     * @brief Updates connection statistics with received data
+     * @param bytesCount Number of bytes received
+     */
+    void updateStatsForDataReceived(size_t bytesCount);
+
+    /**
+     * @brief Updates connection statistics with sent data
+     * @param bytesCount Number of bytes sent
+     */
+    void updateStatsForDataSent(size_t bytesCount);
+
+    /**
+     * @brief Updates latency measurement
+     * @param latencyMs Latency in milliseconds
+     */
+    void updateLatency(float latencyMs);
+
     // Socket
     int m_socket;
 
@@ -106,6 +157,14 @@ private:
 
     // Buffer
     std::vector<uint8_t> m_receiveBuffer;
+
+    // Connection statistics
+    ConnectionStats m_stats;
+    std::mutex m_statsMutex;
+
+    // Latency measurement
+    std::deque<float> m_latencyHistory;
+    static constexpr size_t MAX_LATENCY_HISTORY = 10;
 };
 
 } // namespace dht_hunter::network

@@ -6,6 +6,13 @@
 #include <thread>
 #include <sstream>
 
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/pwr_mgt/IOPMLib.h>
+#include <IOKit/IOMessage.h>
+#endif
+
 // Include thread utilities for the global shutdown flag
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 
@@ -38,10 +45,104 @@
  * Global variables for signal handling and application state
  */
 std::atomic<bool> g_running(true);
+std::atomic<bool> g_systemSleeping(false);
 std::shared_ptr<dht_hunter::network::UDPServer> g_server;
 std::shared_ptr<dht_hunter::dht::DHTNode> g_dhtNode;
 std::shared_ptr<dht_hunter::web::WebServer> g_webServer;
 std::shared_ptr<dht_hunter::bittorrent::metadata::MetadataAcquisitionManager> g_metadataManager;
+
+#ifdef __APPLE__
+// IOKit sleep/wake notification callback
+IONotificationPortRef g_notifyPortRef = nullptr;
+io_object_t g_sleepNotifierRef = IO_OBJECT_NULL;
+io_object_t g_wakeNotifierRef = IO_OBJECT_NULL;
+io_connect_t g_rootPowerDomain = IO_OBJECT_NULL;
+
+// Sleep notification callback
+void sleepCallBack(void* /*refCon*/, io_service_t /*service*/, natural_t messageType, void* messageArgument) {
+    if (messageType == kIOMessageSystemWillSleep) {
+        std::cout << "System is going to sleep..." << std::endl;
+        dht_hunter::unified_event::logInfo("Main", "System is going to sleep");
+
+        // Set the sleeping flag
+        g_systemSleeping.store(true, std::memory_order_release);
+
+        // Acknowledge the sleep notification
+        IOAllowPowerChange(g_rootPowerDomain, reinterpret_cast<intptr_t>(messageArgument));
+    }
+}
+
+// Wake notification callback
+void wakeCallBack(void* /*refCon*/, io_service_t /*service*/, natural_t messageType, void* /*messageArgument*/) {
+    if (messageType == kIOMessageSystemHasPoweredOn) {
+        std::cout << "System has woken up..." << std::endl;
+        dht_hunter::unified_event::logInfo("Main", "System has woken up");
+
+        // Clear the sleeping flag
+        g_systemSleeping.store(false, std::memory_order_release);
+
+        // Restart any services that need to be restarted after sleep
+        if (g_dhtNode && g_running) {
+            // Trigger a refresh of the routing table
+            auto dhtRoutingManager = g_dhtNode->getRoutingManager();
+            if (dhtRoutingManager) {
+                dhtRoutingManager->refreshAllBuckets();
+            }
+        }
+    }
+}
+
+// Register for sleep/wake notifications
+bool registerSleepWakeNotifications() {
+    // Create a notification port
+    g_notifyPortRef = IONotificationPortCreate(kIOMainPortDefault);
+    if (!g_notifyPortRef) {
+        std::cerr << "Failed to create notification port" << std::endl;
+        return false;
+    }
+
+    // Get a run loop source for the notification port
+    CFRunLoopSourceRef runLoopSource = IONotificationPortGetRunLoopSource(g_notifyPortRef);
+
+    // Add the run loop source to the current run loop
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, kCFRunLoopDefaultMode);
+
+    // Register for sleep notifications
+    g_rootPowerDomain = IORegisterForSystemPower(nullptr, &g_notifyPortRef, sleepCallBack, &g_sleepNotifierRef);
+    if (!g_rootPowerDomain) {
+        std::cerr << "Failed to register for system power notifications" << std::endl;
+        return false;
+    }
+
+    // Register for wake notifications - we don't need a separate registration
+    // as the same callback will handle both sleep and wake events
+    g_wakeNotifierRef = g_sleepNotifierRef;
+
+    return true;
+}
+
+// Unregister sleep/wake notifications
+void unregisterSleepWakeNotifications() {
+    // Remove the sleep notification
+    if (g_sleepNotifierRef != IO_OBJECT_NULL) {
+        IODeregisterForSystemPower(&g_sleepNotifierRef);
+        g_sleepNotifierRef = IO_OBJECT_NULL;
+        g_wakeNotifierRef = IO_OBJECT_NULL;
+    }
+
+    // Close the root power domain connection
+    if (g_rootPowerDomain != IO_OBJECT_NULL) {
+        IOServiceClose(g_rootPowerDomain);
+        g_rootPowerDomain = IO_OBJECT_NULL;
+    }
+
+    // Release the notification port
+    if (g_notifyPortRef) {
+        IONotificationPortDestroy(g_notifyPortRef);
+        g_notifyPortRef = nullptr;
+    }
+}
+#endif
 
 /**
  * Signal handler for graceful shutdown
@@ -49,9 +150,15 @@ std::shared_ptr<dht_hunter::bittorrent::metadata::MetadataAcquisitionManager> g_
  */
 void signalHandler(const int signal) {
     std::cout << "Received signal " << signal << ", shutting down gracefully..." << std::endl;
+    dht_hunter::unified_event::logInfo("Main", "Received signal " + std::to_string(signal) + ", shutting down gracefully");
 
     // Set the global shutdown flag to prevent new lock acquisitions
     dht_hunter::utility::thread::g_shuttingDown.store(true, std::memory_order_release);
+
+    // Unregister sleep/wake notifications on macOS
+#ifdef __APPLE__
+    unregisterSleepWakeNotifications();
+#endif
 
     g_running = false;
 }
@@ -250,6 +357,16 @@ int main(int argc, char* argv[]) {
     // Register signal handlers for graceful shutdown
     std::signal(SIGINT, signalHandler);   // Ctrl+C
     std::signal(SIGTERM, signalHandler);  // Termination request
+    std::signal(SIGABRT, signalHandler);  // Abort signal
+
+    // Register for sleep/wake notifications on macOS
+#ifdef __APPLE__
+    if (!registerSleepWakeNotifications()) {
+        dht_hunter::unified_event::logWarning("Main", "Failed to register for sleep/wake notifications");
+    } else {
+        dht_hunter::unified_event::logInfo("Main", "Registered for sleep/wake notifications");
+    }
+#endif
 
     // Get DHT port from config
     uint16_t dhtPort = static_cast<uint16_t>(configManager->getInt("dht.port", 6881));
@@ -344,6 +461,8 @@ int main(int argc, char* argv[]) {
 
     // Create web server with settings from config
     g_webServer = std::make_shared<dht_hunter::web::WebServer>(
+        webRoot,
+        webPort,
         statsService,
         routingManager,
         peerStorage,
@@ -380,14 +499,39 @@ int main(int argc, char* argv[]) {
 
     // Main application loop
     auto lastUpdateTime = std::chrono::steady_clock::now();
+    auto lastActivityCheckTime = std::chrono::steady_clock::now();
     while (g_running) {
         auto currentTime = std::chrono::steady_clock::now();
         auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastUpdateTime);
+        auto elapsedActivityCheckTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastActivityCheckTime);
 
-        // Update title every second
-        if (elapsedTime.count() >= 1000) {
-            updateTitle();
-            lastUpdateTime = currentTime;
+        // Skip updates if the system is sleeping
+        if (!g_systemSleeping.load(std::memory_order_acquire)) {
+            // Update title every second
+            if (elapsedTime.count() >= 1000) {
+                updateTitle();
+                lastUpdateTime = currentTime;
+            }
+
+            // Check for activity every 30 seconds
+            if (elapsedActivityCheckTime.count() >= 30) {
+                // Check if the DHT node is still active
+                if (g_dhtNode && g_dhtNode->isRunning()) {
+                    auto activityRoutingManager = g_dhtNode->getRoutingManager();
+                    if (activityRoutingManager) {
+                        // Get the current node count
+                        size_t nodeCount = activityRoutingManager->getNodeCount();
+                        dht_hunter::unified_event::logDebug("Main", "Activity check: " + std::to_string(nodeCount) + " nodes in routing table");
+                    }
+                }
+                lastActivityCheckTime = currentTime;
+            }
+        } else {
+            // System is sleeping, log this occasionally
+            if (elapsedActivityCheckTime.count() >= 60) {
+                dht_hunter::unified_event::logDebug("Main", "System is in sleep mode");
+                lastActivityCheckTime = currentTime;
+            }
         }
 
         // Sleep to avoid busy waiting
@@ -417,6 +561,11 @@ int main(int argc, char* argv[]) {
         g_dhtNode->stop();
         g_dhtNode.reset();
     }
+
+    // Unregister sleep/wake notifications on macOS
+#ifdef __APPLE__
+    unregisterSleepWakeNotifications();
+#endif
 
     // Shutdown the unified event system
     dht_hunter::unified_event::shutdownEventSystem();

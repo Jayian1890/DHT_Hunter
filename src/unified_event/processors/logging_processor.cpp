@@ -50,14 +50,39 @@ void LoggingProcessor::process(std::shared_ptr<Event> event) {
         return;
     }
 
-    std::string message = formatEvent(event);
+    std::string formattedMessage = formatEvent(event);
+
+    // Add to log buffer
+    {
+        std::lock_guard<std::mutex> lock(m_logBufferMutex);
+
+        // Create log entry
+        LogEntry entry;
+        entry.timestamp = event->getTimestamp();
+        entry.severity = event->getSeverity();
+        entry.source = event->getSource();
+
+        // Get message if available
+        auto messageProperty = event->getProperty<std::string>("message");
+        entry.message = messageProperty ? *messageProperty : event->getDetails();
+
+        entry.formattedMessage = formattedMessage;
+
+        // Add to buffer
+        m_logBuffer.push_back(entry);
+
+        // Trim buffer if it exceeds the maximum size
+        while (m_logBuffer.size() > m_config.maxLogBufferSize) {
+            m_logBuffer.pop_front();
+        }
+    }
 
     if (m_config.consoleOutput) {
-        writeToConsole(message, event->getSeverity());
+        writeToConsole(formattedMessage, event->getSeverity());
     }
 
     if (m_config.fileOutput) {
-        writeToFile(message);
+        writeToFile(formattedMessage);
     }
 }
 
@@ -415,6 +440,38 @@ void LoggingProcessor::writeToFile(const std::string& message) {
         m_logFile << message << std::endl;
         m_logFile.flush();
     }
+}
+
+std::vector<LoggingProcessor::LogEntry> LoggingProcessor::getRecentLogs(size_t maxEntries,
+                                                                      EventSeverity minSeverity,
+                                                                      const std::string& sourceFilter) const {
+    std::lock_guard<std::mutex> lock(m_logBufferMutex);
+
+    std::vector<LogEntry> result;
+    result.reserve(std::min(m_logBuffer.size(), maxEntries > 0 ? maxEntries : m_logBuffer.size()));
+
+    // Apply filters and copy to result vector
+    for (auto it = m_logBuffer.rbegin(); it != m_logBuffer.rend(); ++it) {
+        // Apply severity filter
+        if (it->severity < minSeverity) {
+            continue;
+        }
+
+        // Apply source filter if specified
+        if (!sourceFilter.empty() && it->source.find(sourceFilter) == std::string::npos) {
+            continue;
+        }
+
+        // Add to result
+        result.push_back(*it);
+
+        // Check if we've reached the maximum number of entries
+        if (maxEntries > 0 && result.size() >= maxEntries) {
+            break;
+        }
+    }
+
+    return result;
 }
 
 } // namespace dht_hunter::unified_event

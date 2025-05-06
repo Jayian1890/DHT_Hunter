@@ -74,9 +74,17 @@ std::shared_ptr<network::TCPClient> ConnectionPool::getConnection(
     const network::EndPoint& endpoint,
     std::function<void(const uint8_t*, size_t)> dataCallback,
     std::function<void(const std::string&)> errorCallback,
-    std::function<void()> closedCallback) {
+    std::function<void()> closedCallback,
+    int timeoutSec) {
 
     std::string endpointStr = endpoint.toString();
+
+    // Check if the endpoint is in circuit breaker state
+    if (isCircuitBroken(endpoint)) {
+        unified_event::logWarning("BitTorrent.ConnectionPool", "Circuit breaker open for " + endpointStr + ", connection attempt blocked");
+        m_stats.failedConnections++;
+        return nullptr;
+    }
 
     // Try to get a connection from the pool
     {
@@ -133,11 +141,24 @@ std::shared_ptr<network::TCPClient> ConnectionPool::getConnection(
                             unified_event::logDebug("BitTorrent.ConnectionPool", "Connection to " + endpointStr + " closed");
                         });
 
-                        // Mark as in use
+                        // Mark as in use and update stats
                         connection->inUse = true;
                         connection->lastUsed = std::chrono::steady_clock::now();
+                        connection->useCount++;
+                        connection->updateQuality();
 
-                        unified_event::logDebug("BitTorrent.ConnectionPool", "Reusing connection to " + endpointStr);
+                        // Update pool statistics
+                        m_stats.reuseCount++;
+                        m_stats.activeConnections++;
+                        m_stats.idleConnections--;
+
+                        unified_event::logDebug("BitTorrent.ConnectionPool", "Reusing connection to " + endpointStr +
+                                              " (quality: " + std::to_string(connection->quality) + ", use count: " +
+                                              std::to_string(connection->useCount) + ")");
+
+                        // Update endpoint health
+                        updateEndpointHealth(endpoint, true);
+
                         return connection->client;
                     } else {
                         // Connection failed validation, remove it
@@ -145,6 +166,10 @@ std::shared_ptr<network::TCPClient> ConnectionPool::getConnection(
 
                         // Close the connection
                         connection->client->disconnect();
+
+                        // Update statistics
+                        m_stats.validationFailures++;
+                        m_stats.totalConnections--;
 
                         // Remove from the pool
                         connIt = it->second.erase(connIt);
@@ -225,15 +250,21 @@ std::shared_ptr<network::TCPClient> ConnectionPool::getConnection(
     // Create a new connection
     auto client = std::make_shared<network::TCPClient>();
 
+    // Update statistics
+    m_stats.creationCount++;
+
     // Set up error handling with proper connection lifecycle management
     client->setDataReceivedCallback(dataCallback);
-    client->setErrorCallback([this, client, errorCallback, endpointStr](const std::string& error) {
+    client->setErrorCallback([this, client, errorCallback, endpointStr, endpoint](const std::string& error) {
         // Call the original error callback
         if (errorCallback) {
             errorCallback(error);
         }
 
         unified_event::logWarning("BitTorrent.ConnectionPool", "Connection to " + endpointStr + " reported error: " + error);
+
+        // Update endpoint health
+        updateEndpointHealth(endpoint, false);
 
         // Ensure the connection is properly removed from the pool
         removeConnectionByClient(endpointStr, client);
@@ -251,19 +282,36 @@ std::shared_ptr<network::TCPClient> ConnectionPool::getConnection(
     });
 
     // Connect to the endpoint with timeout handling
-    unified_event::logDebug("BitTorrent.ConnectionPool", "Connecting to " + endpointStr);
+    unified_event::logDebug("BitTorrent.ConnectionPool", "Connecting to " + endpointStr + " with " +
+                          std::to_string(timeoutSec) + " second timeout");
 
     // Attempt to connect with timeout
-    if (!client->connect(endpoint.getAddress().toString(), endpoint.getPort())) {
+    if (!client->connect(endpoint.getAddress().toString(), endpoint.getPort(), timeoutSec)) {
         unified_event::logWarning("BitTorrent.ConnectionPool", "Failed to connect to " + endpointStr);
+
+        // Update statistics and endpoint health
+        m_stats.failedConnections++;
+        updateEndpointHealth(endpoint, false);
+
         return nullptr;
     }
 
     // Verify the connection is actually established
     if (!client->isConnected()) {
         unified_event::logWarning("BitTorrent.ConnectionPool", "Connection to " + endpointStr + " failed verification");
+
+        // Update statistics and endpoint health
+        m_stats.failedConnections++;
+        updateEndpointHealth(endpoint, false);
+
         return nullptr;
     }
+
+    // Update statistics and endpoint health
+    m_stats.successfulConnections++;
+    m_stats.totalConnections++;
+    m_stats.activeConnections++;
+    updateEndpointHealth(endpoint, true);
 
     // Add to the pool
     auto connection = std::make_shared<PooledConnection>(client);
@@ -272,7 +320,10 @@ std::shared_ptr<network::TCPClient> ConnectionPool::getConnection(
         m_connections[endpointStr].push_back(connection);
     }
 
-    unified_event::logDebug("BitTorrent.ConnectionPool", "Created new connection to " + endpointStr);
+    // Log connection stats
+    const auto& stats = client->getStats();
+    unified_event::logDebug("BitTorrent.ConnectionPool", "Created new connection to " + endpointStr +
+                          " in " + std::to_string(stats.connectDuration.count()) + "ms");
     return client;
 }
 
@@ -317,7 +368,15 @@ void ConnectionPool::returnConnection(
 
                     pooledConnection->inUse = false;
                     pooledConnection->lastUsed = std::chrono::steady_clock::now();
-                    unified_event::logDebug("BitTorrent.ConnectionPool", "Returned connection to " + endpointStr + " to the pool");
+                    pooledConnection->updateQuality(); // Update quality metrics
+
+                    // Update statistics
+                    m_stats.activeConnections--;
+                    m_stats.idleConnections++;
+
+                    unified_event::logDebug("BitTorrent.ConnectionPool", "Returned connection to " + endpointStr +
+                                          " to the pool (quality: " + std::to_string(pooledConnection->quality) +
+                                          ", use count: " + std::to_string(pooledConnection->useCount) + ")");
                     return;
                 }
             }
@@ -335,6 +394,7 @@ void ConnectionPool::cleanupIdleConnections() {
     std::vector<std::string> emptyEndpoints;
     size_t closedCount = 0;
     size_t invalidCount = 0;
+    size_t poorQualityCount = 0;
 
     // Find idle connections that have been idle for too long or are invalid
     {
@@ -345,10 +405,13 @@ void ConnectionPool::cleanupIdleConnections() {
             auto& connections = pair.second;
             std::string endpointStr = pair.first;
 
-            // Remove idle connections that have been idle for too long or are invalid
+            // Remove idle connections that have been idle for too long, are invalid, or have poor quality
             connections.erase(
                 std::remove_if(connections.begin(), connections.end(),
-                    [&now, &closedCount, &invalidCount, this](const std::shared_ptr<PooledConnection>& connection) {
+                    [&now, &closedCount, &invalidCount, &poorQualityCount, this](const std::shared_ptr<PooledConnection>& connection) {
+                        // Update quality metrics
+                        connection->updateQuality();
+
                         // Check if the connection is invalid
                         if (!connection->client || !connection->client->isConnected() || !validateConnection(connection->client)) {
                             // Close the connection if it exists
@@ -356,6 +419,16 @@ void ConnectionPool::cleanupIdleConnections() {
                                 connection->client->disconnect();
                             }
                             invalidCount++;
+                            return true;
+                        }
+
+                        // Check if the connection has poor quality
+                        if (!connection->inUse && connection->quality < 0.3f) {
+                            // Close the connection
+                            if (connection->client) {
+                                connection->client->disconnect();
+                            }
+                            poorQualityCount++;
                             return true;
                         }
 
@@ -387,11 +460,19 @@ void ConnectionPool::cleanupIdleConnections() {
         }
     }
 
-    if (closedCount > 0 || invalidCount > 0) {
+    // Update statistics
+    size_t totalRemoved = closedCount + invalidCount + poorQualityCount;
+    if (totalRemoved > 0) {
+        m_stats.cleanupCount += totalRemoved;
+        m_stats.totalConnections -= totalRemoved;
+        m_stats.idleConnections -= (closedCount + poorQualityCount);
+
         unified_event::logInfo("BitTorrent.ConnectionPool",
             "Cleaned up connections: " +
             std::to_string(closedCount) + " idle, " +
-            std::to_string(invalidCount) + " invalid");
+            std::to_string(invalidCount) + " invalid, " +
+            std::to_string(poorQualityCount) + " poor quality. " +
+            "Pool now has " + std::to_string(m_stats.totalConnections) + " total connections.");
     }
 }
 
@@ -440,6 +521,14 @@ void ConnectionPool::removeConnectionByClient(const std::string& endpointStr, st
             });
 
         if (connIt != connections.end()) {
+            // Update statistics
+            if ((*connIt)->inUse) {
+                m_stats.activeConnections--;
+            } else {
+                m_stats.idleConnections--;
+            }
+            m_stats.totalConnections--;
+
             // Remove the connection from the pool
             connections.erase(connIt);
             unified_event::logDebug("BitTorrent.ConnectionPool", "Removed connection to " + endpointStr + " from pool");
@@ -450,6 +539,69 @@ void ConnectionPool::removeConnectionByClient(const std::string& endpointStr, st
             }
         }
     }
+}
+
+const ConnectionPoolStats& ConnectionPool::getStats() const {
+    return m_stats;
+}
+
+EndpointHealth ConnectionPool::getEndpointHealth(const network::EndPoint& endpoint) const {
+    std::string endpointStr = endpoint.toString();
+    std::lock_guard<std::mutex> lock(m_healthMutex);
+
+    auto it = m_endpointHealth.find(endpointStr);
+    if (it != m_endpointHealth.end()) {
+        return it->second;
+    }
+
+    // Return default health for unknown endpoints
+    return EndpointHealth();
+}
+
+void ConnectionPool::updateEndpointHealth(const network::EndPoint& endpoint, bool success) {
+    std::string endpointStr = endpoint.toString();
+    std::lock_guard<std::mutex> lock(m_healthMutex);
+
+    // Get or create health entry
+    auto& health = m_endpointHealth[endpointStr];
+
+    // Update health metrics
+    health.updateHealth(success);
+
+    // Log significant health changes
+    if (success && health.consecutiveSuccesses == 1 && health.consecutiveFailures > 3) {
+        unified_event::logInfo("BitTorrent.ConnectionPool", "Endpoint " + endpointStr +
+                             " recovered after " + std::to_string(health.consecutiveFailures) +
+                             " consecutive failures");
+    } else if (!success && health.consecutiveFailures == 5) {
+        unified_event::logWarning("BitTorrent.ConnectionPool", "Endpoint " + endpointStr +
+                                " has failed 5 consecutive times, circuit breaker activated");
+    }
+}
+
+bool ConnectionPool::isCircuitBroken(const network::EndPoint& endpoint) const {
+    std::string endpointStr = endpoint.toString();
+    std::lock_guard<std::mutex> lock(m_healthMutex);
+
+    auto it = m_endpointHealth.find(endpointStr);
+    if (it != m_endpointHealth.end()) {
+        const auto& health = it->second;
+
+        // Check if circuit is broken
+        if (health.isCircuitBroken()) {
+            // Check if we should attempt to reset the circuit
+            auto now = std::chrono::steady_clock::now();
+            auto sinceLastAttempt = std::chrono::duration_cast<std::chrono::seconds>(now - health.lastAttempt).count();
+
+            // Allow retry after CIRCUIT_BREAKER_RESET_SECONDS
+            if (sinceLastAttempt > CIRCUIT_BREAKER_RESET_SECONDS) {
+                return false; // Allow one retry attempt
+            }
+            return true; // Circuit still broken
+        }
+    }
+
+    return false; // Circuit not broken
 }
 
 } // namespace dht_hunter::bittorrent::metadata

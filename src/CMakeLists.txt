@@ -30,6 +30,16 @@ target_link_libraries(dht_hunter
         dht_hunter_web
 )
 
+# Link with platform-specific libraries
+if(APPLE)
+    # Link with CoreFoundation and IOKit frameworks on macOS
+    target_link_libraries(dht_hunter
+        PRIVATE
+        "-framework CoreFoundation"
+        "-framework IOKit"
+    )
+endif()
+
 # Set include directories
 target_include_directories(dht_hunter
         PRIVATE
