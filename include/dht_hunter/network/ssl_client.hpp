@@ -109,6 +109,30 @@ private:
     bool verifyCertificate(const std::vector<uint8_t>& certificate);
 
     /**
+     * @brief Generate a client key exchange message
+     * @return The client key exchange message
+     */
+    std::vector<uint8_t> generateClientKeyExchange();
+
+    /**
+     * @brief Generate a change cipher spec message
+     * @return The change cipher spec message
+     */
+    std::vector<uint8_t> generateChangeCipherSpec();
+
+    /**
+     * @brief Generate a finished message
+     * @return The finished message
+     */
+    std::vector<uint8_t> generateFinished();
+
+    /**
+     * @brief Generate the master secret
+     * @return True if the master secret was generated successfully, false otherwise
+     */
+    bool generateMasterSecret();
+
+    /**
      * @brief Encrypt data using the negotiated cipher suite
      * @param data The data to encrypt
      * @param length The length of the data

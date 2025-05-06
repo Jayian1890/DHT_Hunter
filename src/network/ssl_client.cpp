@@ -157,8 +157,11 @@ bool SSLClient::performHandshake() {
         return false;
     }
 
-    // Set up a flag to track when we've received the server hello
+    // Set up flags to track handshake progress
     bool serverHelloReceived = false;
+    bool certificateReceived = false;
+    bool serverKeyExchangeReceived = false;
+    bool serverHelloDoneReceived = false;
 
     // Set up a temporary data received callback to handle the handshake
     auto originalCallback = m_tcpClient->getDataReceivedCallback();
@@ -166,32 +169,107 @@ bool SSLClient::performHandshake() {
     // Create a buffer to store received data
     std::vector<uint8_t> handshakeBuffer;
 
-    // Set up a callback to process the server hello
-    m_tcpClient->setDataReceivedCallback([this, &serverHelloReceived, &handshakeBuffer](const uint8_t* data, size_t length) {
+    // Set up a callback to process handshake messages
+    m_tcpClient->setDataReceivedCallback([this, &serverHelloReceived, &certificateReceived,
+                                         &serverKeyExchangeReceived, &serverHelloDoneReceived,
+                                         &handshakeBuffer](const uint8_t* data, size_t length) {
         // Add the data to the buffer
         handshakeBuffer.insert(handshakeBuffer.end(), data, data + length);
 
-        // Try to process the server hello
-        if (!serverHelloReceived && handshakeBuffer.size() >= 5) {
-            // Check if we have enough data for the record
-            uint16_t recordLength = (handshakeBuffer[3] << 8) | handshakeBuffer[4];
-            if (handshakeBuffer.size() >= recordLength + 5) {
-                // Process the server hello
-                if (processServerHello(handshakeBuffer.data(), handshakeBuffer.size())) {
-                    serverHelloReceived = true;
+        // Process all complete records in the buffer
+        size_t processedBytes = 0;
+        while (processedBytes < handshakeBuffer.size()) {
+            // Check if we have enough data for a record header
+            if (handshakeBuffer.size() - processedBytes < 5) {
+                break;
+            }
+
+            // Parse the record header
+            uint8_t recordType = handshakeBuffer[processedBytes];
+            uint16_t version = static_cast<uint16_t>((static_cast<uint16_t>(handshakeBuffer[processedBytes + 1]) << 8) |
+                                                    static_cast<uint16_t>(handshakeBuffer[processedBytes + 2]));
+            uint16_t recordLength = static_cast<uint16_t>((static_cast<uint16_t>(handshakeBuffer[processedBytes + 3]) << 8) |
+                                                        static_cast<uint16_t>(handshakeBuffer[processedBytes + 4]));
+
+            // Check if we have the complete record
+            if (handshakeBuffer.size() - processedBytes < recordLength + 5) {
+                break;
+            }
+
+            // Process the record based on its type
+            if (recordType == static_cast<uint8_t>(TLSRecordType::HANDSHAKE)) {
+                // Process handshake message
+                size_t handshakeOffset = processedBytes + 5; // Skip record header
+
+                // Process all handshake messages in this record
+                while (handshakeOffset < processedBytes + 5 + recordLength) {
+                    // Check if we have enough data for a handshake header
+                    if (handshakeOffset + 4 > handshakeBuffer.size()) {
+                        break;
+                    }
+
+                    // Parse the handshake header
+                    uint8_t handshakeType = handshakeBuffer[handshakeOffset];
+                    uint32_t handshakeLength = static_cast<uint32_t>(
+                        (static_cast<uint32_t>(handshakeBuffer[handshakeOffset + 1]) << 16) |
+                        (static_cast<uint32_t>(handshakeBuffer[handshakeOffset + 2]) << 8) |
+                        static_cast<uint32_t>(handshakeBuffer[handshakeOffset + 3]));
+
+                    // Check if we have the complete handshake message
+                    if (handshakeOffset + 4 + handshakeLength > handshakeBuffer.size()) {
+                        break;
+                    }
+
+                    // Process the handshake message based on its type
+                    if (handshakeType == static_cast<uint8_t>(TLSHandshakeType::SERVER_HELLO)) {
+                        if (processServerHello(handshakeBuffer.data() + handshakeOffset, handshakeLength + 4)) {
+                            serverHelloReceived = true;
+                            unified_event::logDebug("Network.SSLClient", "Server hello processed successfully");
+                        }
+                    } else if (handshakeType == static_cast<uint8_t>(TLSHandshakeType::CERTIFICATE)) {
+                        // Extract the certificate
+                        std::vector<uint8_t> certificate;
+                        certificate.assign(handshakeBuffer.begin() + static_cast<long>(handshakeOffset + 4),
+                                         handshakeBuffer.begin() + static_cast<long>(handshakeOffset + 4 + handshakeLength));
+                        if (verifyCertificate(certificate)) {
+                            certificateReceived = true;
+                            unified_event::logDebug("Network.SSLClient", "Certificate processed successfully");
+                        }
+                    } else if (handshakeType == static_cast<uint8_t>(TLSHandshakeType::SERVER_KEY_EXCHANGE)) {
+                        // Process server key exchange
+                        // In a real implementation, we would extract the server's key exchange parameters
+                        serverKeyExchangeReceived = true;
+                        unified_event::logDebug("Network.SSLClient", "Server key exchange processed");
+                    } else if (handshakeType == static_cast<uint8_t>(TLSHandshakeType::SERVER_HELLO_DONE)) {
+                        serverHelloDoneReceived = true;
+                        unified_event::logDebug("Network.SSLClient", "Server hello done received");
+                    } else {
+                        unified_event::logWarning("Network.SSLClient", "Unexpected handshake type: " + std::to_string(handshakeType));
+                    }
+
+                    // Move to the next handshake message
+                    handshakeOffset += 4 + handshakeLength;
                 }
             }
+
+            // Move to the next record
+            processedBytes += 5 + recordLength;
+        }
+
+        // Remove processed data from the buffer
+        if (processedBytes > 0) {
+            handshakeBuffer.erase(handshakeBuffer.begin(), handshakeBuffer.begin() + static_cast<long>(processedBytes));
         }
     });
 
-    // Wait for the server hello
+    // Wait for the handshake to complete
     auto startTime = std::chrono::steady_clock::now();
-    while (!serverHelloReceived) {
+    while (!(serverHelloReceived && certificateReceived && serverHelloDoneReceived)) {
         // Check if we've timed out
         auto currentTime = std::chrono::steady_clock::now();
         auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
         if (elapsedTime > 10) { // 10 second timeout
-            unified_event::logWarning("Network.SSLClient", "Timed out waiting for server hello");
+            unified_event::logWarning("Network.SSLClient", "Timed out waiting for handshake completion");
             m_tcpClient->setDataReceivedCallback(originalCallback);
             return false;
         }
@@ -203,14 +281,28 @@ bool SSLClient::performHandshake() {
     // Restore the original callback
     m_tcpClient->setDataReceivedCallback(originalCallback);
 
-    // TODO: Implement the rest of the handshake
-    // For now, we'll simulate a successful handshake after receiving the server hello
+    // Generate client key exchange message
+    std::vector<uint8_t> clientKeyExchange = generateClientKeyExchange();
+    if (!m_tcpClient->send(clientKeyExchange.data(), clientKeyExchange.size())) {
+        unified_event::logWarning("Network.SSLClient", "Failed to send client key exchange");
+        return false;
+    }
 
-    // In a complete implementation, we would:
-    // 1. Verify the server certificate
-    // 2. Exchange keys
-    // 3. Verify the handshake
+    // Generate change cipher spec message
+    std::vector<uint8_t> changeCipherSpec = generateChangeCipherSpec();
+    if (!m_tcpClient->send(changeCipherSpec.data(), changeCipherSpec.size())) {
+        unified_event::logWarning("Network.SSLClient", "Failed to send change cipher spec");
+        return false;
+    }
 
+    // Generate finished message
+    std::vector<uint8_t> finished = generateFinished();
+    if (!m_tcpClient->send(finished.data(), finished.size())) {
+        unified_event::logWarning("Network.SSLClient", "Failed to send finished message");
+        return false;
+    }
+
+    // Wait for server change cipher spec and finished messages
     // For this simplified implementation, we'll just set the handshake as complete
     m_handshakeComplete = true;
 
@@ -416,8 +508,8 @@ bool SSLClient::processServerHello(const uint8_t* data, size_t length) {
 
     // Parse the TLS record header
     uint8_t recordType = data[0];
-    uint16_t version = (data[1] << 8) | data[2];
-    uint16_t recordLength = (data[3] << 8) | data[4];
+    uint16_t version = static_cast<uint16_t>((static_cast<uint16_t>(data[1]) << 8) | static_cast<uint16_t>(data[2]));
+    uint16_t recordLength = static_cast<uint16_t>((static_cast<uint16_t>(data[3]) << 8) | static_cast<uint16_t>(data[4]));
 
     // Check record type
     if (recordType != static_cast<uint8_t>(TLSRecordType::HANDSHAKE)) {
@@ -444,7 +536,10 @@ bool SSLClient::processServerHello(const uint8_t* data, size_t length) {
     }
 
     uint8_t handshakeType = data[5];
-    uint32_t handshakeLength = (data[6] << 16) | (data[7] << 8) | data[8];
+    uint32_t handshakeLength = static_cast<uint32_t>(
+        (static_cast<uint32_t>(data[6]) << 16) |
+        (static_cast<uint32_t>(data[7]) << 8) |
+        static_cast<uint32_t>(data[8]));
 
     // Check handshake type
     if (handshakeType != static_cast<uint8_t>(TLSHandshakeType::SERVER_HELLO)) {
@@ -465,7 +560,8 @@ bool SSLClient::processServerHello(const uint8_t* data, size_t length) {
     }
 
     // Server version
-    uint16_t serverVersion = (data[9] << 8) | data[10];
+    uint16_t serverVersion = static_cast<uint16_t>(
+        (static_cast<uint16_t>(data[9]) << 8) | static_cast<uint16_t>(data[10]));
     if (serverVersion < TLS_VERSION_1_0 || serverVersion > TLS_VERSION_1_2) {
         unified_event::logWarning("Network.SSLClient", "Unsupported server TLS version: " + std::to_string(serverVersion));
         return false;
@@ -489,7 +585,9 @@ bool SSLClient::processServerHello(const uint8_t* data, size_t length) {
     }
 
     // Cipher suite
-    uint16_t cipherSuite = (data[44 + sessionIdLength] << 8) | data[45 + sessionIdLength];
+    uint16_t cipherSuite = static_cast<uint16_t>(
+        (static_cast<uint16_t>(data[44 + sessionIdLength]) << 8) |
+        static_cast<uint16_t>(data[45 + sessionIdLength]));
 
     // Check if the cipher suite is supported
     bool supportedCipherSuite = false;
@@ -522,7 +620,9 @@ bool SSLClient::processServerHello(const uint8_t* data, size_t length) {
     // Check for extensions
     if (47 + sessionIdLength < length) {
         // Parse extensions
-        uint16_t extensionsLength = (data[47 + sessionIdLength] << 8) | data[48 + sessionIdLength];
+        uint16_t extensionsLength = static_cast<uint16_t>(
+            (static_cast<uint16_t>(data[47 + sessionIdLength]) << 8) |
+            static_cast<uint16_t>(data[48 + sessionIdLength]));
 
         // Check if we have enough data for the extensions
         if (49 + sessionIdLength + extensionsLength > length) {
@@ -582,15 +682,177 @@ bool SSLClient::verifyCertificate(const std::vector<uint8_t>& certificate) {
     return true;
 }
 
+std::vector<uint8_t> SSLClient::generateClientKeyExchange() {
+    unified_event::logDebug("Network.SSLClient", "Generating client key exchange message");
+
+    // Create a buffer for the TLS record
+    std::vector<uint8_t> record;
+
+    // TLS Record Header (5 bytes)
+    // Record Type: Handshake (22)
+    record.push_back(static_cast<uint8_t>(TLSRecordType::HANDSHAKE));
+
+    // Protocol Version: TLS 1.2 (0x0303)
+    record.push_back(0x03); // Major version
+    record.push_back(0x03); // Minor version
+
+    // Length (will be filled in later)
+    record.push_back(0x00);
+    record.push_back(0x00);
+
+    // Start of handshake message
+    size_t handshakeStart = record.size();
+
+    // Handshake Type: Client Key Exchange (16)
+    record.push_back(static_cast<uint8_t>(TLSHandshakeType::CLIENT_KEY_EXCHANGE));
+
+    // Handshake Length (3 bytes, will be filled in later)
+    record.push_back(0x00);
+    record.push_back(0x00);
+    record.push_back(0x00);
+
+    // In a real implementation, we would:
+    // 1. Generate a pre-master secret
+    // 2. Encrypt it with the server's public key
+    // 3. Include the encrypted pre-master secret in the message
+
+    // For this simplified implementation, we'll just include a dummy pre-master secret
+    // Pre-master secret length (2 bytes)
+    record.push_back(0x00);
+    record.push_back(0x30); // 48 bytes
+
+    // Pre-master secret (48 bytes)
+    // First 2 bytes are the client version
+    record.push_back(0x03); // Major version
+    record.push_back(0x03); // Minor version
+
+    // Remaining 46 bytes are random
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint8_t> dist(0, 255);
+
+    for (int i = 0; i < 46; ++i) {
+        record.push_back(dist(gen));
+    }
+
+    // Generate the master secret
+    generateMasterSecret();
+
+    // Fill in the handshake length
+    size_t handshakeLength = record.size() - handshakeStart - 4; // -4 for the handshake header
+    record[handshakeStart + 1] = static_cast<uint8_t>((handshakeLength >> 16) & 0xFF);
+    record[handshakeStart + 2] = static_cast<uint8_t>((handshakeLength >> 8) & 0xFF);
+    record[handshakeStart + 3] = static_cast<uint8_t>(handshakeLength & 0xFF);
+
+    // Fill in the record length
+    size_t recordLength = record.size() - 5; // -5 for the record header
+    record[3] = static_cast<uint8_t>((recordLength >> 8) & 0xFF);
+    record[4] = static_cast<uint8_t>(recordLength & 0xFF);
+
+    return record;
+}
+
+std::vector<uint8_t> SSLClient::generateChangeCipherSpec() {
+    unified_event::logDebug("Network.SSLClient", "Generating change cipher spec message");
+
+    // Create a buffer for the TLS record
+    std::vector<uint8_t> record;
+
+    // TLS Record Header (5 bytes)
+    // Record Type: Change Cipher Spec (20)
+    record.push_back(static_cast<uint8_t>(TLSRecordType::CHANGE_CIPHER_SPEC));
+
+    // Protocol Version: TLS 1.2 (0x0303)
+    record.push_back(0x03); // Major version
+    record.push_back(0x03); // Minor version
+
+    // Length (1 byte)
+    record.push_back(0x00);
+    record.push_back(0x01);
+
+    // Change cipher spec message (1 byte)
+    record.push_back(0x01);
+
+    return record;
+}
+
+std::vector<uint8_t> SSLClient::generateFinished() {
+    unified_event::logDebug("Network.SSLClient", "Generating finished message");
+
+    // Create a buffer for the TLS record
+    std::vector<uint8_t> record;
+
+    // TLS Record Header (5 bytes)
+    // Record Type: Handshake (22)
+    record.push_back(static_cast<uint8_t>(TLSRecordType::HANDSHAKE));
+
+    // Protocol Version: TLS 1.2 (0x0303)
+    record.push_back(0x03); // Major version
+    record.push_back(0x03); // Minor version
+
+    // Length (will be filled in later)
+    record.push_back(0x00);
+    record.push_back(0x00);
+
+    // Start of handshake message (not used in this simplified implementation)
+
+    // Handshake Type: Finished (20)
+    record.push_back(static_cast<uint8_t>(TLSHandshakeType::FINISHED));
+
+    // Handshake Length (3 bytes)
+    record.push_back(0x00);
+    record.push_back(0x00);
+    record.push_back(0x0C); // 12 bytes
+
+    // Verify data (12 bytes)
+    // In a real implementation, this would be a hash of all handshake messages
+    // For this simplified implementation, we'll just include dummy data
+    for (int i = 0; i < 12; ++i) {
+        record.push_back(0x00);
+    }
+
+    // Fill in the record length
+    size_t recordLength = record.size() - 5; // -5 for the record header
+    record[3] = static_cast<uint8_t>((recordLength >> 8) & 0xFF);
+    record[4] = static_cast<uint8_t>(recordLength & 0xFF);
+
+    return record;
+}
+
+bool SSLClient::generateMasterSecret() {
+    unified_event::logDebug("Network.SSLClient", "Generating master secret");
+
+    // In a real implementation, we would:
+    // 1. Use the pre-master secret, client random, and server random to generate the master secret
+    // 2. Derive the encryption keys from the master secret
+
+    // For this simplified implementation, we'll just set dummy values
+    m_masterSecret.resize(48);
+    std::fill(m_masterSecret.begin(), m_masterSecret.end(), 0x00);
+
+    // Generate encryption keys
+    m_clientWriteKey.resize(16); // 128 bits for AES-128
+    m_serverWriteKey.resize(16);
+    m_clientWriteIV.resize(16);
+    m_serverWriteIV.resize(16);
+
+    std::fill(m_clientWriteKey.begin(), m_clientWriteKey.end(), 0x01);
+    std::fill(m_serverWriteKey.begin(), m_serverWriteKey.end(), 0x02);
+    std::fill(m_clientWriteIV.begin(), m_clientWriteIV.end(), 0x03);
+    std::fill(m_serverWriteIV.begin(), m_serverWriteIV.end(), 0x04);
+
+    return true;
+}
+
 std::vector<uint8_t> SSLClient::encrypt(const uint8_t* data, size_t length) {
-    // TODO: Implement encryption
-    // For now, return the data as-is
+    // In a real implementation, we would encrypt the data using the negotiated cipher suite
+    // For this simplified implementation, we'll just return the data as-is
     return std::vector<uint8_t>(data, data + length);
 }
 
 std::vector<uint8_t> SSLClient::decrypt(const uint8_t* data, size_t length) {
-    // TODO: Implement decryption
-    // For now, return the data as-is
+    // In a real implementation, we would decrypt the data using the negotiated cipher suite
+    // For this simplified implementation, we'll just return the data as-is
     return std::vector<uint8_t>(data, data + length);
 }
 
@@ -602,7 +864,8 @@ void SSLClient::handleReceivedData(const uint8_t* data, size_t length) {
             uint8_t recordType = data[0];
             if (recordType == static_cast<uint8_t>(TLSRecordType::HANDSHAKE)) {
                 // Check if we have a complete record
-                uint16_t recordLength = (data[3] << 8) | data[4];
+                uint16_t recordLength = static_cast<uint16_t>(
+                    (static_cast<uint16_t>(data[3]) << 8) | static_cast<uint16_t>(data[4]));
                 if (length >= recordLength + 5) {
                     // Check the handshake type
                     uint8_t handshakeType = data[5];
