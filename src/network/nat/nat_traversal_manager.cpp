@@ -1,4 +1,5 @@
 #include "dht_hunter/network/nat/nat_traversal_manager.hpp"
+#include "dht_hunter/utility/config/configuration_manager.hpp"
 #include <sstream>
 
 namespace dht_hunter::network::nat {
@@ -30,22 +31,37 @@ bool NATTraversalManager::initialize() {
 
     unified_event::logDebug("Network.NAT", "Initializing NAT traversal manager");
 
-    // Initialize UPnP service
-    auto upnpService = UPnPService::getInstance();
-    if (upnpService->initialize()) {
-        m_services.push_back(upnpService);
-        unified_event::logInfo("Network.NAT", "UPnP service initialized");
+    // Get configuration settings
+    auto configManager = utility::config::ConfigurationManager::getInstance();
+    bool enableUPnP = configManager->getBool("network.enableUPnP", false);
+    bool enableNATPMP = configManager->getBool("network.enableNATPMP", false);
+
+    // Initialize UPnP service if enabled
+    if (enableUPnP) {
+        unified_event::logDebug("Network.NAT", "UPnP is enabled in configuration");
+        auto upnpService = UPnPService::getInstance();
+        if (upnpService->initialize()) {
+            m_services.push_back(upnpService);
+            unified_event::logInfo("Network.NAT", "UPnP service initialized");
+        } else {
+            unified_event::logWarning("Network.NAT", "Failed to initialize UPnP service");
+        }
     } else {
-        unified_event::logWarning("Network.NAT", "Failed to initialize UPnP service");
+        unified_event::logInfo("Network.NAT", "UPnP is disabled in configuration");
     }
 
-    // Initialize NAT-PMP service
-    auto natpmpService = NATPMPService::getInstance();
-    if (natpmpService->initialize()) {
-        m_services.push_back(natpmpService);
-        unified_event::logInfo("Network.NAT", "NAT-PMP service initialized");
+    // Initialize NAT-PMP service if enabled
+    if (enableNATPMP) {
+        unified_event::logDebug("Network.NAT", "NAT-PMP is enabled in configuration");
+        auto natpmpService = NATPMPService::getInstance();
+        if (natpmpService->initialize()) {
+            m_services.push_back(natpmpService);
+            unified_event::logInfo("Network.NAT", "NAT-PMP service initialized");
+        } else {
+            unified_event::logWarning("Network.NAT", "Failed to initialize NAT-PMP service");
+        }
     } else {
-        unified_event::logWarning("Network.NAT", "Failed to initialize NAT-PMP service");
+        unified_event::logInfo("Network.NAT", "NAT-PMP is disabled in configuration");
     }
 
     // Check if we have any services

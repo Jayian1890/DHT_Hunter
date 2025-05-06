@@ -114,7 +114,7 @@ bool DHTMetadataProvider::acquireMetadata(
         return false;
     }
 
-    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Started metadata acquisition for info hash: " + infoHashStr);
+    unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Started metadata acquisition for info hash: " + infoHashStr);
     return true;
 }
 
@@ -496,7 +496,7 @@ void DHTMetadataProvider::cleanupTimedOutTasks() {
                     // Reset the start time
                     task->startTime = std::chrono::steady_clock::now();
 
-                    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Retrying metadata acquisition for info hash: " + infoHashStr + " (attempt " + std::to_string(task->retryCount) + ")");
+                    unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Retrying metadata acquisition for info hash: " + infoHashStr + " (attempt " + std::to_string(task->retryCount) + ")");
 
                     // Retry the acquisition
                     if (m_dhtNode) {

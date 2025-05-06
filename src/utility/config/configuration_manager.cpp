@@ -281,6 +281,8 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         networkConfig.getObject()->set("maxTransactions", json::JsonValue(1024));
         networkConfig.getObject()->set("mtuSize", json::JsonValue(1400));
         networkConfig.getObject()->set("userAgent", json::JsonValue(network::getUserAgent()));
+        networkConfig.getObject()->set("enableUPnP", json::JsonValue(false));
+        networkConfig.getObject()->set("enableNATPMP", json::JsonValue(false));
         config.getObject()->set("network", networkConfig);
 
         // Web interface settings
@@ -291,7 +293,7 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
 
         // Persistence settings
         json::JsonValue persistenceConfig(json::JsonValue::createObject());
-        persistenceConfig.getObject()->set("saveInterval", json::JsonValue(60)); // In minutes
+        persistenceConfig.getObject()->set("saveInterval", json::JsonValue(5)); // In minutes
         persistenceConfig.getObject()->set("routingTablePath", json::JsonValue("routing_table.dat"));
         persistenceConfig.getObject()->set("peerStoragePath", json::JsonValue("peer_storage.dat"));
         persistenceConfig.getObject()->set("metadataPath", json::JsonValue("metadata.dat"));
