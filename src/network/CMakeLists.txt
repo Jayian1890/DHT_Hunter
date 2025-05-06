@@ -4,7 +4,9 @@ add_library(dht_hunter_network
         udp_server.cpp
         udp_client.cpp
         tcp_client.cpp
+        ssl_client.cpp
         network_address.cpp
+        http_client.cpp
         http_server.cpp
         nat/upnp_service.cpp
         nat/natpmp_service.cpp

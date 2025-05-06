@@ -32,7 +32,7 @@ bool DHTMetadataProvider::acquireMetadata(
     // Check if we already have metadata for this info hash in the persistence store
     auto persistedMetadata = MetadataPersistence::getInstance().getMetadata(infoHash);
     if (persistedMetadata && MetadataValidator::validate(persistedMetadata)) {
-        unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Already have metadata for info hash in persistence store: " + types::infoHashToString(infoHash));
+        unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Already have metadata for info hash in persistence store: " + types::infoHashToString(infoHash));
         callback(true);
         return true;
     }
@@ -40,7 +40,7 @@ bool DHTMetadataProvider::acquireMetadata(
     // Check if we already have metadata for this info hash in the utility
     auto metadata = utility::metadata::MetadataUtils::getInfoHashMetadata(infoHash);
     if (metadata && !metadata->getName().empty() && metadata->getTotalSize() > 0) {
-        unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Already have metadata for info hash in utility: " + types::infoHashToString(infoHash));
+        unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Already have metadata for info hash in utility: " + types::infoHashToString(infoHash));
         callback(true);
         return true;
     }
@@ -50,7 +50,7 @@ bool DHTMetadataProvider::acquireMetadata(
     {
         std::lock_guard<std::mutex> lock(m_tasksMutex);
         if (m_tasks.find(infoHashStr) != m_tasks.end()) {
-            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Already acquiring metadata for info hash: " + infoHashStr);
+            unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Already acquiring metadata for info hash: " + infoHashStr);
             return true;
         }
     }
@@ -73,13 +73,13 @@ bool DHTMetadataProvider::acquireMetadata(
                 closestNodes.push_back(node->getID());
             }
 
-            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Found " + std::to_string(closestNodes.size()) +
+            unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Found " + std::to_string(closestNodes.size()) +
                                   " nodes that might have metadata for info hash " + types::infoHashToString(infoHash));
         });
 
         // If we didn't find any nodes, use bootstrap nodes
         if (closestNodes.empty()) {
-            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "No nodes found that might have metadata, using bootstrap nodes");
+            unified_event::logDebug("BitTorrent.DHTMetadataProvider", "No nodes found that might have metadata, using bootstrap nodes");
 
             // Get bootstrap nodes from the DHT config
             dht::DHTConfig config;
@@ -128,7 +128,7 @@ bool DHTMetadataProvider::start() {
     // Start the cleanup thread
     m_cleanupThread = std::thread(&DHTMetadataProvider::cleanupTimedOutTasksPeriodically, this);
 
-    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Started DHT metadata provider");
+    unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Started DHT metadata provider");
     return true;
 }
 
@@ -192,7 +192,7 @@ bool DHTMetadataProvider::sendGetMetadataQuery(
     std::string infoHashStr = types::infoHashToString(infoHash);
     std::string nodeIdStr = types::nodeIDToString(nodeId);
 
-    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Sending get_metadata query for info hash: " + infoHashStr + " to node: " + nodeIdStr);
+    unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Sending get_metadata query for info hash: " + infoHashStr + " to node: " + nodeIdStr);
 
     // This is a real implementation of the DHT metadata extension protocol (BEP-51)
     // We'll use the DHT node's sendQueryToNode method to send the query directly to the node
@@ -200,14 +200,14 @@ bool DHTMetadataProvider::sendGetMetadataQuery(
     // Send the query to the node and register a callback for the response
     return m_dhtNode->sendQueryToNode(nodeId, query, [this, infoHash, task, infoHashStr, nodeIdStr](std::shared_ptr<dht::ResponseMessage> response, bool success) {
         if (success && response) {
-            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Received response from node: " + nodeIdStr + " for info hash: " + infoHashStr);
+            unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Received response from node: " + nodeIdStr + " for info hash: " + infoHashStr);
 
             // Get the metadata from the response
             auto metadata = response->getMetadata();
             if (metadata) {
                 // Validate the metadata
                 if (MetadataValidator::validate(metadata)) {
-                    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Received valid metadata for info hash: " + infoHashStr);
+                    unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Received valid metadata for info hash: " + infoHashStr);
 
                     // Store the metadata in the task
                     task->metadata = metadata;
@@ -346,7 +346,7 @@ bool DHTMetadataProvider::processMetadataResponse(
     }
 
     std::string torrentName = *name;
-    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Got metadata name: " + torrentName + " for info hash: " + types::infoHashToString(task->infoHash));
+    unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Got metadata name: " + torrentName + " for info hash: " + types::infoHashToString(task->infoHash));
 
     // Extract the files
     std::vector<types::TorrentFile> files;
@@ -356,7 +356,7 @@ bool DHTMetadataProvider::processMetadataResponse(
     auto filesList = metadataValue->getList("files");
     if (filesList) {
         // Multi-file torrent
-        unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Processing multi-file torrent with " + std::to_string(filesList->size()) + " files");
+        unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Processing multi-file torrent with " + std::to_string(filesList->size()) + " files");
 
         for (const auto& fileValue : *filesList) {
             auto file = std::make_shared<bencode::BencodeValue>(*fileValue);
@@ -400,7 +400,7 @@ bool DHTMetadataProvider::processMetadataResponse(
             files.emplace_back(filePath, fileSize);
             totalSize += fileSize;
 
-            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Added file: " + filePath + " (" + std::to_string(fileSize) + " bytes)");
+            unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Added file: " + filePath + " (" + std::to_string(fileSize) + " bytes)");
         }
     } else {
         // Single-file torrent
@@ -410,17 +410,17 @@ bool DHTMetadataProvider::processMetadataResponse(
             files.emplace_back(torrentName, fileSize);
             totalSize = fileSize;
 
-            unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Single-file torrent: " + torrentName + " (" + std::to_string(fileSize) + " bytes)");
+            unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Single-file torrent: " + torrentName + " (" + std::to_string(fileSize) + " bytes)");
         }
     }
 
     // Log the total size
-    unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Total size: " + std::to_string(totalSize) + " bytes");
+    unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Total size: " + std::to_string(totalSize) + " bytes");
 
     // Extract piece length
     auto pieceLength = metadataValue->getInteger("piece length");
     if (pieceLength) {
-        unified_event::logInfo("BitTorrent.DHTMetadataProvider", "Piece length: " + std::to_string(*pieceLength) + " bytes");
+        unified_event::logDebug("BitTorrent.DHTMetadataProvider", "Piece length: " + std::to_string(*pieceLength) + " bytes");
     }
 
     // Store the metadata

@@ -1,11 +1,12 @@
 #include "dht_hunter/bittorrent/tracker/tracker_manager.hpp"
 #include "dht_hunter/utility/config/configuration_manager.hpp"
 #include "dht_hunter/utility/network/network_utils.hpp"
+#include "dht_hunter/network/http_client.hpp"
 #include <sstream>
 #include <algorithm>
-#include <curl/curl.h>
 #include <regex>
 #include <chrono>
+#include <future>
 
 namespace dht_hunter::bittorrent::tracker {
 
@@ -468,15 +469,6 @@ std::string TrackerManager::getTrackerType(const std::string& url) const {
     }
 }
 
-// Callback function for cURL to write data
-size_t writeCallback(char* ptr, size_t size, size_t nmemb, std::string* data) {
-    if (data == nullptr) {
-        return 0;
-    }
-    data->append(ptr, size * nmemb);
-    return size * nmemb;
-}
-
 int TrackerManager::loadTrackersFromConfiguredUrls() {
     auto configManager = utility::config::ConfigurationManager::getInstance();
     std::string udpTrackerListUrl = configManager->getString("tracker.udpTrackerListUrl",
@@ -536,34 +528,44 @@ int TrackerManager::loadTrackersFromUrl(const std::string& url, const std::strin
 }
 
 bool TrackerManager::fetchUrl(const std::string& url, std::string& content) {
-    // Initialize cURL
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        unified_event::logError("BitTorrent.TrackerManager", "Failed to initialize cURL");
-        return false;
-    }
+    unified_event::logDebug("BitTorrent.TrackerManager", "Fetching URL: " + url);
 
-    // Set up the request
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, utility::network::getUserAgent().c_str());
+    // Create a promise and future to wait for the async request to complete
+    std::promise<bool> resultPromise;
+    std::future<bool> resultFuture = resultPromise.get_future();
 
-    // Perform the request
-    CURLcode res = curl_easy_perform(curl);
+    // Create an HTTP client
+    auto httpClient = std::make_shared<network::HttpClient>();
 
-    // Check for errors
-    bool success = (res == CURLE_OK);
-    if (!success) {
-        unified_event::logError("BitTorrent.TrackerManager", "cURL request failed: " + std::string(curl_easy_strerror(res)));
-    }
+    // Configure the client
+    httpClient->setConnectionTimeout(10);
+    httpClient->setRequestTimeout(30);
+    httpClient->setMaxRedirects(5);
+    httpClient->setUserAgent(utility::network::getUserAgent());
 
-    // Clean up
-    curl_easy_cleanup(curl);
+    // Make the request
+    httpClient->get(url, [&resultPromise, &content](bool success, const network::HttpClientResponse& response) {
+        if (!success) {
+            unified_event::logError("BitTorrent.TrackerManager", "HTTP request failed");
+            resultPromise.set_value(false);
+            return;
+        }
 
-    return success;
+        // Check HTTP response code
+        if (response.statusCode != 200) {
+            unified_event::logError("BitTorrent.TrackerManager", "HTTP request failed with code: " +
+                                 std::to_string(response.statusCode));
+            resultPromise.set_value(false);
+            return;
+        }
+
+        // Set the content
+        content = response.body;
+        resultPromise.set_value(true);
+    });
+
+    // Wait for the request to complete
+    return resultFuture.get();
 }
 
 std::vector<std::string> TrackerManager::parseTrackerUrls(const std::string& content, const std::string& trackerType) {

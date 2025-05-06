@@ -2,6 +2,7 @@
 
 #include "dht_hunter/bittorrent/tracker/tracker.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
+#include "dht_hunter/network/http_client.hpp"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -130,6 +131,9 @@ private:
     std::chrono::steady_clock::time_point m_lastAnnounce;
     std::chrono::steady_clock::time_point m_lastScrape;
     std::mutex m_mutex;
+
+    // HTTP client
+    std::shared_ptr<network::HttpClient> m_httpClient;
 
     // Retry configuration
     int m_maxRetries;

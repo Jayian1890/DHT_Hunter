@@ -11,8 +11,7 @@ add_library(dht_hunter_bittorrent
         tracker/tracker_manager.cpp
 )
 
-# Find libcurl
-find_package(CURL REQUIRED)
+# No external dependencies required
 
 # Link with other libraries
 target_link_libraries(dht_hunter_bittorrent
@@ -24,14 +23,12 @@ target_link_libraries(dht_hunter_bittorrent
         dht_hunter_dht
         dht_hunter_bencode
         dht_hunter_unified_event
-        ${CURL_LIBRARIES}
 )
 
 # Set include directories
 target_include_directories(dht_hunter_bittorrent
         PRIVATE
         ${CMAKE_SOURCE_DIR}/include
-        ${CURL_INCLUDE_DIRS}
 )
 
 # Install the library

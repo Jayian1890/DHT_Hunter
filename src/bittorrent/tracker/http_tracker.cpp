@@ -1,23 +1,20 @@
 #include "dht_hunter/bittorrent/tracker/http_tracker.hpp"
 #include "dht_hunter/bencode/bencode.hpp"
 #include "dht_hunter/utility/network/network_utils.hpp"
+#include "dht_hunter/network/http_client.hpp"
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
 #include <random>
 #include <cstring>
-#include <curl/curl.h>
 #include <thread>
 
 namespace dht_hunter::bittorrent::tracker {
 
-// Callback function for cURL to write data
-size_t curlWriteCallback(char* ptr, size_t size, size_t nmemb, std::string* data) {
-    if (data == nullptr) {
-        return 0;
-    }
-    data->append(ptr, size * nmemb);
-    return size * nmemb;
+// Create a shared HTTP client for all trackers
+static std::shared_ptr<network::HttpClient> getSharedHttpClient() {
+    static std::shared_ptr<network::HttpClient> httpClient = std::make_shared<network::HttpClient>();
+    return httpClient;
 }
 
 HTTPTracker::HTTPTracker(const std::string& url)
@@ -33,20 +30,12 @@ HTTPTracker::HTTPTracker(const std::string& url)
         m_scrapeURL = m_url;
     }
 
-    // Initialize cURL globally if needed
-    static std::once_flag curlInitFlag;
-    std::call_once(curlInitFlag, []() {
-        curl_global_init(CURL_GLOBAL_ALL);
-        unified_event::logDebug("BitTorrent.HTTPTracker", "cURL globally initialized");
-    });
+    // Get the shared HTTP client
+    m_httpClient = getSharedHttpClient();
 }
 
 HTTPTracker::~HTTPTracker() {
     unified_event::logDebug("BitTorrent.HTTPTracker", "Destroyed HTTP tracker: " + m_url);
-
-    // Note: We don't need to call curl_global_cleanup() here because:
-    // 1. It would affect other instances that might still be using cURL
-    // 2. It will be automatically cleaned up when the program exits
 }
 
 std::string HTTPTracker::getURL() const {
@@ -74,93 +63,94 @@ bool HTTPTracker::announce(
     std::string announceURL = buildAnnounceURL(infoHash, port, event);
     unified_event::logDebug("BitTorrent.HTTPTracker", "Announce URL: " + announceURL);
 
-    // Create a thread to handle the HTTP request asynchronously
-    std::thread([this, announceURL, callback]() {
-        // Implement retry logic
+    // Implement retry logic in a separate function to avoid duplicating code
+    auto retryHandler = [this, announceURL, callback]() {
+        int retryCount = 0;
         bool success = false;
         std::vector<types::EndPoint> peers;
-        std::string response;
 
-        for (int retryCount = 0; retryCount <= m_maxRetries; retryCount++) {
-            if (retryCount > 0) {
+        auto makeRequest = [this, announceURL, &retryCount, &success, &peers, callback]() {
+            // Configure the HTTP client
+            m_httpClient->setConnectionTimeout(10);
+            m_httpClient->setRequestTimeout(30);
+            m_httpClient->setMaxRedirects(5);
+            m_httpClient->setUserAgent(utility::network::getUserAgent());
+
+            // Make the request
+            return m_httpClient->get(announceURL, [this, &success, &peers, callback](bool requestSuccess, const network::HttpClientResponse& response) {
+                if (!requestSuccess) {
+                    unified_event::logWarning("BitTorrent.HTTPTracker", "HTTP request failed");
+                    return false;
+                }
+
+                // Check HTTP response code
+                if (response.statusCode != 200) {
+                    unified_event::logWarning("BitTorrent.HTTPTracker", "HTTP request failed with code: " +
+                                           std::to_string(response.statusCode));
+                    return false;
+                }
+
+                // Parse the response
+                success = parseAnnounceResponse(response.body, peers);
+                if (!success) {
+                    unified_event::logWarning("BitTorrent.HTTPTracker", "Failed to parse announce response");
+                    return false;
+                }
+
+                // Log success with peer count
+                unified_event::logDebug("BitTorrent.HTTPTracker", "Successfully parsed announce response with " +
+                                     std::to_string(peers.size()) + " peers");
+
+                // Update tracker state
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    m_lastAnnounce = std::chrono::steady_clock::now();
+                    m_available = true;
+                }
+
+                // Call the callback with the peers
+                callback(true, peers);
+                return true;
+            });
+        };
+
+        // Try the initial request
+        if (makeRequest()) {
+            return;
+        }
+
+        // If the initial request failed, start the retry loop
+        std::thread([this, &retryCount, makeRequest, callback]() {
+            std::vector<types::EndPoint> emptyPeers;
+            bool requestSucceeded = false;
+
+            for (retryCount = 1; retryCount <= m_maxRetries; retryCount++) {
                 unified_event::logInfo("BitTorrent.HTTPTracker", "Retrying announce request (attempt " +
                                      std::to_string(retryCount) + " of " + std::to_string(m_maxRetries) + ")");
                 // Wait before retrying
                 std::this_thread::sleep_for(std::chrono::milliseconds(m_retryDelayMs));
+
+                if (makeRequest()) {
+                    requestSucceeded = true;
+                    break;
+                }
             }
 
-            // Initialize cURL
-            CURL* curl = curl_easy_init();
-            if (!curl) {
-                unified_event::logError("BitTorrent.HTTPTracker", "Failed to initialize cURL");
-                continue; // Try again
+            if (!requestSucceeded) {
+                // All retries failed, update tracker state and call callback
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    m_lastAnnounce = std::chrono::steady_clock::now();
+                    m_available = false;
+                }
+
+                callback(false, emptyPeers);
             }
+        }).detach();
+    };
 
-            // Clear response from previous attempts
-            response.clear();
-
-            // Set up the request
-            curl_easy_setopt(curl, CURLOPT_URL, announceURL.c_str());
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, utility::network::getUserAgent().c_str());
-
-            // Set connection timeout
-            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-
-            // Perform the request
-            CURLcode res = curl_easy_perform(curl);
-
-            // Get HTTP response code
-            long httpCode = 0;
-            if (res == CURLE_OK) {
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
-            }
-
-            // Clean up cURL
-            curl_easy_cleanup(curl);
-
-            // Check for errors
-            if (res != CURLE_OK) {
-                unified_event::logWarning("BitTorrent.HTTPTracker", "cURL request failed: " +
-                                       std::string(curl_easy_strerror(res)));
-                continue; // Try again
-            }
-
-            // Check HTTP response code
-            if (httpCode != 200) {
-                unified_event::logWarning("BitTorrent.HTTPTracker", "HTTP request failed with code: " +
-                                       std::to_string(httpCode));
-                continue; // Try again
-            }
-
-            // Parse the response
-            success = parseAnnounceResponse(response, peers);
-            if (!success) {
-                unified_event::logWarning("BitTorrent.HTTPTracker", "Failed to parse announce response");
-                continue; // Try again
-            }
-
-            // Log success with peer count
-            unified_event::logDebug("BitTorrent.HTTPTracker", "Successfully parsed announce response with " +
-                                 std::to_string(peers.size()) + " peers");
-
-            // If we got here, the request was successful
-            break;
-        }
-
-        // Update tracker state
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_lastAnnounce = std::chrono::steady_clock::now();
-            m_available = success;
-        }
-
-        // Call the callback with the peers
-        callback(success, peers);
-    }).detach();
+    // Start the request process
+    retryHandler();
 
     return true;
 }
@@ -193,94 +183,96 @@ bool HTTPTracker::scrape(
     std::string scrapeURL = buildScrapeURL(infoHashes);
     unified_event::logDebug("BitTorrent.HTTPTracker", "Scrape URL: " + scrapeURL);
 
-    // Create a thread to handle the HTTP request asynchronously
-    std::thread([this, scrapeURL, infoHashes, callback]() {
-        // Implement retry logic
+    // Implement retry logic in a separate function to avoid duplicating code
+    auto retryHandler = [this, scrapeURL, infoHashes, callback]() {
+        int retryCount = 0;
         bool success = false;
         std::unordered_map<std::string, std::tuple<int, int, int>> stats;
-        std::string response;
 
-        for (int retryCount = 0; retryCount <= m_maxRetries; retryCount++) {
-            if (retryCount > 0) {
+        auto makeRequest = [this, scrapeURL, &retryCount, &success, &stats, callback]() {
+            // Configure the HTTP client
+            m_httpClient->setConnectionTimeout(10);
+            m_httpClient->setRequestTimeout(30);
+            m_httpClient->setMaxRedirects(5);
+            m_httpClient->setUserAgent(utility::network::getUserAgent());
+
+            // Make the request
+            return m_httpClient->get(scrapeURL, [this, &success, &stats, callback](bool requestSuccess, const network::HttpClientResponse& response) {
+                if (!requestSuccess) {
+                    unified_event::logWarning("BitTorrent.HTTPTracker", "HTTP request failed");
+                    return false;
+                }
+
+                // Check HTTP response code
+                if (response.statusCode != 200) {
+                    unified_event::logWarning("BitTorrent.HTTPTracker", "HTTP request failed with code: " +
+                                           std::to_string(response.statusCode));
+                    return false;
+                }
+
+                // Parse the response
+                stats.clear();
+                success = parseScrapeResponse(response.body, stats);
+                if (!success) {
+                    unified_event::logWarning("BitTorrent.HTTPTracker", "Failed to parse scrape response");
+                    return false;
+                }
+
+                // Log success with stats count
+                unified_event::logDebug("BitTorrent.HTTPTracker", "Successfully parsed scrape response with " +
+                                     std::to_string(stats.size()) + " info hashes");
+
+                // Update tracker state
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    m_lastScrape = std::chrono::steady_clock::now();
+                    m_available = true;
+                }
+
+                // Call the callback with the stats
+                callback(true, stats);
+                return true;
+            });
+        };
+
+        // Try the initial request
+        if (makeRequest()) {
+            return;
+        }
+
+        // If the initial request failed, start the retry loop
+        std::thread([this, &retryCount, makeRequest, callback]() {
+            std::unordered_map<std::string, std::tuple<int, int, int>> emptyStats;
+            bool requestSucceeded = false;
+
+            for (retryCount = 1; retryCount <= m_maxRetries; retryCount++) {
                 unified_event::logInfo("BitTorrent.HTTPTracker", "Retrying scrape request (attempt " +
                                      std::to_string(retryCount) + " of " + std::to_string(m_maxRetries) + ")");
                 // Wait before retrying
                 std::this_thread::sleep_for(std::chrono::milliseconds(m_retryDelayMs));
+
+                if (makeRequest()) {
+                    requestSucceeded = true;
+                    break;
+                }
             }
 
-            // Initialize cURL
-            CURL* curl = curl_easy_init();
-            if (!curl) {
-                unified_event::logError("BitTorrent.HTTPTracker", "Failed to initialize cURL");
-                continue; // Try again
+            if (!requestSucceeded) {
+                // All retries failed, update tracker state and call callback
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    m_lastScrape = std::chrono::steady_clock::now();
+                    m_available = false;
+                }
+
+                callback(false, emptyStats);
             }
+        }).detach();
 
-            // Clear response from previous attempts
-            response.clear();
+    };
 
-            // Set up the request
-            curl_easy_setopt(curl, CURLOPT_URL, scrapeURL.c_str());
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, utility::network::getUserAgent().c_str());
-
-            // Set connection timeout
-            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-
-            // Perform the request
-            CURLcode res = curl_easy_perform(curl);
-
-            // Get HTTP response code
-            long httpCode = 0;
-            if (res == CURLE_OK) {
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
-            }
-
-            // Clean up cURL
-            curl_easy_cleanup(curl);
-
-            // Check for errors
-            if (res != CURLE_OK) {
-                unified_event::logWarning("BitTorrent.HTTPTracker", "cURL request failed: " +
-                                       std::string(curl_easy_strerror(res)));
-                continue; // Try again
-            }
-
-            // Check HTTP response code
-            if (httpCode != 200) {
-                unified_event::logWarning("BitTorrent.HTTPTracker", "HTTP request failed with code: " +
-                                       std::to_string(httpCode));
-                continue; // Try again
-            }
-
-            // Parse the response
-            stats.clear();
-            success = parseScrapeResponse(response, stats);
-            if (!success) {
-                unified_event::logWarning("BitTorrent.HTTPTracker", "Failed to parse scrape response");
-                continue; // Try again
-            }
-
-            // Log success with stats count
-            unified_event::logDebug("BitTorrent.HTTPTracker", "Successfully parsed scrape response with " +
-                                 std::to_string(stats.size()) + " info hashes");
-
-            // If we got here, the request was successful
-            break;
-        }
-
-        // Update tracker state
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_lastScrape = std::chrono::steady_clock::now();
-            m_available = success;
-        }
-
-        // Call the callback with the stats
-        callback(success, stats);
-    }).detach();
+    // Start the request process
+    retryHandler();
 
     return true;
 }
