@@ -162,6 +162,7 @@ private:
     std::vector<uint8_t> m_serverRandom;
     std::vector<uint8_t> m_masterSecret;
     std::vector<uint8_t> m_serverCertificate;
+    uint16_t m_selectedCipherSuite;
 
     // Encryption keys
     std::vector<uint8_t> m_clientWriteKey;

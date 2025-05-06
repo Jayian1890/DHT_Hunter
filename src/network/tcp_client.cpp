@@ -229,6 +229,11 @@ void TCPClient::setDataReceivedCallback(std::function<void(const uint8_t*, size_
     m_dataReceivedCallback = callback;
 }
 
+std::function<void(const uint8_t*, size_t)> TCPClient::getDataReceivedCallback() const {
+    std::lock_guard<std::mutex> lock(m_callbackMutex);
+    return m_dataReceivedCallback;
+}
+
 void TCPClient::setErrorCallback(std::function<void(const std::string&)> callback) {
     std::lock_guard<std::mutex> lock(m_callbackMutex);
     m_errorCallback = callback;

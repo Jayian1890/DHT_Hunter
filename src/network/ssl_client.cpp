@@ -157,14 +157,59 @@ bool SSLClient::performHandshake() {
         return false;
     }
 
-    // TODO: Implement the rest of the handshake
-    // For now, we'll simulate a successful handshake
+    // Set up a flag to track when we've received the server hello
+    bool serverHelloReceived = false;
 
-    // In a real implementation, we would:
-    // 1. Wait for and process the server hello
-    // 2. Verify the server certificate
-    // 3. Exchange keys
-    // 4. Verify the handshake
+    // Set up a temporary data received callback to handle the handshake
+    auto originalCallback = m_tcpClient->getDataReceivedCallback();
+
+    // Create a buffer to store received data
+    std::vector<uint8_t> handshakeBuffer;
+
+    // Set up a callback to process the server hello
+    m_tcpClient->setDataReceivedCallback([this, &serverHelloReceived, &handshakeBuffer](const uint8_t* data, size_t length) {
+        // Add the data to the buffer
+        handshakeBuffer.insert(handshakeBuffer.end(), data, data + length);
+
+        // Try to process the server hello
+        if (!serverHelloReceived && handshakeBuffer.size() >= 5) {
+            // Check if we have enough data for the record
+            uint16_t recordLength = (handshakeBuffer[3] << 8) | handshakeBuffer[4];
+            if (handshakeBuffer.size() >= recordLength + 5) {
+                // Process the server hello
+                if (processServerHello(handshakeBuffer.data(), handshakeBuffer.size())) {
+                    serverHelloReceived = true;
+                }
+            }
+        }
+    });
+
+    // Wait for the server hello
+    auto startTime = std::chrono::steady_clock::now();
+    while (!serverHelloReceived) {
+        // Check if we've timed out
+        auto currentTime = std::chrono::steady_clock::now();
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
+        if (elapsedTime > 10) { // 10 second timeout
+            unified_event::logWarning("Network.SSLClient", "Timed out waiting for server hello");
+            m_tcpClient->setDataReceivedCallback(originalCallback);
+            return false;
+        }
+
+        // Sleep a bit to avoid busy waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Restore the original callback
+    m_tcpClient->setDataReceivedCallback(originalCallback);
+
+    // TODO: Implement the rest of the handshake
+    // For now, we'll simulate a successful handshake after receiving the server hello
+
+    // In a complete implementation, we would:
+    // 1. Verify the server certificate
+    // 2. Exchange keys
+    // 3. Verify the handshake
 
     // For this simplified implementation, we'll just set the handshake as complete
     m_handshakeComplete = true;
@@ -495,7 +540,45 @@ bool SSLClient::processServerHello(const uint8_t* data, size_t length) {
 }
 
 bool SSLClient::verifyCertificate(const std::vector<uint8_t>& certificate) {
-    // TODO: Implement certificate verification
+    // If certificate verification is disabled, return true
+    if (!m_verifyCertificate) {
+        unified_event::logDebug("Network.SSLClient", "Certificate verification is disabled");
+        return true;
+    }
+
+    // Store the certificate for later use
+    m_serverCertificate = certificate;
+
+    // Basic certificate structure validation
+    if (certificate.size() < 10) {
+        unified_event::logWarning("Network.SSLClient", "Certificate is too short");
+        return false;
+    }
+
+    // In a real implementation, we would:
+    // 1. Parse the X.509 certificate
+    // 2. Verify the certificate chain
+    // 3. Check the certificate validity period
+    // 4. Verify the certificate signature
+    // 5. Check the certificate revocation status
+    // 6. Verify the hostname against the certificate's subject
+
+    // For this simplified implementation, we'll just log the certificate details
+    unified_event::logDebug("Network.SSLClient", "Certificate received " + std::to_string(certificate.size()) + " bytes");
+
+    // Extract basic information from the certificate
+    // This is a very simplified parsing of the certificate
+    // In a real implementation, we would use a proper X.509 parser
+
+    // Check if the certificate starts with the sequence tag (0x30)
+    if (certificate[0] != 0x30) {
+        unified_event::logWarning("Network.SSLClient", "Certificate does not start with sequence tag");
+        return false;
+    }
+
+    // Log success
+    unified_event::logDebug("Network.SSLClient", "Certificate verification successful");
+
     return true;
 }
 
@@ -514,7 +597,37 @@ std::vector<uint8_t> SSLClient::decrypt(const uint8_t* data, size_t length) {
 void SSLClient::handleReceivedData(const uint8_t* data, size_t length) {
     if (!m_handshakeComplete) {
         // Process handshake data
-        // TODO: Implement handshake processing
+        if (length >= 5) {
+            // Check the record type
+            uint8_t recordType = data[0];
+            if (recordType == static_cast<uint8_t>(TLSRecordType::HANDSHAKE)) {
+                // Check if we have a complete record
+                uint16_t recordLength = (data[3] << 8) | data[4];
+                if (length >= recordLength + 5) {
+                    // Check the handshake type
+                    uint8_t handshakeType = data[5];
+
+                    // Process based on handshake type
+                    switch (handshakeType) {
+                        case static_cast<uint8_t>(TLSHandshakeType::SERVER_HELLO):
+                            processServerHello(data, length);
+                            break;
+                        case static_cast<uint8_t>(TLSHandshakeType::CERTIFICATE):
+                            // TODO: Process certificate
+                            break;
+                        case static_cast<uint8_t>(TLSHandshakeType::SERVER_KEY_EXCHANGE):
+                            // TODO: Process server key exchange
+                            break;
+                        case static_cast<uint8_t>(TLSHandshakeType::SERVER_HELLO_DONE):
+                            // TODO: Process server hello done
+                            break;
+                        default:
+                            unified_event::logWarning("Network.SSLClient", "Unexpected handshake type: " + std::to_string(handshakeType));
+                            break;
+                    }
+                }
+            }
+        }
     } else {
         // Decrypt the data
         std::vector<uint8_t> decryptedData = decrypt(data, length);

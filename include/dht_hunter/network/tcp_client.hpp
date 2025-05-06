@@ -93,6 +93,12 @@ public:
     void setDataReceivedCallback(std::function<void(const uint8_t*, size_t)> callback);
 
     /**
+     * @brief Gets the current data received callback
+     * @return The current callback
+     */
+    std::function<void(const uint8_t*, size_t)> getDataReceivedCallback() const;
+
+    /**
      * @brief Sets the error callback
      * @param callback The callback
      */
