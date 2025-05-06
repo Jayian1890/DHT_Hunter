@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <netdb.h>
 
 namespace dht_hunter::network {
 
@@ -42,7 +43,7 @@ TCPClient::~TCPClient() {
     }
 }
 
-bool TCPClient::connect(const std::string& ip, uint16_t port, int timeoutSec) {
+bool TCPClient::connect(const std::string& host, uint16_t port, int timeoutSec) {
     // Check if already connected
     if (m_connected) {
         return true;
@@ -84,11 +85,41 @@ bool TCPClient::connect(const std::string& ip, uint16_t port, int timeoutSec) {
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(port);
 
-    if (inet_pton(AF_INET, ip.c_str(), &serverAddr.sin_addr) <= 0) {
-        handleError("Invalid address: " + ip);
-        close(m_socket);
-        m_socket = -1;
-        return false;
+    // Check if the host is an IP address or a hostname
+    if (inet_pton(AF_INET, host.c_str(), &serverAddr.sin_addr) <= 0) {
+        // Not a valid IP address, try to resolve the hostname
+        struct addrinfo hints, *res, *p;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+
+        int status = getaddrinfo(host.c_str(), nullptr, &hints, &res);
+        if (status != 0) {
+            handleError("Failed to resolve hostname: " + host + ", error: " + std::string(gai_strerror(status)));
+            close(m_socket);
+            m_socket = -1;
+            return false;
+        }
+
+        // Use the first resolved address
+        bool foundAddress = false;
+        for (p = res; p != nullptr; p = p->ai_next) {
+            if (p->ai_family == AF_INET) {
+                struct sockaddr_in* ipv4 = reinterpret_cast<struct sockaddr_in*>(p->ai_addr);
+                serverAddr.sin_addr = ipv4->sin_addr;
+                foundAddress = true;
+                break;
+            }
+        }
+
+        freeaddrinfo(res);
+
+        if (!foundAddress) {
+            handleError("No valid IPv4 address found for hostname: " + host);
+            close(m_socket);
+            m_socket = -1;
+            return false;
+        }
     }
 
     // Connect to the server (non-blocking)
@@ -110,7 +141,7 @@ bool TCPClient::connect(const std::string& ip, uint16_t port, int timeoutSec) {
         timeout.tv_sec = timeoutSec;
         timeout.tv_usec = 0;
 
-        unified_event::logDebug("Network.TCPClient", "Attempting to connect to " + ip + ":" + std::to_string(port) +
+        unified_event::logDebug("Network.TCPClient", "Attempting to connect to " + host + ":" + std::to_string(port) +
                               " with " + std::to_string(timeoutSec) + " second timeout");
 
         result = select(m_socket + 1, nullptr, &writeSet, nullptr, &timeout);
@@ -161,7 +192,7 @@ bool TCPClient::connect(const std::string& ip, uint16_t port, int timeoutSec) {
         m_stats.lastActivityTime = now;
     }
 
-    unified_event::logDebug("Network.TCPClient", "Successfully connected to " + ip + ":" + std::to_string(port) +
+    unified_event::logDebug("Network.TCPClient", "Successfully connected to " + host + ":" + std::to_string(port) +
                           " in " + std::to_string(m_stats.connectDuration.count()) + "ms");
 
     return true;

@@ -78,6 +78,18 @@ public:
      */
     void setMaxRedirects(int maxRedirects);
 
+    /**
+     * @brief Sets the error callback
+     * @param callback The callback to call when an error occurs
+     */
+    void setErrorCallback(std::function<void(const std::string&)> callback);
+
+    /**
+     * @brief Gets the current error callback
+     * @return The current error callback
+     */
+    std::function<void(const std::string&)> getErrorCallback() const;
+
 private:
     /**
      * @brief Parses a URL into its components
@@ -123,6 +135,7 @@ private:
     int m_requestTimeout{30};
     int m_maxRedirects{5};
     bool m_verifyCertificates{true};
+    std::function<void(const std::string&)> m_errorCallback;
     std::mutex m_mutex;
 };
 

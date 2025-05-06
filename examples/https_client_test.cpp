@@ -26,6 +26,10 @@ public:
     }
 
     ~HttpsClientTest() {
+        // Clean up resources
+        // Sleep briefly to allow any pending operations to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
         // Shutdown the event system
         unified_event::shutdownEventSystem();
     }
@@ -128,6 +132,14 @@ public:
         std::mutex mutex;
         std::condition_variable cv;
         bool requestComplete = false;
+        std::string errorMessage;
+
+        // Set up an error callback to capture any errors
+        auto originalErrorCallback = m_httpClient.getErrorCallback();
+        m_httpClient.setErrorCallback([&errorMessage](const std::string& error) {
+            errorMessage = error;
+            std::cout << "Error during localhost test: " << error << std::endl;
+        });
 
         m_httpClient.get("http://localhost:8080/", [&](bool requestSuccess, const HttpClientResponse& response) {
             std::lock_guard<std::mutex> lock(mutex);
@@ -142,11 +154,19 @@ public:
         std::unique_lock<std::mutex> lock(mutex);
         if (!cv.wait_for(lock, std::chrono::seconds(5), [&]() { return requestComplete; })) {
             std::cerr << "Localhost connection test timed out" << std::endl;
+            // Restore the original error callback
+            m_httpClient.setErrorCallback(originalErrorCallback);
             return false;
         }
 
+        // Restore the original error callback
+        m_httpClient.setErrorCallback(originalErrorCallback);
+
         // We don't check success here because it depends on whether a server is running
         std::cout << "Localhost connection test completed with result: " << (success ? "SUCCESS" : "FAILURE") << std::endl;
+        if (!errorMessage.empty()) {
+            std::cout << "Error message: " << errorMessage << std::endl;
+        }
         return true;
     }
 

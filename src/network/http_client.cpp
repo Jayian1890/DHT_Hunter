@@ -62,6 +62,16 @@ void HttpClient::setMaxRedirects(int maxRedirects) {
     m_maxRedirects = maxRedirects;
 }
 
+void HttpClient::setErrorCallback(std::function<void(const std::string&)> callback) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_errorCallback = callback;
+}
+
+std::function<void(const std::string&)> HttpClient::getErrorCallback() const {
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_mutex));
+    return m_errorCallback;
+}
+
 void HttpClient::setVerifyCertificates(bool verify) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_verifyCertificates = verify;
@@ -111,13 +121,30 @@ bool HttpClient::request(const std::string& method, const std::string& url,
     std::string scheme, host, path;
     uint16_t port;
     if (!parseUrl(url, scheme, host, port, path)) {
+        std::string errorMsg = "Invalid URL format: " + url;
+        unified_event::logWarning("Network.HttpClient", errorMsg);
+
+        // Call the error callback if set
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_errorCallback) {
+            m_errorCallback(errorMsg);
+        }
+
         callback(false, {});
         return false;
     }
 
     // Check if the scheme is supported
     if (scheme != "http" && scheme != "https") {
-        unified_event::logWarning("Network.HttpClient", "Unsupported URL scheme: " + scheme);
+        std::string errorMsg = "Unsupported URL scheme: " + scheme;
+        unified_event::logWarning("Network.HttpClient", errorMsg);
+
+        // Call the error callback if set
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_errorCallback) {
+            m_errorCallback(errorMsg);
+        }
+
         callback(false, {});
         return false;
     }
@@ -138,7 +165,20 @@ bool HttpClient::request(const std::string& method, const std::string& url,
             sslClient->setVerifyCertificate(m_verifyCertificates);
 
             if (!sslClient->connect(host, port, m_connectionTimeout)) {
-                unified_event::logWarning("Network.HttpClient", "Failed to establish secure connection to " + host + ":" + std::to_string(port));
+                std::string errorMsg = "Failed to establish secure connection to " + host + ":" + std::to_string(port);
+                unified_event::logWarning("Network.HttpClient", errorMsg);
+
+                // Call the error callback if set
+                std::function<void(const std::string&)> errorCallback;
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    errorCallback = m_errorCallback;
+                }
+
+                if (errorCallback) {
+                    errorCallback(errorMsg);
+                }
+
                 callback(false, {});
                 return;
             }
@@ -170,7 +210,20 @@ bool HttpClient::request(const std::string& method, const std::string& url,
             tcpClient = std::make_shared<TCPClient>();
 
             if (!tcpClient->connect(host, port, m_connectionTimeout)) {
-                unified_event::logWarning("Network.HttpClient", "Failed to connect to " + host + ":" + std::to_string(port));
+                std::string errorMsg = "Failed to connect to " + host + ":" + std::to_string(port);
+                unified_event::logWarning("Network.HttpClient", errorMsg);
+
+                // Call the error callback if set
+                std::function<void(const std::string&)> errorCallback;
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    errorCallback = m_errorCallback;
+                }
+
+                if (errorCallback) {
+                    errorCallback(errorMsg);
+                }
+
                 callback(false, {});
                 return;
             }
