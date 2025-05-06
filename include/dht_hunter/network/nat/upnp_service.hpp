@@ -195,7 +195,7 @@ private:
     // Constants
     static constexpr int REFRESH_INTERVAL_SECONDS = 600; // 10 minutes
     static constexpr int DISCOVERY_TIMEOUT_SECONDS = 10; // Increased from 5 to 10 seconds
-    static constexpr int DISCOVERY_RETRY_COUNT = 3; // Number of discovery attempts
+    static constexpr int DISCOVERY_RETRY_COUNT = 1; // Number of discovery attempts
     static constexpr int DISCOVERY_RETRY_DELAY_MS = 1000; // Delay between discovery attempts
     static constexpr int MAX_PORT_MAPPING_LIFETIME_SECONDS = 86400; // 24 hours
 };

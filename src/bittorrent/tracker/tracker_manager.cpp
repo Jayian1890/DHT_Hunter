@@ -1,6 +1,11 @@
 #include "dht_hunter/bittorrent/tracker/tracker_manager.hpp"
+#include "dht_hunter/utility/config/configuration_manager.hpp"
+#include "dht_hunter/utility/network/network_utils.hpp"
 #include <sstream>
 #include <algorithm>
+#include <curl/curl.h>
+#include <regex>
+#include <chrono>
 
 namespace dht_hunter::bittorrent::tracker {
 
@@ -17,7 +22,7 @@ std::shared_ptr<TrackerManager> TrackerManager::getInstance() {
 }
 
 TrackerManager::TrackerManager() : m_initialized(false) {
-    unified_event::logInfo("BitTorrent.TrackerManager", "Created tracker manager");
+    unified_event::logDebug("BitTorrent.TrackerManager", "Created tracker manager");
 }
 
 TrackerManager::~TrackerManager() {
@@ -29,10 +34,45 @@ bool TrackerManager::initialize() {
         return true;
     }
 
-    unified_event::logInfo("BitTorrent.TrackerManager", "Initializing tracker manager");
+    unified_event::logDebug("BitTorrent.TrackerManager", "Initializing tracker manager");
 
+    // Mark as initialized first to avoid circular dependency issues
     m_initialized = true;
-    unified_event::logInfo("BitTorrent.TrackerManager", "Tracker manager initialized");
+    unified_event::logDebug("BitTorrent.TrackerManager", "Tracker manager marked as initialized");
+
+    // Load trackers from configured URLs
+    auto configManager = utility::config::ConfigurationManager::getInstance();
+    bool useTrackerListUrls = configManager->getBool("tracker.useTrackerListUrls", true);
+
+    if (useTrackerListUrls) {
+        int trackersLoaded = loadTrackersFromConfiguredUrls();
+        unified_event::logInfo("BitTorrent.TrackerManager", "Loaded " + std::to_string(trackersLoaded) + " trackers");
+
+        // Start the refresh thread
+        m_refreshThreadRunning = true;
+        m_refreshThread = std::thread([this]() {
+            auto configManager = utility::config::ConfigurationManager::getInstance();
+            int refreshIntervalHours = configManager->getInt("tracker.trackerListRefreshInterval", 24);
+
+            while (m_refreshThreadRunning) {
+                // Wait for the refresh interval or until shutdown
+                std::unique_lock<std::mutex> lock(m_refreshMutex);
+                if (m_refreshCondition.wait_for(lock, std::chrono::hours(refreshIntervalHours),
+                    [this]() { return !m_refreshThreadRunning; })) {
+                    // If we're here, we were signaled to stop
+                    break;
+                }
+
+                // Refresh the tracker lists
+                unified_event::logDebug("BitTorrent.TrackerManager", "Refreshing tracker lists");
+                int trackersLoaded = loadTrackersFromConfiguredUrls();
+                unified_event::logInfo("BitTorrent.TrackerManager", "Refreshed tracker lists, loaded " +
+                                     std::to_string(trackersLoaded) + " trackers");
+            }
+        });
+    }
+
+    unified_event::logDebug("BitTorrent.TrackerManager", "Tracker manager initialization complete");
     return true;
 }
 
@@ -42,6 +82,13 @@ void TrackerManager::shutdown() {
     }
 
     unified_event::logInfo("BitTorrent.TrackerManager", "Shutting down tracker manager");
+
+    // Stop the refresh thread
+    m_refreshThreadRunning = false;
+    m_refreshCondition.notify_all();
+    if (m_refreshThread.joinable()) {
+        m_refreshThread.join();
+    }
 
     // Clear all trackers
     {
@@ -58,9 +105,11 @@ bool TrackerManager::isInitialized() const {
 }
 
 bool TrackerManager::addTracker(const std::string& url) {
+    // Check if we're initialized
     if (!m_initialized) {
-        unified_event::logWarning("BitTorrent.TrackerManager", "Cannot add tracker - tracker manager not initialized");
-        return false;
+        // During initialization, we're called from loadTrackersFromUrl which is called from initialize()
+        // We'll allow this to proceed even though m_initialized is false
+        unified_event::logDebug("BitTorrent.TrackerManager", "Adding tracker during initialization: " + url);
     }
 
     // Check if we already have this tracker
@@ -84,7 +133,7 @@ bool TrackerManager::addTracker(const std::string& url) {
         m_trackers[url] = tracker;
     }
 
-    unified_event::logInfo("BitTorrent.TrackerManager", "Added tracker: " + url);
+    unified_event::logDebug("BitTorrent.TrackerManager", "Added tracker: " + url);
     return true;
 }
 
@@ -105,7 +154,7 @@ bool TrackerManager::removeTracker(const std::string& url) {
         m_trackers.erase(url);
     }
 
-    unified_event::logInfo("BitTorrent.TrackerManager", "Removed tracker: " + url);
+    unified_event::logDebug("BitTorrent.TrackerManager", "Removed tracker: " + url);
     return true;
 }
 
@@ -417,6 +466,132 @@ std::string TrackerManager::getTrackerType(const std::string& url) const {
             return "Unknown";
         }
     }
+}
+
+// Callback function for cURL to write data
+size_t writeCallback(char* ptr, size_t size, size_t nmemb, std::string* data) {
+    if (data == nullptr) {
+        return 0;
+    }
+    data->append(ptr, size * nmemb);
+    return size * nmemb;
+}
+
+int TrackerManager::loadTrackersFromConfiguredUrls() {
+    auto configManager = utility::config::ConfigurationManager::getInstance();
+    std::string udpTrackerListUrl = configManager->getString("tracker.udpTrackerListUrl",
+        "https://github.com/ngosang/trackerslist/raw/refs/heads/master/trackers_all_udp.txt");
+    std::string httpTrackerListUrl = configManager->getString("tracker.httpTrackerListUrl",
+        "https://github.com/ngosang/trackerslist/raw/refs/heads/master/trackers_all_http.txt");
+
+    int totalLoaded = 0;
+
+    // Load UDP trackers
+    if (!udpTrackerListUrl.empty()) {
+        int udpTrackersLoaded = loadTrackersFromUrl(udpTrackerListUrl, "UDP");
+        unified_event::logInfo("BitTorrent.TrackerManager", "Loaded " + std::to_string(udpTrackersLoaded) + " UDP trackers");
+        totalLoaded += udpTrackersLoaded;
+    }
+
+    // Load HTTP trackers
+    if (!httpTrackerListUrl.empty()) {
+        int httpTrackersLoaded = loadTrackersFromUrl(httpTrackerListUrl, "HTTP");
+        unified_event::logInfo("BitTorrent.TrackerManager", "Loaded " + std::to_string(httpTrackersLoaded) + " HTTP trackers");
+        totalLoaded += httpTrackersLoaded;
+    }
+
+    return totalLoaded;
+}
+
+int TrackerManager::loadTrackersFromUrl(const std::string& url, const std::string& trackerType) {
+    // Check if we're initialized
+    if (!m_initialized) {
+        // During initialization, we're called from initialize() method
+        // We'll allow this to proceed even though m_initialized is false
+        unified_event::logDebug("BitTorrent.TrackerManager", "Loading trackers during initialization");
+    }
+
+    unified_event::logDebug("BitTorrent.TrackerManager", "Loading " + trackerType + " trackers from " + url);
+
+    // Fetch the content from the URL
+    std::string content;
+    if (!fetchUrl(url, content)) {
+        unified_event::logWarning("BitTorrent.TrackerManager", "Failed to fetch tracker list from " + url);
+        return 0;
+    }
+
+    // Parse the tracker URLs
+    std::vector<std::string> trackerUrls = parseTrackerUrls(content, trackerType);
+    unified_event::logDebug("BitTorrent.TrackerManager", "Parsed " + std::to_string(trackerUrls.size()) + " " + trackerType + " tracker URLs");
+
+    // Add the trackers
+    int trackersAdded = 0;
+    for (const auto& trackerUrl : trackerUrls) {
+        if (addTracker(trackerUrl)) {
+            trackersAdded++;
+        }
+    }
+
+    return trackersAdded;
+}
+
+bool TrackerManager::fetchUrl(const std::string& url, std::string& content) {
+    // Initialize cURL
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        unified_event::logError("BitTorrent.TrackerManager", "Failed to initialize cURL");
+        return false;
+    }
+
+    // Set up the request
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, utility::network::getUserAgent().c_str());
+
+    // Perform the request
+    CURLcode res = curl_easy_perform(curl);
+
+    // Check for errors
+    bool success = (res == CURLE_OK);
+    if (!success) {
+        unified_event::logError("BitTorrent.TrackerManager", "cURL request failed: " + std::string(curl_easy_strerror(res)));
+    }
+
+    // Clean up
+    curl_easy_cleanup(curl);
+
+    return success;
+}
+
+std::vector<std::string> TrackerManager::parseTrackerUrls(const std::string& content, const std::string& trackerType) {
+    std::vector<std::string> trackerUrls;
+
+    // Split the content by lines
+    std::istringstream iss(content);
+    std::string line;
+
+    while (std::getline(iss, line)) {
+        // Trim whitespace
+        line.erase(0, line.find_first_not_of(" \t\n\r\f\v"));
+        line.erase(line.find_last_not_of(" \t\n\r\f\v") + 1);
+
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        // Check if the URL matches the tracker type
+        if (trackerType == "UDP" && line.substr(0, 6) == "udp://") {
+            trackerUrls.push_back(line);
+        } else if (trackerType == "HTTP" && (line.substr(0, 7) == "http://" || line.substr(0, 8) == "https://")) {
+            trackerUrls.push_back(line);
+        }
+    }
+
+    return trackerUrls;
 }
 
 } // namespace dht_hunter::bittorrent::tracker

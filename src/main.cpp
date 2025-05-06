@@ -185,13 +185,13 @@ int main(int argc, char* argv[]) {
 #endif
 
     if (homeDir) {
-        configDir = std::string(homeDir) + "/dht-hunter";
+        configDir = std::string(homeDir) + "/bitscrape";
     } else {
         configDir = "config";
     }
 
     // Default config file path
-    configFile = configDir + "/dht_hunter.json";
+    configFile = configDir + "/bitscrape.json";
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -200,8 +200,8 @@ int main(int argc, char* argv[]) {
             if (i + 1 < argc) {
                 configDir = argv[++i];
                 // Update config file path if it wasn't explicitly set
-                if (configFile == configDir + "/dht_hunter.json") {
-                    configFile = configDir + "/dht_hunter.json";
+                if (configFile == configDir + "/bitscrape.json") {
+                    configFile = configDir + "/bitscrape.json";
                 }
             } else {
                 std::cerr << "Error: --config-dir requires a directory path" << std::endl;
@@ -264,15 +264,15 @@ int main(int argc, char* argv[]) {
     // Initialize the configuration manager
     auto configManager = dht_hunter::utility::config::ConfigurationManager::getInstance(configFile);
     if (!configManager) {
-        std::cerr << "Error: Failed to initialize configuration manager" << std::endl;
+        dht_hunter::unified_event::logError("Main", "Failed to initialize configuration manager");
         return 1;
     }
 
     // Enable hot-reloading of the configuration file
     if (!configManager->enableHotReloading(true, 1000)) { // Check every second
-        std::cerr << "Warning: Failed to enable hot-reloading of configuration file" << std::endl;
+        dht_hunter::unified_event::logError("Main", "Failed to enable hot-reloading of configuration file");
     } else {
-        std::cout << "Hot-reloading of configuration file enabled" << std::endl;
+        dht_hunter::unified_event::logDebug("Main", "Hot-reloading of configuration file enabled");
     }
 
     // If the config file exists, load settings from it
@@ -364,7 +364,7 @@ int main(int argc, char* argv[]) {
     if (!registerSleepWakeNotifications()) {
         dht_hunter::unified_event::logWarning("Main", "Failed to register for sleep/wake notifications");
     } else {
-        dht_hunter::unified_event::logInfo("Main", "Registered for sleep/wake notifications");
+        dht_hunter::unified_event::logDebug("Main", "Registered for sleep/wake notifications");
     }
 #endif
 
@@ -407,7 +407,7 @@ int main(int argc, char* argv[]) {
         if (persistenceManager->loadNodeID(nodeID)) {
             dht_hunter::unified_event::logInfo("Main", "Loaded existing node ID: " + dht_hunter::dht::nodeIDToString(nodeID));
         } else {
-            dht_hunter::unified_event::logInfo("Main", "No existing node ID found, generated new ID: " + dht_hunter::dht::nodeIDToString(nodeID));
+            dht_hunter::unified_event::logInfo("Main", "No existing node ID found, dht_hunter new ID: " + dht_hunter::dht::nodeIDToString(nodeID));
             // Save the new node ID
             persistenceManager->saveNodeID(nodeID);
         }
@@ -446,12 +446,12 @@ int main(int argc, char* argv[]) {
     if (!g_metadataManager->start()) {
         dht_hunter::unified_event::logError("Main", "Failed to start metadata acquisition manager");
     } else {
-        dht_hunter::unified_event::logInfo("Main", "Metadata acquisition manager started");
+        dht_hunter::unified_event::logDebug("Main", "Metadata acquisition manager started");
 
         // Trigger metadata acquisition for existing InfoHashes
         if (peerStorage) {
             auto infoHashes = peerStorage->getAllInfoHashes();
-            dht_hunter::unified_event::logInfo("Main", "Triggering metadata acquisition for " + std::to_string(infoHashes.size()) + " existing InfoHashes");
+            dht_hunter::unified_event::logDebug("Main", "Triggering metadata acquisition for " + std::to_string(infoHashes.size()) + " existing InfoHashes");
 
             for (const auto& infoHash : infoHashes) {
                 g_metadataManager->acquireMetadata(infoHash);
@@ -488,7 +488,7 @@ int main(int argc, char* argv[]) {
         size_t messagesReceived = statsService->getMessagesReceived();
 
         std::stringstream ss;
-        ss << "\033]0;DHT Hunter - Nodes: " << nodesDiscovered
+        ss << "\033]0;BitScrape - Nodes: " << nodesDiscovered
            << "/" << nodesInTable
            << " | Peers: " << peersDiscovered
            << " | Msgs: " << messagesReceived << "/" << messagesSent

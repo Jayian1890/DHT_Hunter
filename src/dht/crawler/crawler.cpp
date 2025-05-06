@@ -105,7 +105,7 @@ Crawler::Crawler(const DHTConfig& config,
     // Auto-start if configured
     if (m_crawlerConfig.autoStart) {
         start();
-        unified_event::logInfo("DHT.Crawler", "Crawler started automatically");
+        unified_event::logDebug("DHT.Crawler", "Crawler started automatically");
     }
 }
 
@@ -612,7 +612,7 @@ void Crawler::monitorInfoHashes() {
                                             }
 
                                             if (newPeers > 0) {
-                                                unified_event::logInfo("DHT.Crawler", "Additional lookup found " +
+                                                unified_event::logDebug("DHT.Crawler", "Additional lookup found " +
                                                                      std::to_string(newPeers) +
                                                                      " new peers for InfoHash: " + infoHashStr +
                                                                      ", total peers: " + std::to_string(peerSet.size()));
@@ -861,9 +861,9 @@ void Crawler::handlePeerDiscoveredEvent(const std::shared_ptr<unified_event::Eve
             // Log the event with detailed information
             if (isNewInfoHash) {
                 std::string logMessage = "New info hash discovered - Hash: " + infoHashStr;
-                unified_event::logInfo("DHT.Crawler", logMessage);
+                unified_event::logDebug("DHT.Crawler", logMessage);
 
-                // Publish an InfoHashDiscoveredEvent
+                // We still want to publish the event but without logging
                 if (m_eventBus) {
                     auto event = std::make_shared<unified_event::InfoHashDiscoveredEvent>("DHT.Crawler", infoHash);
                     m_eventBus->publish(event);

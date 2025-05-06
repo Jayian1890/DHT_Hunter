@@ -1,5 +1,6 @@
 #include "dht_hunter/network/nat/natpmp_service.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
+#include "dht_hunter/utility/network/network_utils.hpp"
 #include <sstream>
 #include <algorithm>
 #include <random>
@@ -40,7 +41,7 @@ std::shared_ptr<NATPMPService> NATPMPService::getInstance() {
 }
 
 NATPMPService::NATPMPService() : m_initialized(false), m_running(false) {
-    unified_event::logInfo("Network.NATPMP", "NAT-PMP service created");
+    unified_event::logDebug("Network.NATPMP", "NAT-PMP service created");
 }
 
 NATPMPService::~NATPMPService() {
@@ -52,7 +53,10 @@ bool NATPMPService::initialize() {
         return true;
     }
 
-    unified_event::logInfo("Network.NATPMP", "Initializing NAT-PMP service");
+    unified_event::logDebug("Network.NATPMP", "Initializing NAT-PMP service");
+
+    // Log network interfaces for diagnostic purposes
+    logNetworkInterfaces();
 
     // Create a socket for NAT-PMP communication
     m_socket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -66,36 +70,44 @@ bool NATPMPService::initialize() {
     tv.tv_sec = NATPMP_TIMEOUT_SECONDS;
     tv.tv_usec = 0;
     if (setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, static_cast<void*>(&tv), sizeof(tv)) < 0) {
-        unified_event::logWarning("Network.NATPMP", "Failed to set socket timeout: " + std::string(strerror(errno)));
-        close(m_socket);
-        m_socket = -1;
-        return false;
+        unified_event::logWarning("Network.NATPMP", "Failed to set socket timeout: " + std::string(strerror(errno)) +
+                                 ". This may cause requests to hang.");
+        // Continue despite this error - we'll just have longer timeouts
     }
 
     // Discover the gateway
     if (!discoverGateway()) {
-        unified_event::logWarning("Network.NATPMP", "Failed to discover gateway");
+        unified_event::logWarning("Network.NATPMP", "Failed to discover gateway. NAT-PMP service will be limited.");
         close(m_socket);
         m_socket = -1;
         return false;
     }
 
-    // Get external IP address
-    m_externalIP = getExternalIPAddress();
+    // Try to get external IP address
+    m_externalIP = tryGetExternalIPAddress();
     if (m_externalIP.empty()) {
-        unified_event::logWarning("Network.NATPMP", "Failed to get external IP address");
-        return false;
+        unified_event::logWarning("Network.NATPMP", "Failed to get external IP address after multiple attempts. "
+                                "NAT-PMP service will continue with limited functionality.");
+        m_externalIPFailed = true;
+        // Continue initialization despite this failure
+    } else {
+        unified_event::logDebug("Network.NATPMP", "External IP address: " + m_externalIP);
     }
 
-    unified_event::logInfo("Network.NATPMP", "External IP address: " + m_externalIP);
-    unified_event::logInfo("Network.NATPMP", "Gateway IP address: " + m_gatewayIP);
+    unified_event::logDebug("Network.NATPMP", "Gateway IP address: " + m_gatewayIP);
 
     // Start the refresh thread
     m_running = true;
     m_refreshThread = std::thread(&NATPMPService::refreshPortMappingsPeriodically, this);
 
     m_initialized = true;
-    unified_event::logInfo("Network.NATPMP", "NAT-PMP service initialized");
+
+    if (m_externalIPFailed) {
+        unified_event::logInfo("Network.NATPMP", "NAT-PMP service initialized with limited functionality (no external IP)");
+    } else {
+        unified_event::logInfo("Network.NATPMP", "NAT-PMP service fully initialized");
+    }
+
     return true;
 }
 
@@ -248,7 +260,7 @@ uint16_t NATPMPService::addPortMapping(uint16_t internalPort, uint16_t externalP
 
     // Check if the mapping was successful
     if (mappedExternalPort != externalPort) {
-        unified_event::logInfo("Network.NATPMP", "NAT-PMP mapped to a different external port: " + std::to_string(mappedExternalPort));
+        unified_event::logDebug("Network.NATPMP", "NAT-PMP mapped to a different external port: " + std::to_string(mappedExternalPort));
         externalPort = mappedExternalPort;
         key = std::to_string(externalPort) + ":" + protocol;
     }
@@ -375,10 +387,24 @@ std::string NATPMPService::getExternalIPAddress() {
         return "";
     }
 
+    // If we already have the external IP, return it
     if (!m_externalIP.empty()) {
         return m_externalIP;
     }
 
+    // If we previously failed to get the external IP and we're initialized,
+    // try again with the retry mechanism
+    if (m_externalIPFailed && m_initialized) {
+        unified_event::logDebug("Network.NATPMP", "Attempting to get external IP address again after previous failure");
+        m_externalIP = tryGetExternalIPAddress();
+        if (!m_externalIP.empty()) {
+            m_externalIPFailed = false;
+            unified_event::logDebug("Network.NATPMP", "Successfully retrieved external IP address after previous failure: " + m_externalIP);
+        }
+        return m_externalIP; // May still be empty if retry failed
+    }
+
+    // Otherwise, just try once
     // Prepare the NAT-PMP request
     uint8_t request[2];
     request[0] = NATPMP_VERSION;
@@ -394,19 +420,19 @@ std::string NATPMPService::getExternalIPAddress() {
 
     // Check if the response is valid
     if (responseSize < 12) {
-        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP external IP response size");
+        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP external IP response size: " + std::to_string(responseSize) + " bytes");
         return "";
     }
 
     // Check the version
     if (response[0] != NATPMP_VERSION) {
-        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP version in external IP response");
+        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP version in external IP response: " + std::to_string(response[0]));
         return "";
     }
 
     // Check the operation code
     if (response[1] != (NATPMP_OP_EXTERNAL_IP + 128)) {
-        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP operation code in external IP response");
+        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP operation code in external IP response: " + std::to_string(response[1]));
         return "";
     }
 
@@ -431,7 +457,7 @@ std::string NATPMPService::getExternalIPAddress() {
     ss << static_cast<int>(response[8]) << "." << static_cast<int>(response[9]) << "." << static_cast<int>(response[10]) << "." << static_cast<int>(response[11]);
     m_externalIP = ss.str();
 
-    unified_event::logInfo("Network.NATPMP", "Got external IP address: " + m_externalIP);
+    unified_event::logDebug("Network.NATPMP", "Got external IP address: " + m_externalIP);
     return m_externalIP;
 }
 
@@ -442,13 +468,21 @@ std::string NATPMPService::getStatus() const {
 
     std::stringstream ss;
     ss << "Initialized, " << m_portMappings.size() << " port mappings";
-    ss << ", External IP: " << m_externalIP;
+
+    if (m_externalIPFailed) {
+        ss << ", External IP: Unknown (retrieval failed)";
+    } else if (m_externalIP.empty()) {
+        ss << ", External IP: Not available";
+    } else {
+        ss << ", External IP: " << m_externalIP;
+    }
+
     ss << ", Gateway IP: " << m_gatewayIP;
     return ss.str();
 }
 
 bool NATPMPService::discoverGateway() {
-    unified_event::logInfo("Network.NATPMP", "Discovering gateway");
+    unified_event::logDebug("Network.NATPMP", "Discovering gateway");
 
 #ifdef _WIN32
     // Windows implementation
@@ -493,14 +527,14 @@ bool NATPMPService::discoverGateway() {
     }
 #elif defined(__APPLE__)
     // macOS implementation
-    unified_event::logInfo("Network.NATPMP", "Using macOS-specific gateway discovery");
+    unified_event::logDebug("Network.NATPMP", "Using macOS-specific gateway discovery");
 
     // Store potential gateways for evaluation
     std::vector<std::string> potentialGateways;
 
     // First try using SystemConfiguration framework
     #ifdef __APPLE__
-    unified_event::logInfo("Network.NATPMP", "Trying SystemConfiguration framework");
+    unified_event::logDebug("Network.NATPMP", "Trying SystemConfiguration framework");
 
     SCDynamicStoreRef store = SCDynamicStoreCreate(nullptr, CFSTR("dht_hunter"), nullptr, nullptr);
     if (store) {
@@ -508,7 +542,7 @@ bool NATPMPService::discoverGateway() {
         CFArrayRef services = SCDynamicStoreCopyKeyList(store, CFSTR("State:/Network/Service/[^/]+/IPv4"));
         if (services) {
             CFIndex count = CFArrayGetCount(services);
-            unified_event::logInfo("Network.NATPMP", "Found " + std::to_string(count) + " network services");
+            unified_event::logDebug("Network.NATPMP", "Found " + std::to_string(count) + " network services");
 
             for (CFIndex i = 0; i < count; i++) {
                 CFStringRef serviceKey = static_cast<CFStringRef>(CFArrayGetValueAtIndex(services, i));
@@ -521,7 +555,7 @@ bool NATPMPService::discoverGateway() {
                         char gatewayBuffer[16]; // IPv4 address max length
                         if (CFStringGetCString(routerAddress, gatewayBuffer, sizeof(gatewayBuffer), kCFStringEncodingUTF8)) {
                             std::string gateway = gatewayBuffer;
-                            unified_event::logInfo("Network.NATPMP", "Found potential gateway IP: " + gateway);
+                            unified_event::logDebug("Network.NATPMP", "Found potential gateway IP: " + gateway);
                             potentialGateways.push_back(gateway);
                         }
                     }
@@ -541,7 +575,7 @@ bool NATPMPService::discoverGateway() {
                     char gatewayBuffer[16]; // IPv4 address max length
                     if (CFStringGetCString(routerAddress, gatewayBuffer, sizeof(gatewayBuffer), kCFStringEncodingUTF8)) {
                         std::string gateway = gatewayBuffer;
-                        unified_event::logInfo("Network.NATPMP", "Found global gateway IP: " + gateway);
+                        unified_event::logDebug("Network.NATPMP", "Found global gateway IP: " + gateway);
                         potentialGateways.push_back(gateway);
                     }
                 }
@@ -554,7 +588,7 @@ bool NATPMPService::discoverGateway() {
     #endif
 
     // Try using command line tools to find more potential gateways
-    unified_event::logInfo("Network.NATPMP", "Trying command line tools for gateway discovery");
+    unified_event::logDebug("Network.NATPMP", "Trying command line tools for gateway discovery");
 
     // Try using route command
     FILE* fp = popen("route -n get default | grep gateway | awk '{print $2}'", "r");
@@ -564,7 +598,7 @@ bool NATPMPService::discoverGateway() {
             // Remove trailing newline
             buffer[strcspn(buffer, "\n")] = 0;
             std::string gateway = buffer;
-            unified_event::logInfo("Network.NATPMP", "Found gateway IP using route command: " + gateway);
+            unified_event::logDebug("Network.NATPMP", "Found gateway IP using route command: " + gateway);
             potentialGateways.push_back(gateway);
         }
         pclose(fp);
@@ -578,7 +612,7 @@ bool NATPMPService::discoverGateway() {
             // Remove trailing newline
             buffer[strcspn(buffer, "\n")] = 0;
             std::string gateway = buffer;
-            unified_event::logInfo("Network.NATPMP", "Found gateway IP using netstat command: " + gateway);
+            unified_event::logDebug("Network.NATPMP", "Found gateway IP using netstat command: " + gateway);
             potentialGateways.push_back(gateway);
         }
         pclose(fp);
@@ -606,7 +640,7 @@ bool NATPMPService::discoverGateway() {
         std::sort(potentialGateways.begin(), potentialGateways.end());
         potentialGateways.erase(std::unique(potentialGateways.begin(), potentialGateways.end()), potentialGateways.end());
 
-        unified_event::logInfo("Network.NATPMP", "Found " + std::to_string(potentialGateways.size()) + " unique potential gateways");
+        unified_event::logDebug("Network.NATPMP", "Found " + std::to_string(potentialGateways.size()) + " unique potential gateways");
 
         // Helper function to check if an IP is in a specific range
         auto isInRange = [](const std::string& ip, const std::string& prefix) {
@@ -617,7 +651,7 @@ bool NATPMPService::discoverGateway() {
         for (const auto& gateway : potentialGateways) {
             if (isInRange(gateway, "192.168.")) {
                 m_gatewayIP = gateway;
-                unified_event::logInfo("Network.NATPMP", "Selected 192.168.x.x gateway: " + m_gatewayIP);
+                unified_event::logDebug("Network.NATPMP", "Selected 192.168.x.x gateway: " + m_gatewayIP);
                 return true;
             }
         }
@@ -626,7 +660,7 @@ bool NATPMPService::discoverGateway() {
         for (const auto& gateway : potentialGateways) {
             if (isInRange(gateway, "10.")) {
                 m_gatewayIP = gateway;
-                unified_event::logInfo("Network.NATPMP", "Selected 10.x.x.x gateway: " + m_gatewayIP);
+                unified_event::logDebug("Network.NATPMP", "Selected 10.x.x.x gateway: " + m_gatewayIP);
                 return true;
             }
         }
@@ -638,7 +672,7 @@ bool NATPMPService::discoverGateway() {
                 int secondOctet = std::stoi(gateway.substr(4, gateway.find('.', 4) - 4));
                 if (secondOctet >= 16 && secondOctet <= 31) {
                     m_gatewayIP = gateway;
-                    unified_event::logInfo("Network.NATPMP", "Selected 172.16-31.x.x gateway: " + m_gatewayIP);
+                    unified_event::logDebug("Network.NATPMP", "Selected 172.16-31.x.x gateway: " + m_gatewayIP);
                     return true;
                 }
             }
@@ -648,7 +682,7 @@ bool NATPMPService::discoverGateway() {
         for (const auto& gateway : potentialGateways) {
             if (!isInRange(gateway, "100.")) {
                 m_gatewayIP = gateway;
-                unified_event::logInfo("Network.NATPMP", "Selected non-VPN gateway: " + m_gatewayIP);
+                unified_event::logDebug("Network.NATPMP", "Selected non-VPN gateway: " + m_gatewayIP);
                 return true;
             }
         }
@@ -675,7 +709,7 @@ bool NATPMPService::discoverGateway() {
         // Remove trailing newline
         buffer[strcspn(buffer, "\n")] = 0;
         m_gatewayIP = buffer;
-        unified_event::logInfo("Network.NATPMP", "Found gateway IP using ip route command: " + m_gatewayIP);
+        unified_event::logDebug("Network.NATPMP", "Found gateway IP using ip route command: " + m_gatewayIP);
     } else {
         pclose(fp);
         unified_event::logError("Network.NATPMP", "Failed to get default gateway using ip route command");
@@ -690,7 +724,7 @@ bool NATPMPService::discoverGateway() {
         return false;
     }
 
-    unified_event::logInfo("Network.NATPMP", "Discovered gateway: " + m_gatewayIP);
+    unified_event::logDebug("Network.NATPMP", "Discovered gateway: " + m_gatewayIP);
 
     // Test if the gateway supports NAT-PMP by sending a request for external IP
     if (!testGateway()) {
@@ -702,7 +736,7 @@ bool NATPMPService::discoverGateway() {
 }
 
 bool NATPMPService::testGateway() {
-    unified_event::logInfo("Network.NATPMP", "Testing gateway for NAT-PMP support");
+    unified_event::logDebug("Network.NATPMP", "Testing gateway " + m_gatewayIP + " for NAT-PMP support");
 
     // Create a socket for NAT-PMP communication if it doesn't exist
     if (m_socket < 0) {
@@ -717,10 +751,9 @@ bool NATPMPService::testGateway() {
         tv.tv_sec = NATPMP_TIMEOUT_SECONDS;
         tv.tv_usec = 0;
         if (setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, static_cast<void*>(&tv), sizeof(tv)) < 0) {
-            unified_event::logWarning("Network.NATPMP", "Failed to set socket timeout: " + std::string(strerror(errno)));
-            close(m_socket);
-            m_socket = -1;
-            return false;
+            unified_event::logWarning("Network.NATPMP", "Failed to set socket timeout: " + std::string(strerror(errno)) +
+                                     ". Testing will continue but may hang.");
+            // Continue despite this error
         }
     }
 
@@ -732,26 +765,27 @@ bool NATPMPService::testGateway() {
     uint8_t response[16];
     size_t responseSize = sizeof(response);
 
+    unified_event::logDebug("Network.NATPMP", "Sending NAT-PMP test request to gateway " + m_gatewayIP);
     if (!sendNATPMPRequest(request, sizeof(request), response, responseSize)) {
-        unified_event::logWarning("Network.NATPMP", "Failed to send NAT-PMP request");
+        unified_event::logWarning("Network.NATPMP", "Failed to send NAT-PMP test request to gateway " + m_gatewayIP);
         return false;
     }
 
     // Check if the response is valid
     if (responseSize < 12) {
-        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP response size");
+        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP response size: " + std::to_string(responseSize) + " bytes");
         return false;
     }
 
     // Check the version
     if (response[0] != NATPMP_VERSION) {
-        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP version in response");
+        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP version in response: " + std::to_string(response[0]));
         return false;
     }
 
     // Check the operation code
     if (response[1] != (NATPMP_OP_EXTERNAL_IP + 128)) {
-        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP operation code in response");
+        unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP operation code in response: " + std::to_string(response[1]));
         return false;
     }
 
@@ -760,7 +794,7 @@ bool NATPMPService::testGateway() {
         (static_cast<uint16_t>(response[2]) << 8) |
         static_cast<uint16_t>(response[3]));
     if (resultCode != NATPMP_RESULT_SUCCESS) {
-        unified_event::logWarning("Network.NATPMP", "NAT-PMP request failed with result code: " + std::to_string(resultCode));
+        unified_event::logWarning("Network.NATPMP", "NAT-PMP test request failed with result code: " + std::to_string(resultCode));
         return false;
     }
 
@@ -776,13 +810,18 @@ bool NATPMPService::testGateway() {
     ss << static_cast<int>(response[8]) << "." << static_cast<int>(response[9]) << "." << static_cast<int>(response[10]) << "." << static_cast<int>(response[11]);
     m_externalIP = ss.str();
 
-    unified_event::logInfo("Network.NATPMP", "Gateway supports NAT-PMP, external IP: " + m_externalIP);
+    unified_event::logDebug("Network.NATPMP", "Gateway " + m_gatewayIP + " supports NAT-PMP, external IP: " + m_externalIP);
     return true;
 }
 
 bool NATPMPService::sendNATPMPRequest(const uint8_t* request, size_t requestSize, uint8_t* response, size_t& responseSize) {
-    if (m_socket < 0 || m_gatewayIP.empty()) {
-        unified_event::logWarning("Network.NATPMP", "Cannot send NAT-PMP request - socket not initialized or gateway not discovered");
+    if (m_socket < 0) {
+        unified_event::logWarning("Network.NATPMP", "Cannot send NAT-PMP request - socket not initialized");
+        return false;
+    }
+
+    if (m_gatewayIP.empty()) {
+        unified_event::logWarning("Network.NATPMP", "Cannot send NAT-PMP request - gateway not discovered");
         return false;
     }
 
@@ -826,7 +865,7 @@ bool NATPMPService::sendNATPMPRequest(const uint8_t* request, size_t requestSize
 }
 
 void NATPMPService::refreshPortMappingsPeriodically() {
-    unified_event::logInfo("Network.NATPMP", "Starting port mapping refresh thread");
+    unified_event::logDebug("Network.NATPMP", "Starting port mapping refresh thread");
 
     while (m_running) {
         // Wait for the refresh interval or until shutdown
@@ -872,7 +911,257 @@ void NATPMPService::refreshPortMappingsPeriodically() {
         }
     }
 
-    unified_event::logInfo("Network.NATPMP", "Port mapping refresh thread stopped");
+    unified_event::logDebug("Network.NATPMP", "Port mapping refresh thread stopped");
+}
+
+std::string NATPMPService::tryGetExternalIPAddress() {
+    unified_event::logDebug("Network.NATPMP", "Attempting to get external IP address with retry logic");
+
+    // Reset retry count
+    m_externalIPRetryCount = 0;
+
+    // Try multiple times with increasing timeouts
+    for (int attempt = 0; attempt < MAX_EXTERNAL_IP_RETRY_ATTEMPTS; attempt++) {
+        m_externalIPRetryCount++;
+
+        // If this isn't the first attempt, wait with exponential backoff
+        if (attempt > 0) {
+            int waitTime = 1000 * (1 << (attempt - 1)); // 1s, 2s, 4s...
+            unified_event::logDebug("Network.NATPMP", "Waiting " + std::to_string(waitTime/1000) +
+                                   " seconds before retry attempt " + std::to_string(attempt + 1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(waitTime));
+        }
+
+        // Prepare the NAT-PMP request
+        uint8_t request[2];
+        request[0] = NATPMP_VERSION;
+        request[1] = NATPMP_OP_EXTERNAL_IP;
+
+        uint8_t response[16];
+        size_t responseSize = sizeof(response);
+
+        unified_event::logDebug("Network.NATPMP", "External IP retrieval attempt " + std::to_string(attempt + 1) +
+                               " of " + std::to_string(MAX_EXTERNAL_IP_RETRY_ATTEMPTS));
+
+        if (!sendNATPMPRequest(request, sizeof(request), response, responseSize)) {
+            unified_event::logWarning("Network.NATPMP", "Failed to send NAT-PMP external IP request (attempt " +
+                                    std::to_string(attempt + 1) + ")");
+            continue; // Try again
+        }
+
+        // Check if the response is valid
+        if (responseSize < 12) {
+            unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP external IP response size: " +
+                                    std::to_string(responseSize) + " bytes (attempt " + std::to_string(attempt + 1) + ")");
+            continue; // Try again
+        }
+
+        // Check the version
+        if (response[0] != NATPMP_VERSION) {
+            unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP version in external IP response: " +
+                                    std::to_string(response[0]) + " (attempt " + std::to_string(attempt + 1) + ")");
+            continue; // Try again
+        }
+
+        // Check the operation code
+        if (response[1] != (NATPMP_OP_EXTERNAL_IP + 128)) {
+            unified_event::logWarning("Network.NATPMP", "Invalid NAT-PMP operation code in external IP response: " +
+                                    std::to_string(response[1]) + " (attempt " + std::to_string(attempt + 1) + ")");
+            continue; // Try again
+        }
+
+        // Check the result code
+        uint16_t resultCode = static_cast<uint16_t>(
+            (static_cast<uint16_t>(response[2]) << 8) |
+            static_cast<uint16_t>(response[3]));
+        if (resultCode != NATPMP_RESULT_SUCCESS) {
+            unified_event::logWarning("Network.NATPMP", "NAT-PMP external IP request failed with result code: " +
+                                    std::to_string(resultCode) + " (attempt " + std::to_string(attempt + 1) + ")");
+            continue; // Try again
+        }
+
+        // Extract the epoch time
+        m_epoch = static_cast<uint32_t>(
+            (static_cast<uint32_t>(response[4]) << 24) |
+            (static_cast<uint32_t>(response[5]) << 16) |
+            (static_cast<uint32_t>(response[6]) << 8) |
+            static_cast<uint32_t>(response[7]));
+
+        // Extract the external IP address
+        std::stringstream ss;
+        ss << static_cast<int>(response[8]) << "." << static_cast<int>(response[9]) << "." <<
+           static_cast<int>(response[10]) << "." << static_cast<int>(response[11]);
+        std::string externalIP = ss.str();
+
+        // Validate the IP address (basic check)
+        if (externalIP == "0.0.0.0") {
+            unified_event::logWarning("Network.NATPMP", "Received invalid external IP address: 0.0.0.0 (attempt " +
+                                    std::to_string(attempt + 1) + ")");
+            continue; // Try again
+        }
+
+        unified_event::logDebug("Network.NATPMP", "Successfully retrieved external IP address: " + externalIP +
+                             " (attempt " + std::to_string(attempt + 1) + ")");
+        return externalIP;
+    }
+
+    unified_event::logError("Network.NATPMP", "Failed to get external IP address after " +
+                          std::to_string(MAX_EXTERNAL_IP_RETRY_ATTEMPTS) + " attempts");
+    return "";
+}
+
+void NATPMPService::logNetworkInterfaces() {
+    unified_event::logDebug("Network.NATPMP", "Logging network interface information for diagnostics");
+
+#ifdef _WIN32
+    // Windows implementation
+    ULONG bufferSize = 15000;
+    PIP_ADAPTER_ADDRESSES pAddresses = nullptr;
+    ULONG result = 0;
+
+    do {
+        pAddresses = (PIP_ADAPTER_ADDRESSES)malloc(bufferSize);
+        if (pAddresses == nullptr) {
+            unified_event::logError("Network.NATPMP", "Memory allocation failed for adapter addresses");
+            return;
+        }
+
+        result = GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, nullptr, pAddresses, &bufferSize);
+
+        if (result == ERROR_BUFFER_OVERFLOW) {
+            free(pAddresses);
+            pAddresses = nullptr;
+            bufferSize *= 2;
+        }
+    } while (result == ERROR_BUFFER_OVERFLOW);
+
+    if (result == NO_ERROR) {
+        int adapterCount = 0;
+        for (PIP_ADAPTER_ADDRESSES pCurrent = pAddresses; pCurrent; pCurrent = pCurrent->Next) {
+            adapterCount++;
+
+            std::string adapterName = "<unknown>";
+            if (pCurrent->FriendlyName) {
+                char friendlyName[256];
+                WideCharToMultiByte(CP_ACP, 0, pCurrent->FriendlyName, -1, friendlyName, sizeof(friendlyName), nullptr, nullptr);
+                adapterName = friendlyName;
+            }
+
+            std::string adapterDesc = "<unknown>";
+            if (pCurrent->Description) {
+                char description[256];
+                WideCharToMultiByte(CP_ACP, 0, pCurrent->Description, -1, description, sizeof(description), nullptr, nullptr);
+                adapterDesc = description;
+            }
+
+            unified_event::logDebug("Network.NATPMP", "Adapter " + std::to_string(adapterCount) + ": " + adapterName +
+                                   " (" + adapterDesc + ")");
+
+            // Log IP addresses
+            PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrent->FirstUnicastAddress;
+            int addressCount = 0;
+            while (pUnicast) {
+                addressCount++;
+                if (pUnicast->Address.lpSockaddr->sa_family == AF_INET) {
+                    sockaddr_in* pSockAddr = reinterpret_cast<sockaddr_in*>(pUnicast->Address.lpSockaddr);
+                    char ipAddress[INET_ADDRSTRLEN];
+                    inet_ntop(AF_INET, &(pSockAddr->sin_addr), ipAddress, INET_ADDRSTRLEN);
+                    unified_event::logDebug("Network.NATPMP", "  IP Address " + std::to_string(addressCount) + ": " + ipAddress);
+                }
+                pUnicast = pUnicast->Next;
+            }
+
+            // Log gateway addresses
+            PIP_ADAPTER_GATEWAY_ADDRESS pGateway = pCurrent->FirstGatewayAddress;
+            int gatewayCount = 0;
+            while (pGateway) {
+                gatewayCount++;
+                if (pGateway->Address.lpSockaddr->sa_family == AF_INET) {
+                    sockaddr_in* pSockAddr = reinterpret_cast<sockaddr_in*>(pGateway->Address.lpSockaddr);
+                    char gatewayAddress[INET_ADDRSTRLEN];
+                    inet_ntop(AF_INET, &(pSockAddr->sin_addr), gatewayAddress, INET_ADDRSTRLEN);
+                    unified_event::logDebug("Network.NATPMP", "  Gateway " + std::to_string(gatewayCount) + ": " + gatewayAddress);
+                }
+                pGateway = pGateway->Next;
+            }
+        }
+    } else {
+        unified_event::logWarning("Network.NATPMP", "GetAdaptersAddresses failed with error code: " + std::to_string(result));
+    }
+
+    if (pAddresses) {
+        free(pAddresses);
+    }
+#elif defined(__APPLE__) || defined(__linux__)
+    // macOS and Linux implementation
+    struct ifaddrs* ifaddr;
+    if (getifaddrs(&ifaddr) == -1) {
+        unified_event::logError("Network.NATPMP", "getifaddrs failed: " + std::string(strerror(errno)));
+        return;
+    }
+
+    int adapterCount = 0;
+    for (struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == nullptr) {
+            continue;
+        }
+
+        // Only handle IPv4 addresses
+        if (ifa->ifa_addr->sa_family == AF_INET) {
+            adapterCount++;
+
+            char ipAddress[INET_ADDRSTRLEN];
+            struct sockaddr_in* addr = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
+            inet_ntop(AF_INET, &(addr->sin_addr), ipAddress, INET_ADDRSTRLEN);
+
+            unified_event::logDebug("Network.NATPMP", "Interface " + std::to_string(adapterCount) + ": " + ifa->ifa_name +
+                                   " - IP: " + ipAddress);
+
+            // Get netmask
+            if (ifa->ifa_netmask != nullptr) {
+                char netmask[INET_ADDRSTRLEN];
+                struct sockaddr_in* mask = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_netmask);
+                inet_ntop(AF_INET, &(mask->sin_addr), netmask, INET_ADDRSTRLEN);
+                unified_event::logDebug("Network.NATPMP", "  Netmask: " + std::string(netmask));
+            }
+
+            // Get broadcast address if available
+            if ((ifa->ifa_flags & IFF_BROADCAST) && ifa->ifa_broadaddr != nullptr) {
+                char broadcast[INET_ADDRSTRLEN];
+                struct sockaddr_in* bcast = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_broadaddr);
+                inet_ntop(AF_INET, &(bcast->sin_addr), broadcast, INET_ADDRSTRLEN);
+                unified_event::logDebug("Network.NATPMP", "  Broadcast: " + std::string(broadcast));
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+
+    // Try to get gateway information using command line tools
+    unified_event::logDebug("Network.NATPMP", "Attempting to get gateway information using command line tools");
+
+#ifdef __APPLE__
+    FILE* fp = popen("route -n get default | grep gateway | awk '{print $2}'", "r");
+#else
+    FILE* fp = popen("ip route | grep default | awk '{print $3}'", "r");
+#endif
+
+    if (fp != nullptr) {
+        char buffer[16];
+        if (fgets(buffer, sizeof(buffer), fp) != nullptr) {
+            // Remove trailing newline
+            buffer[strcspn(buffer, "\n")] = 0;
+            unified_event::logDebug("Network.NATPMP", "Default gateway: " + std::string(buffer));
+        } else {
+            unified_event::logWarning("Network.NATPMP", "Failed to get default gateway from command line");
+        }
+        pclose(fp);
+    } else {
+        unified_event::logWarning("Network.NATPMP", "Failed to execute command to get default gateway");
+    }
+#endif
+
+    unified_event::logDebug("Network.NATPMP", "Network interface logging complete");
 }
 
 } // namespace dht_hunter::network::nat

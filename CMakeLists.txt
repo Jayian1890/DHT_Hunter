@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(DHT_Hunter VERSION 0.1.0 LANGUAGES CXX)
+project(BitScrape VERSION 0.1.0 LANGUAGES CXX)
 
 # Set C++ standard globally
 set(CMAKE_CXX_STANDARD 20)
@@ -78,9 +78,6 @@ endif()
 
 # Copy web directory to build directory (for development mode)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/web DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-
-# Tests have been removed from the project
-# TODO: Consider implementing a new testing framework in the future if needed
 
 # Install targets
 install(TARGETS dht_hunter

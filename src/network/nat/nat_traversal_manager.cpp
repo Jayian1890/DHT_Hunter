@@ -16,7 +16,7 @@ std::shared_ptr<NATTraversalManager> NATTraversalManager::getInstance() {
 }
 
 NATTraversalManager::NATTraversalManager() : m_initialized(false) {
-    unified_event::logInfo("Network.NAT", "NAT traversal manager created");
+    unified_event::logDebug("Network.NAT", "NAT traversal manager created");
 }
 
 NATTraversalManager::~NATTraversalManager() {
@@ -28,7 +28,7 @@ bool NATTraversalManager::initialize() {
         return true;
     }
 
-    unified_event::logInfo("Network.NAT", "Initializing NAT traversal manager");
+    unified_event::logDebug("Network.NAT", "Initializing NAT traversal manager");
 
     // Initialize UPnP service
     auto upnpService = UPnPService::getInstance();
@@ -59,7 +59,7 @@ bool NATTraversalManager::initialize() {
     unified_event::logInfo("Network.NAT", "Active NAT traversal service: " + m_activeService->getStatus());
 
     m_initialized = true;
-    unified_event::logInfo("Network.NAT", "NAT traversal manager initialized");
+    unified_event::logDebug("Network.NAT", "NAT traversal manager initialized");
     return true;
 }
 
@@ -176,7 +176,20 @@ std::string NATTraversalManager::getExternalIPAddress() {
         }
     }
 
-    unified_event::logWarning("Network.NAT", "Failed to get external IP address");
+    // If we get here, none of the services could provide an external IP
+    // Try one more time with detailed logging
+    unified_event::logDebug("Network.NAT", "Initial external IP retrieval failed, trying again with detailed diagnostics");
+
+    for (auto& service : m_services) {
+        unified_event::logDebug("Network.NAT", "Trying to get external IP from service: " + service->getStatus());
+        std::string ip = service->getExternalIPAddress();
+        if (!ip.empty()) {
+            unified_event::logInfo("Network.NAT", "Successfully retrieved external IP on second attempt: " + ip);
+            return ip;
+        }
+    }
+
+    unified_event::logWarning("Network.NAT", "Failed to get external IP address from any service");
     return "";
 }
 

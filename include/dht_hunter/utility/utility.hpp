@@ -10,6 +10,7 @@
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 #include "dht_hunter/utility/thread/thread_pool.hpp"
 #include "dht_hunter/utility/process/process_utils.hpp"
+#include "dht_hunter/utility/network/network_utils.hpp"
 
 namespace dht_hunter::utility {
     // Main utility namespace

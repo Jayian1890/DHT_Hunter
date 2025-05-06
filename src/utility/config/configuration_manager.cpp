@@ -1,12 +1,14 @@
 #include "dht_hunter/utility/config/configuration_manager.hpp"
+
+#include <algorithm>
+#include <dht_hunter/utility/network/network_utils.hpp>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include "dht_hunter/utility/json/json.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
-
-#include <fstream>
-#include <sstream>
-#include <filesystem>
-#include <algorithm>
 
 namespace dht_hunter::utility::config {
 
@@ -247,8 +249,8 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
 
         // General settings
         json::JsonValue generalConfig(json::JsonValue::createObject());
-        generalConfig.getObject()->set("configDir", json::JsonValue("~/dht-hunter"));
-        generalConfig.getObject()->set("logFile", json::JsonValue("dht_hunter.log"));
+        generalConfig.getObject()->set("configDir", json::JsonValue("~/bitscrape"));
+        generalConfig.getObject()->set("logFile", json::JsonValue("bitscrape.log"));
         generalConfig.getObject()->set("logLevel", json::JsonValue("info"));
         config.getObject()->set("general", generalConfig);
 
@@ -278,6 +280,7 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
         networkConfig.getObject()->set("transactionTimeout", json::JsonValue(30));
         networkConfig.getObject()->set("maxTransactions", json::JsonValue(1024));
         networkConfig.getObject()->set("mtuSize", json::JsonValue(1400));
+        networkConfig.getObject()->set("userAgent", json::JsonValue(network::getUserAgent()));
         config.getObject()->set("network", networkConfig);
 
         // Web interface settings

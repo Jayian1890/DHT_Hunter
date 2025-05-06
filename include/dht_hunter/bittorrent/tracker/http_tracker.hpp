@@ -79,6 +79,18 @@ public:
      */
     std::string getStatus() const override;
 
+    /**
+     * @brief Update the announce interval
+     * @param interval The new interval in seconds
+     */
+    void updateAnnounceInterval(int interval);
+
+    /**
+     * @brief Update the minimum announce interval
+     * @param interval The new interval in seconds
+     */
+    void updateMinAnnounceInterval(int interval);
+
 private:
     /**
      * @brief Builds the announce URL
@@ -102,7 +114,7 @@ private:
      * @param peers The vector to fill with peers
      * @return True if the response was parsed successfully, false otherwise
      */
-    bool parseAnnounceResponse(const std::string& response, std::vector<network::EndPoint>& peers) const;
+    bool parseAnnounceResponse(const std::string& response, std::vector<types::EndPoint>& peers) const;
 
     /**
      * @brief Parses the scrape response
@@ -118,6 +130,14 @@ private:
     std::chrono::steady_clock::time_point m_lastAnnounce;
     std::chrono::steady_clock::time_point m_lastScrape;
     std::mutex m_mutex;
+
+    // Retry configuration
+    int m_maxRetries;
+    int m_retryDelayMs;
+
+    // Tracker-provided intervals
+    int m_announceInterval{1800}; // Default 30 minutes
+    int m_minAnnounceInterval{900}; // Default 15 minutes
 };
 
 } // namespace dht_hunter::bittorrent::tracker

@@ -3,7 +3,7 @@
 
 namespace dht_hunter::dht::extensions {
 
-AzureusDHT::AzureusDHT(const DHTConfig& config, 
+AzureusDHT::AzureusDHT(const DHTConfig& config,
                      const NodeID& nodeID,
                      std::shared_ptr<RoutingTable> routingTable)
     : DHTExtension(config, nodeID),
@@ -38,10 +38,10 @@ bool AzureusDHT::initialize() {
     // 1. It uses a different node ID format (still 160 bits, but generated differently)
     // 2. It uses different message types
     // 3. It has a different routing table structure
-    // 
+    //
     // For this implementation, we're reusing the existing routing table
     // but in a real implementation, we would need to handle these differences
-    unified_event::logInfo("DHT.AzureusDHT", "Initialized Azureus DHT extension");
+    unified_event::logDebug("DHT.AzureusDHT", "Initialized Azureus DHT extension");
 
     m_initialized = true;
     return true;

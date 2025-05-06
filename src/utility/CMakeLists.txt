@@ -28,6 +28,9 @@ add_library(dht_hunter_utility
         # System utilities
         system/memory_utils.cpp
 
+        # Network utilities
+        network/network_utils.cpp
+
         # JSON utilities
         json/json.cpp
 

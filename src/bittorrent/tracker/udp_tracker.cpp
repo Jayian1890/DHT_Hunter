@@ -21,7 +21,7 @@ namespace dht_hunter::bittorrent::tracker {
 
 UDPTracker::UDPTracker(const std::string& url)
     : m_url(url), m_available(false), m_connected(false), m_connectionId(0) {
-    unified_event::logInfo("BitTorrent.UDPTracker", "Created UDP tracker: " + url);
+    unified_event::logDebug("BitTorrent.UDPTracker", "Created UDP tracker: " + url);
 
     // Parse the URL to get the host and port
     // UDP tracker URLs are in the format: udp://host:port/announce
@@ -51,11 +51,11 @@ UDPTracker::UDPTracker(const std::string& url)
         m_port = 80;
     }
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Parsed UDP tracker URL: " + m_url + " -> " + m_host + ":" + std::to_string(m_port));
+    unified_event::logDebug("BitTorrent.UDPTracker", "Parsed UDP tracker URL: " + m_url + " -> " + m_host + ":" + std::to_string(m_port));
 }
 
 UDPTracker::~UDPTracker() {
-    unified_event::logInfo("BitTorrent.UDPTracker", "Destroyed UDP tracker: " + m_url);
+    unified_event::logDebug("BitTorrent.UDPTracker", "Destroyed UDP tracker: " + m_url);
 }
 
 std::string UDPTracker::getURL() const {
@@ -77,7 +77,7 @@ bool UDPTracker::announce(
         return false;
     }
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Announcing to tracker: " + m_url + " for info hash: " + types::infoHashToString(infoHash));
+    unified_event::logDebug("BitTorrent.UDPTracker", "Announcing to tracker: " + m_url + " for info hash: " + types::infoHashToString(infoHash));
 
     // Initialize the UDP client if needed
     if (!m_udpClient && !initializeUDPClient()) {
@@ -120,7 +120,7 @@ bool UDPTracker::scrape(
         return false;
     }
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Scraping tracker: " + m_url + " for " + std::to_string(infoHashes.size()) + " info hashes");
+    unified_event::logDebug("BitTorrent.UDPTracker", "Scraping tracker: " + m_url + " for " + std::to_string(infoHashes.size()) + " info hashes");
 
     // Initialize the UDP client if needed
     if (!m_udpClient && !initializeUDPClient()) {
@@ -178,7 +178,7 @@ std::string UDPTracker::getStatus() const {
 bool UDPTracker::initializeUDPClient() {
     try {
         // Create a new UDP client
-        unified_event::logInfo("BitTorrent.UDPTracker", "Initializing UDP client for tracker: " + m_url);
+        unified_event::logDebug("BitTorrent.UDPTracker", "Initializing UDP client for tracker: " + m_url);
         m_udpClient = std::make_shared<network::UDPClient>();
 
         // Set up the data received callback
@@ -229,13 +229,13 @@ bool UDPTracker::initializeUDPClient() {
         });
 
         // Start the UDP client
-        unified_event::logInfo("BitTorrent.UDPTracker", "Starting UDP client for tracker: " + m_url);
+        unified_event::logDebug("BitTorrent.UDPTracker", "Starting UDP client for tracker: " + m_url);
         if (!m_udpClient->start()) {
             unified_event::logWarning("BitTorrent.UDPTracker", "Failed to start UDP client for tracker: " + m_url);
             return false;
         }
 
-        unified_event::logInfo("BitTorrent.UDPTracker", "UDP client initialized successfully for tracker: " + m_url);
+        unified_event::logDebug("BitTorrent.UDPTracker", "UDP client initialized successfully for tracker: " + m_url);
         return true;
     } catch (const std::exception& e) {
         unified_event::logError("BitTorrent.UDPTracker", "Error initializing UDP client for tracker: " + m_url + ": " + std::string(e.what()));
@@ -250,7 +250,7 @@ bool UDPTracker::connect(std::function<void(bool success, uint64_t connectionId)
         return false;
     }
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Connecting to tracker: " + m_url);
+    unified_event::logDebug("BitTorrent.UDPTracker", "Connecting to tracker: " + m_url);
 
     // Generate a transaction ID
     uint32_t transactionId = generateTransactionId();
@@ -287,14 +287,14 @@ bool UDPTracker::connect(std::function<void(bool success, uint64_t connectionId)
             // Try to handle the response
             if (data && length >= 16) {
                 if (handleConnectResponse(data, length, callback)) {
-                    unified_event::logInfo("BitTorrent.UDPTracker", "Successfully connected to tracker: " + m_url);
+                    unified_event::logDebug("BitTorrent.UDPTracker", "Successfully connected to tracker: " + m_url);
                     return;
                 }
             }
 
             // If we get here, the response was invalid or there was an error
             if (retryCount < MAX_RETRIES) {
-                unified_event::logInfo("BitTorrent.UDPTracker", "Retrying connect to tracker: " + m_url + " (attempt " + std::to_string(retryCount + 1) + " of " + std::to_string(MAX_RETRIES) + ")");
+                unified_event::logDebug("BitTorrent.UDPTracker", "Retrying connect to tracker: " + m_url + " (attempt " + std::to_string(retryCount + 1) + " of " + std::to_string(MAX_RETRIES) + ")");
 
                 // Wait a bit before retrying (exponential backoff)
                 std::this_thread::sleep_for(std::chrono::milliseconds(500 * (1 << retryCount)));
@@ -363,7 +363,7 @@ bool UDPTracker::sendAnnounce(
     }
 
     std::string infoHashStr = types::infoHashToString(infoHash);
-    unified_event::logInfo("BitTorrent.UDPTracker", "Announcing to tracker: " + m_url + " for info hash: " + infoHashStr);
+    unified_event::logDebug("BitTorrent.UDPTracker", "Announcing to tracker: " + m_url + " for info hash: " + infoHashStr);
 
     // Generate a transaction ID
     uint32_t transactionId = generateTransactionId();
@@ -467,7 +467,7 @@ bool UDPTracker::sendAnnounce(
 
             // If we get here, the response was invalid or there was an error
             if (retryCount < MAX_RETRIES) {
-                unified_event::logInfo("BitTorrent.UDPTracker", "Retrying announce to tracker: " + m_url + " for info hash: " + infoHashStr +
+                unified_event::logDebug("BitTorrent.UDPTracker", "Retrying announce to tracker: " + m_url + " for info hash: " + infoHashStr +
                                      " (attempt " + std::to_string(retryCount + 1) + " of " + std::to_string(MAX_RETRIES) + ")");
 
                 // Wait a bit before retrying (exponential backoff)
@@ -650,7 +650,7 @@ bool UDPTracker::handleConnectResponse(
         connectionId = (connectionId << 8) | static_cast<uint64_t>(data[8U + static_cast<size_t>(i)]);
     }
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Received valid connect response with connection ID: " + std::to_string(connectionId));
+    unified_event::logDebug("BitTorrent.UDPTracker", "Received valid connect response with connection ID: " + std::to_string(connectionId));
 
     // Store the connection ID and time
     m_connectionId = connectionId;
@@ -658,7 +658,7 @@ bool UDPTracker::handleConnectResponse(
     m_connected = true;
     m_available = true;
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Connected to tracker: " + m_url);
+    unified_event::logDebug("BitTorrent.UDPTracker", "Connected to tracker: " + m_url);
 
     // Call the callback
     callback(true, connectionId);
@@ -733,14 +733,14 @@ bool UDPTracker::handleAnnounceResponse(
         seeders = (seeders << 8) | static_cast<uint32_t>(data[16U + static_cast<size_t>(i)]);
     }
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Received announce response with interval: " + std::to_string(interval) +
+    unified_event::logDebug("BitTorrent.UDPTracker", "Received announce response with interval: " + std::to_string(interval) +
                          ", leechers: " + std::to_string(leechers) + ", seeders: " + std::to_string(seeders));
 
     // Extract ALL peers from the response
     std::vector<types::EndPoint> peers;
     size_t numPeers = (length - 20) / 6;
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Received " + std::to_string(numPeers) + " peers from tracker");
+    unified_event::logDebug("BitTorrent.UDPTracker", "Received " + std::to_string(numPeers) + " peers from tracker");
 
     // Make sure we have enough data for all peers
     if (length >= 20 + numPeers * 6) {
@@ -789,7 +789,7 @@ bool UDPTracker::handleAnnounceResponse(
     // Update the last announce time
     m_lastAnnounce = std::chrono::steady_clock::now();
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Announce successful: " + m_url + ", interval: " + std::to_string(interval) + ", leechers: " + std::to_string(leechers) + ", seeders: " + std::to_string(seeders) + ", peers: " + std::to_string(peers.size()));
+    unified_event::logDebug("BitTorrent.UDPTracker", "Announce successful: " + m_url + ", interval: " + std::to_string(interval) + ", leechers: " + std::to_string(leechers) + ", seeders: " + std::to_string(seeders) + ", peers: " + std::to_string(peers.size()));
 
     // Call the callback
     callback(true, peers);
@@ -852,7 +852,7 @@ bool UDPTracker::handleScrapeResponse(
     // Update the last scrape time
     m_lastScrape = std::chrono::steady_clock::now();
 
-    unified_event::logInfo("BitTorrent.UDPTracker", "Scrape successful: " + m_url + ", info hashes: " + std::to_string(infoHashes.size()));
+    unified_event::logDebug("BitTorrent.UDPTracker", "Scrape successful: " + m_url + ", info hashes: " + std::to_string(infoHashes.size()));
 
     // Call the callback
     callback(true, stats);

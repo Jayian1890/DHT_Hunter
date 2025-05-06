@@ -32,8 +32,13 @@ bool LoggingProcessor::shouldProcess(std::shared_ptr<Event> event) const {
         return false;
     }
 
-    // Filter out NodeDiscoveredEvent events as per user request
+    // Filter out specific events as per user request
     if (event->getType() == EventType::NodeDiscovered) {
+        return false;
+    }
+
+    // Filter out InfoHashDiscovered events
+    if (event->getType() == EventType::Custom && event->getName() == "InfoHashDiscovered") {
         return false;
     }
 

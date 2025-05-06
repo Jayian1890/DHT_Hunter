@@ -1,6 +1,7 @@
 #include "dht_hunter/bittorrent/metadata/metadata_acquisition_manager.hpp"
 #include "dht_hunter/utility/metadata/metadata_utils.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
+#include "dht_hunter/utility/network/network_utils.hpp"
 #include <algorithm>
 #include <random>
 
@@ -97,7 +98,7 @@ bool MetadataAcquisitionManager::start() {
         if (!m_dhtMetadataProvider->start()) {
             unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to start DHT metadata provider");
         } else {
-            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Started DHT metadata provider");
+            unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Started DHT metadata provider");
         }
     }
 
@@ -106,14 +107,8 @@ bool MetadataAcquisitionManager::start() {
         if (!m_trackerManager->initialize()) {
             unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to initialize tracker manager");
         } else {
-            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Initialized tracker manager");
-
-            // Add some default trackers
-            m_trackerManager->addTracker("udp://tracker.opentrackr.org:1337/announce");
-            m_trackerManager->addTracker("udp://tracker.openbittorrent.com:6969/announce");
-            m_trackerManager->addTracker("udp://tracker.torrent.eu.org:451/announce");
-            m_trackerManager->addTracker("udp://tracker.tiny-vps.com:6969/announce");
-            m_trackerManager->addTracker("udp://open.stealth.si:80/announce");
+            unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Initialized tracker manager");
+            // Trackers will be loaded from the configured URLs
         }
     }
 
@@ -122,7 +117,7 @@ bool MetadataAcquisitionManager::start() {
         if (!m_natTraversalManager->initialize()) {
             unified_event::logWarning("BitTorrent.MetadataAcquisitionManager", "Failed to initialize NAT traversal manager");
         } else {
-            unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Initialized NAT traversal manager");
+            unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Initialized NAT traversal manager");
 
             // Add port mappings for DHT and BitTorrent
             auto configManager = utility::config::ConfigurationManager::getInstance();
@@ -130,15 +125,16 @@ bool MetadataAcquisitionManager::start() {
             uint16_t btPort = static_cast<uint16_t>(configManager->getInt("bittorrent.port", 6881));
 
             // Add port mappings
-            uint16_t mappedDhtPort = m_natTraversalManager->addPortMapping(dhtPort, dhtPort, "UDP", "DHT-Hunter DHT");
-            uint16_t mappedBtPort = m_natTraversalManager->addPortMapping(btPort, btPort, "TCP", "DHT-Hunter BitTorrent");
+            std::string userAgent = utility::network::getUserAgent();
+            uint16_t mappedDhtPort = m_natTraversalManager->addPortMapping(dhtPort, dhtPort, "UDP", userAgent + " DHT");
+            uint16_t mappedBtPort = m_natTraversalManager->addPortMapping(btPort, btPort, "TCP", userAgent + " BitTorrent");
 
             if (mappedDhtPort > 0) {
-                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Mapped DHT port: " + std::to_string(dhtPort) + " -> " + std::to_string(mappedDhtPort));
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Mapped DHT port: " + std::to_string(dhtPort) + " -> " + std::to_string(mappedDhtPort));
             }
 
             if (mappedBtPort > 0) {
-                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Mapped BitTorrent port: " + std::to_string(btPort) + " -> " + std::to_string(mappedBtPort));
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Mapped BitTorrent port: " + std::to_string(btPort) + " -> " + std::to_string(mappedBtPort));
             }
         }
     }
@@ -198,13 +194,13 @@ bool MetadataAcquisitionManager::isRunning() const {
 }
 
 bool MetadataAcquisitionManager::acquireMetadata(const types::InfoHash& infoHash, int priority) {
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Attempting to acquire metadata for info hash: " + types::infoHashToString(infoHash) +
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Attempting to acquire metadata for info hash: " + types::infoHashToString(infoHash) +
                          " with priority: " + std::to_string(priority));
 
     // Check if we already have metadata for this info hash
     auto metadata = utility::metadata::MetadataUtils::getInfoHashMetadata(infoHash);
     if (metadata && !metadata->getName().empty() && metadata->getTotalSize() > 0) {
-        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Already have metadata for info hash: " + types::infoHashToString(infoHash));
+        unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Already have metadata for info hash: " + types::infoHashToString(infoHash));
         return true;
     }
 
@@ -216,7 +212,7 @@ bool MetadataAcquisitionManager::acquireMetadata(const types::InfoHash& infoHash
                 auto it = m_activeAcquisitions.find(infoHash);
                 if (it != m_activeAcquisitions.end() && priority > it->second->priority) {
                     it->second->priority = priority;
-                    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Updated priority for info hash: " +
+                    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Updated priority for info hash: " +
                                          types::infoHashToString(infoHash) +
                                          " to " + std::to_string(priority));
                 }
@@ -225,7 +221,7 @@ bool MetadataAcquisitionManager::acquireMetadata(const types::InfoHash& infoHash
             unified_event::logError("BitTorrent.MetadataAcquisitionManager", e.what());
         }
 
-        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition already in progress for info hash: " + types::infoHashToString(infoHash));
+        unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Metadata acquisition already in progress for info hash: " + types::infoHashToString(infoHash));
         return true;
     }
 
@@ -268,7 +264,7 @@ bool MetadataAcquisitionManager::acquireMetadata(const types::InfoHash& infoHash
         try {
             utility::thread::withLock(m_queueMutex, [this, &infoHash]() {
                 m_acquisitionQueue.insert(infoHash);
-                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Added info hash to acquisition queue: " +
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Added info hash to acquisition queue: " +
                                      types::infoHashToString(infoHash) +
                                      ", queue size: " +
                                      std::to_string(m_acquisitionQueue.size()));
@@ -294,7 +290,7 @@ bool MetadataAcquisitionManager::acquireMetadata(const types::InfoHash& infoHash
 
     // Notify the processing thread
     m_processingCondition.notify_one();
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Notified processing thread for info hash: " + types::infoHashToString(infoHash));
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Notified processing thread for info hash: " + types::infoHashToString(infoHash));
     return true;
 }
 
@@ -510,7 +506,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
     peers = enhancedPeers;
 
     if (portIndex > 0) {
-        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Enhanced " +
+        unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Enhanced " +
                              std::to_string(portIndex) +
                              " peers with common BitTorrent ports for info hash: " +
                              types::infoHashToString(infoHash));
@@ -519,7 +515,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
     // Prioritize peers for better connection success rate
     peers = prioritizePeers(peers);
 
-    unified_event::logInfo("BitTorrent.MetadataAcquisitionManager", "Using " +
+    unified_event::logDebug("BitTorrent.MetadataAcquisitionManager", "Using " +
                          std::to_string(peers.size()) +
                          " prioritized peers for info hash: " +
                          types::infoHashToString(infoHash));
@@ -558,7 +554,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
                 handleSuccessfulAcquisition(infoHash);
             } else {
                 // Don't mark as failed yet, other providers might succeed
-                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager",
                                     "BitTorrent metadata exchange with DHT peers failed for info hash: " +
                                     types::infoHashToString(infoHash) +
                                     ", waiting for other provider results");
@@ -574,7 +570,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
         trackerStarted = true;
         m_trackerManager->announceToAll(infoHash, btPort, "started", [this, infoHash](bool success, const std::vector<types::EndPoint>& trackerPeers) {
             if (success && !trackerPeers.empty()) {
-                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager",
                                     "Got " + std::to_string(trackerPeers.size()) +
                                     " peers from trackers for info hash: " +
                                     types::infoHashToString(infoHash));
@@ -584,7 +580,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
                     if (success) {
                         handleSuccessfulAcquisition(infoHash);
                     } else {
-                        unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                        unified_event::logDebug("BitTorrent.MetadataAcquisitionManager",
                                             "BitTorrent metadata exchange with tracker peers failed for info hash: " +
                                             types::infoHashToString(infoHash));
                     }
@@ -593,7 +589,7 @@ void MetadataAcquisitionManager::processAcquisitionQueue() {
                     m_processingCondition.notify_one();
                 }, 5); // Try up to 5 peers concurrently
             } else {
-                unified_event::logInfo("BitTorrent.MetadataAcquisitionManager",
+                unified_event::logDebug("BitTorrent.MetadataAcquisitionManager",
                                     "Failed to get peers from trackers for info hash: " +
                                     types::infoHashToString(infoHash));
 

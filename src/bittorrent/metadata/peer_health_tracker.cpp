@@ -16,7 +16,7 @@ std::shared_ptr<PeerHealthTracker> PeerHealthTracker::getInstance() {
 }
 
 PeerHealthTracker::PeerHealthTracker() {
-    unified_event::logInfo("BitTorrent.PeerHealthTracker", "Initialized peer health tracker");
+    unified_event::logDebug("BitTorrent.PeerHealthTracker", "Initialized peer health tracker");
 }
 
 void PeerHealthTracker::recordSuccess(const dht_hunter::network::EndPoint& peer, int latencyMs) {

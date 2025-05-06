@@ -185,12 +185,12 @@ bool PersistenceManager::saveNow() {
     bool success = true;
 
     // Save routing table (outside the lock)
-    unified_event::logInfo("DHT.PersistenceManager", "Saving routing table with " + std::to_string(routingTable->getNodeCount()) + " nodes to " + routingTablePath);
+    unified_event::logDebug("DHT.PersistenceManager", "Saving routing table with " + std::to_string(routingTable->getNodeCount()) + " nodes to " + routingTablePath);
     if (!routingTable->saveToFile(routingTablePath)) {
         unified_event::logError("DHT.PersistenceManager", "Failed to save routing table to " + routingTablePath);
         success = false;
     } else {
-        unified_event::logInfo("DHT.PersistenceManager", "Successfully saved routing table to " + routingTablePath);
+        unified_event::logDebug("DHT.PersistenceManager", "Successfully saved routing table to " + routingTablePath);
     }
 
     // Get the peer storage path
@@ -214,7 +214,7 @@ bool PersistenceManager::saveNow() {
         // Get all info hashes from the peer storage
         std::vector<InfoHash> infoHashes = peerStorage->getAllInfoHashes();
 
-        unified_event::logInfo("DHT.PersistenceManager", "Saving " + std::to_string(infoHashCount) + " info hashes with " +
+        unified_event::logDebug("DHT.PersistenceManager", "Saving " + std::to_string(infoHashCount) + " info hashes with " +
                                 std::to_string(totalPeerCount) + " total peers to " + peerStoragePath);
 
         // Open file for binary writing
@@ -258,14 +258,14 @@ bool PersistenceManager::saveNow() {
 
             // Log success with details
             if (infoHashes.empty()) {
-                unified_event::logInfo("DHT.PersistenceManager", "Saved empty peer storage to " + peerStoragePath);
+                unified_event::logWarning("DHT.PersistenceManager", "Saved empty peer storage to " + peerStoragePath);
             } else {
                 // Get file size
                 std::ifstream checkFile(peerStoragePath, std::ios::binary | std::ios::ate);
                 std::streamsize fileSize = checkFile.tellg();
                 checkFile.close();
 
-                unified_event::logInfo("DHT.PersistenceManager", "Successfully saved " + std::to_string(infoHashes.size()) +
+                unified_event::logDebug("DHT.PersistenceManager", "Successfully saved " + std::to_string(infoHashes.size()) +
                                       " info hashes with " + std::to_string(totalPeerCount) + " peers to " + peerStoragePath +
                                       " (" + std::to_string(fileSize) + " bytes)");
             }
@@ -284,7 +284,7 @@ bool PersistenceManager::saveNow() {
         auto allMetadata = metadataRegistry->getAllMetadata();
         size_t metadataCount = allMetadata.size();
 
-        unified_event::logInfo("DHT.PersistenceManager", "Saving " + std::to_string(metadataCount) + " metadata entries to " + metadataPath);
+        unified_event::logDebug("DHT.PersistenceManager", "Saving " + std::to_string(metadataCount) + " metadata entries to " + metadataPath);
 
         // Serialize all metadata
         auto serializedData = metadataRegistry->serializeAll();
@@ -298,14 +298,14 @@ bool PersistenceManager::saveNow() {
 
             // Log success with details
             if (serializedData.empty()) {
-                unified_event::logInfo("DHT.PersistenceManager", "Saved empty metadata to " + metadataPath);
+                unified_event::logDebug("DHT.PersistenceManager", "Saved empty metadata to " + metadataPath);
             } else {
                 // Get file size
                 std::ifstream checkFile(metadataPath, std::ios::binary | std::ios::ate);
                 std::streamsize fileSize = checkFile.tellg();
                 checkFile.close();
 
-                unified_event::logInfo("DHT.PersistenceManager", "Successfully saved " + std::to_string(metadataCount) +
+                unified_event::logDebug("DHT.PersistenceManager", "Successfully saved " + std::to_string(metadataCount) +
                                       " metadata entries to " + metadataPath +
                                       " (" + std::to_string(fileSize) + " bytes)");
             }
@@ -353,18 +353,18 @@ bool PersistenceManager::loadFromDisk() {
 
     // Load routing table (outside the lock)
     if (fs::exists(routingTablePath)) {
-        unified_event::logInfo("DHT.PersistenceManager", "Found routing table file at: " + routingTablePath);
-        unified_event::logInfo("DHT.PersistenceManager", "Current node count before loading: " + std::to_string(routingTable->getNodeCount()));
+        unified_event::logDebug("DHT.PersistenceManager", "Found routing table file at: " + routingTablePath);
+        unified_event::logDebug("DHT.PersistenceManager", "Current node count before loading: " + std::to_string(routingTable->getNodeCount()));
 
         if (!routingTable->loadFromFile(routingTablePath)) {
             unified_event::logError("DHT.PersistenceManager", "Failed to load routing table from " + routingTablePath);
             success = false;
         } else {
             unified_event::logInfo("DHT.PersistenceManager", "Loaded routing table from " + routingTablePath);
-            unified_event::logInfo("DHT.PersistenceManager", "Node count after loading: " + std::to_string(routingTable->getNodeCount()));
+            unified_event::logDebug("DHT.PersistenceManager", "Node count after loading: " + std::to_string(routingTable->getNodeCount()));
         }
     } else {
-        unified_event::logInfo("DHT.PersistenceManager", "Routing table file does not exist: " + routingTablePath);
+        unified_event::logWarning("DHT.PersistenceManager", "Routing table file does not exist: " + routingTablePath);
     }
 
     // Get the peer storage path
@@ -391,12 +391,12 @@ bool PersistenceManager::loadFromDisk() {
                 file.seekg(0, std::ios::beg);
 
                 if (fileSize == 0) {
-                    unified_event::logInfo("DHT.PersistenceManager", "Peer storage file is empty");
+                    unified_event::logWarning("DHT.PersistenceManager", "Peer storage file is empty");
                     file.close();
                     return success;
                 }
 
-                unified_event::logInfo("DHT.PersistenceManager", "Peer storage file size: " + std::to_string(fileSize) + " bytes");
+                unified_event::logDebug("DHT.PersistenceManager", "Peer storage file size: " + std::to_string(fileSize) + " bytes");
 
                 // Read file format version
                 uint32_t version;
@@ -420,7 +420,7 @@ bool PersistenceManager::loadFromDisk() {
                     return success;
                 }
 
-                unified_event::logInfo("DHT.PersistenceManager", "Loading " + std::to_string(numInfoHashes) + " info hashes from peer storage file");
+                unified_event::logDebug("DHT.PersistenceManager", "Loading " + std::to_string(numInfoHashes) + " info hashes from peer storage file");
 
                 size_t totalPeerCount = 0;
 
@@ -503,7 +503,7 @@ bool PersistenceManager::loadFromDisk() {
                 file.seekg(0, std::ios::beg);
 
                 if (fileSize == 0) {
-                    unified_event::logInfo("DHT.PersistenceManager", "Metadata file is empty");
+                    unified_event::logWarning("DHT.PersistenceManager", "Metadata file is empty");
                     file.close();
                     return success;
                 }
@@ -592,7 +592,7 @@ bool PersistenceManager::createConfigDir() {
 
 bool PersistenceManager::saveNodeID(const NodeID& nodeID) {
     try {
-        unified_event::logInfo("DHT.PersistenceManager", "Saving node ID: " + nodeID.toString() + " to " + m_nodeIDPath);
+        unified_event::logDebug("DHT.PersistenceManager", "Saving node ID: " + nodeID.toString() + " to " + m_nodeIDPath);
 
         // Open file for binary writing
         std::ofstream file(m_nodeIDPath, std::ios::binary);
@@ -605,7 +605,7 @@ bool PersistenceManager::saveNodeID(const NodeID& nodeID) {
         file.write(reinterpret_cast<const char*>(nodeID.data()), static_cast<std::streamsize>(nodeID.size()));
         file.close();
 
-        unified_event::logInfo("DHT.PersistenceManager", "Successfully saved node ID to " + m_nodeIDPath);
+        unified_event::logDebug("DHT.PersistenceManager", "Successfully saved node ID to " + m_nodeIDPath);
         return true;
     } catch (const std::exception& e) {
         unified_event::logError("DHT.PersistenceManager", "Exception while saving node ID: " + std::string(e.what()));
@@ -617,11 +617,11 @@ bool PersistenceManager::loadNodeID(NodeID& nodeID) {
     try {
         // Check if the file exists
         if (!fs::exists(m_nodeIDPath)) {
-            unified_event::logInfo("DHT.PersistenceManager", "Node ID file does not exist: " + m_nodeIDPath);
+            unified_event::logWarning("DHT.PersistenceManager", "Node ID file does not exist: " + m_nodeIDPath);
             return false;
         }
 
-        unified_event::logInfo("DHT.PersistenceManager", "Loading node ID from " + m_nodeIDPath);
+        unified_event::logDebug("DHT.PersistenceManager", "Loading node ID from " + m_nodeIDPath);
 
         // Open file for binary reading
         std::ifstream file(m_nodeIDPath, std::ios::binary);
@@ -655,7 +655,7 @@ bool PersistenceManager::loadNodeID(NodeID& nodeID) {
         // Create the node ID from the bytes
         nodeID = NodeID(nodeIDBytes);
 
-        unified_event::logInfo("DHT.PersistenceManager", "Successfully loaded node ID: " + nodeID.toString() + " from " + m_nodeIDPath);
+        unified_event::logDebug("DHT.PersistenceManager", "Successfully loaded node ID: " + nodeID.toString() + " from " + m_nodeIDPath);
         return true;
     } catch (const std::exception& e) {
         unified_event::logError("DHT.PersistenceManager", "Exception while loading node ID: " + std::string(e.what()));
@@ -667,7 +667,7 @@ void PersistenceManager::setSaveInterval(std::chrono::minutes interval) {
     try {
         utility::thread::withLock(m_mutex, [this, interval]() {
             m_saveInterval = interval;
-            unified_event::logInfo("DHT.PersistenceManager", "Save interval set to " + std::to_string(interval.count()) + " minutes");
+            unified_event::logDebug("DHT.PersistenceManager", "Save interval set to " + std::to_string(interval.count()) + " minutes");
         }, "PersistenceManager::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PersistenceManager", e.what());

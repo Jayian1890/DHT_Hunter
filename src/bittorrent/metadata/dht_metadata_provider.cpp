@@ -483,7 +483,7 @@ void DHTMetadataProvider::cleanupTimedOutTasks() {
                 if (task->retryCount >= MAX_RETRY_COUNT) {
                     m_tasks.erase(it);
 
-                    unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Metadata acquisition timed out for info hash: " + infoHashStr + " after " + std::to_string(task->retryCount) + " retries");
+                    unified_event::logWarning("BitTorrent.DHTMetadataProvider", "Metadata acquisition timeout info hash: " + infoHashStr);
 
                     // Call the callback with failure
                     if (task->callback) {

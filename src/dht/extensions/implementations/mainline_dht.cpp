@@ -3,7 +3,7 @@
 
 namespace dht_hunter::dht::extensions {
 
-MainlineDHT::MainlineDHT(const DHTConfig& config, 
+MainlineDHT::MainlineDHT(const DHTConfig& config,
                        const NodeID& nodeID,
                        std::shared_ptr<RoutingTable> routingTable)
     : DHTExtension(config, nodeID),
@@ -34,7 +34,7 @@ bool MainlineDHT::initialize() {
     }
 
     // TODO: Implement Mainline-specific initialization
-    unified_event::logInfo("DHT.MainlineDHT", "Initialized Mainline DHT extension");
+    unified_event::logDebug("DHT.MainlineDHT", "Initialized Mainline DHT extension");
 
     m_initialized = true;
     return true;

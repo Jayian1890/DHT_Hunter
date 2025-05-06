@@ -33,7 +33,7 @@ void ConnectionPool::start() {
     // Start the cleanup thread
     m_cleanupThread = std::thread(&ConnectionPool::cleanupIdleConnectionsPeriodically, this);
 
-    unified_event::logInfo("BitTorrent.ConnectionPool", "Started connection pool");
+    unified_event::logDebug("BitTorrent.ConnectionPool", "Started connection pool");
 }
 
 void ConnectionPool::stop() {

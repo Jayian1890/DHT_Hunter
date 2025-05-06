@@ -1,5 +1,6 @@
 #include "dht_hunter/network/nat/upnp_service.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
+#include "dht_hunter/utility/network/network_utils.hpp"
 #include <sstream>
 #include <algorithm>
 #include <random>
@@ -36,7 +37,7 @@ std::shared_ptr<UPnPService> UPnPService::getInstance() {
 }
 
 UPnPService::UPnPService() : m_initialized(false), m_running(false) {
-    unified_event::logInfo("Network.UPnP", "UPnP service created");
+    unified_event::logDebug("Network.UPnP", "UPnP service created");
 }
 
 UPnPService::~UPnPService() {
@@ -48,7 +49,7 @@ bool UPnPService::initialize() {
         return true;
     }
 
-    unified_event::logInfo("Network.UPnP", "Initializing UPnP service");
+    unified_event::logDebug("Network.UPnP", "Initializing UPnP service");
 
     // Discover UPnP devices
     if (!discoverDevices()) {
@@ -69,18 +70,18 @@ bool UPnPService::initialize() {
         return false;
     }
 
-    unified_event::logInfo("Network.UPnP", "External IP address: " + m_externalIP);
-    unified_event::logInfo("Network.UPnP", "Local IP address: " + m_localIP);
-    unified_event::logInfo("Network.UPnP", "Device name: " + m_deviceName);
-    unified_event::logInfo("Network.UPnP", "Service type: " + m_serviceType);
-    unified_event::logInfo("Network.UPnP", "Control URL: " + m_controlURL);
+    unified_event::logDebug("Network.UPnP", "External IP address: " + m_externalIP);
+    unified_event::logDebug("Network.UPnP", "Local IP address: " + m_localIP);
+    unified_event::logDebug("Network.UPnP", "Device name: " + m_deviceName);
+    unified_event::logDebug("Network.UPnP", "Service type: " + m_serviceType);
+    unified_event::logDebug("Network.UPnP", "Control URL: " + m_controlURL);
 
     // Start the refresh thread
     m_running = true;
     m_refreshThread = std::thread(&UPnPService::refreshPortMappingsPeriodically, this);
 
     m_initialized = true;
-    unified_event::logInfo("Network.UPnP", "UPnP service initialized");
+    unified_event::logDebug("Network.UPnP", "UPnP service initialized");
     return true;
 }
 
@@ -319,7 +320,7 @@ std::string UPnPService::getStatus() const {
 }
 
 bool UPnPService::discoverDevices() {
-    unified_event::logInfo("Network.UPnP", "Discovering UPnP devices");
+    unified_event::logDebug("Network.UPnP", "Discovering UPnP devices");
 
     // Get the local IP address
     if (!getLocalIPAddress()) {
@@ -332,7 +333,7 @@ bool UPnPService::discoverDevices() {
 
     // Try multiple discovery attempts
     for (int attempt = 1; attempt <= DISCOVERY_RETRY_COUNT; attempt++) {
-        unified_event::logInfo("Network.UPnP", "Discovery attempt " + std::to_string(attempt) + " of " + std::to_string(DISCOVERY_RETRY_COUNT));
+        unified_event::logDebug("Network.UPnP", "Discovery attempt " + std::to_string(attempt) + " of " + std::to_string(DISCOVERY_RETRY_COUNT));
 
         // Create a UDP socket for SSDP discovery
         int ssdpSocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -462,7 +463,7 @@ bool UPnPService::discoverDevices() {
 
         // Wait before retrying
         if (attempt < DISCOVERY_RETRY_COUNT) {
-            unified_event::logInfo("Network.UPnP", "No devices found, retrying in " + std::to_string(DISCOVERY_RETRY_DELAY_MS) + "ms...");
+            unified_event::logDebug("Network.UPnP", "No devices found, retrying in " + std::to_string(DISCOVERY_RETRY_DELAY_MS) + "ms...");
             std::this_thread::sleep_for(std::chrono::milliseconds(DISCOVERY_RETRY_DELAY_MS));
         }
     }
@@ -479,7 +480,7 @@ bool UPnPService::discoverDevices() {
 }
 
 bool UPnPService::selectDevice() {
-    unified_event::logInfo("Network.UPnP", "Selecting UPnP device");
+    unified_event::logDebug("Network.UPnP", "Selecting UPnP device");
 
     if (m_deviceLocations.empty()) {
         unified_event::logWarning("Network.UPnP", "No device locations available");
@@ -498,7 +499,7 @@ bool UPnPService::selectDevice() {
 
     // Try each device location
     for (const auto& location : m_deviceLocations) {
-        unified_event::logInfo("Network.UPnP", "Trying device at: " + location);
+        unified_event::logDebug("Network.UPnP", "Trying device at: " + location);
 
         // Temporary variables to store device info
         std::string deviceName;
@@ -548,7 +549,7 @@ bool UPnPService::selectDevice() {
 
                     // Add to potential devices
                     potentialDevices.push_back({location, deviceName, serviceType, controlURL, isRouter});
-                    unified_event::logInfo("Network.UPnP", "Found potential device: " + deviceName + ", service: " + serviceType);
+                    unified_event::logDebug("Network.UPnP", "Found potential device: " + deviceName + ", service: " + serviceType);
                 }
             }
         }
@@ -562,7 +563,7 @@ bool UPnPService::selectDevice() {
                 m_deviceName = device.name;
                 m_serviceType = device.serviceType;
                 m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
-                unified_event::logInfo("Network.UPnP", "Selected router with WANIPConnection: " + m_deviceName);
+                unified_event::logDebug("Network.UPnP", "Selected router with WANIPConnection: " + m_deviceName);
                 return true;
             }
         }
@@ -573,7 +574,7 @@ bool UPnPService::selectDevice() {
                 m_deviceName = device.name;
                 m_serviceType = device.serviceType;
                 m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
-                unified_event::logInfo("Network.UPnP", "Selected device with WANIPConnection: " + m_deviceName);
+                unified_event::logDebug("Network.UPnP", "Selected device with WANIPConnection: " + m_deviceName);
                 return true;
             }
         }
@@ -584,7 +585,7 @@ bool UPnPService::selectDevice() {
                 m_deviceName = device.name;
                 m_serviceType = device.serviceType;
                 m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
-                unified_event::logInfo("Network.UPnP", "Selected router with WANPPPConnection: " + m_deviceName);
+                unified_event::logDebug("Network.UPnP", "Selected router with WANPPPConnection: " + m_deviceName);
                 return true;
             }
         }
@@ -595,7 +596,7 @@ bool UPnPService::selectDevice() {
                 m_deviceName = device.name;
                 m_serviceType = device.serviceType;
                 m_controlURL = makeAbsoluteURL(device.location, device.controlURL);
-                unified_event::logInfo("Network.UPnP", "Selected device with WANPPPConnection: " + m_deviceName);
+                unified_event::logDebug("Network.UPnP", "Selected device with WANPPPConnection: " + m_deviceName);
                 return true;
             }
         }
@@ -642,7 +643,7 @@ std::string UPnPService::makeAbsoluteURL(const std::string& baseURL, const std::
 }
 
 bool UPnPService::getLocalIPAddress() {
-    unified_event::logInfo("Network.UPnP", "Getting local IP address");
+    unified_event::logDebug("Network.UPnP", "Getting local IP address");
 
     // Store potential local IPs for evaluation
     std::vector<std::string> potentialIPs;
@@ -681,7 +682,7 @@ bool UPnPService::getLocalIPAddress() {
 
         // Skip loopback addresses
         if (ip != "127.0.0.1") {
-            unified_event::logInfo("Network.UPnP", "Found potential local IP: " + ip);
+            unified_event::logDebug("Network.UPnP", "Found potential local IP: " + ip);
             potentialIPs.push_back(ip);
         }
     }
@@ -713,7 +714,7 @@ bool UPnPService::getLocalIPAddress() {
                 std::string ip = addressBuffer;
 
                 // Log the interface name and IP
-                unified_event::logInfo("Network.UPnP", "Found interface: " + std::string(ifa->ifa_name) + " with IP: " + ip);
+                unified_event::logDebug("Network.UPnP", "Found interface: " + std::string(ifa->ifa_name) + " with IP: " + ip);
                 potentialIPs.push_back(ip);
             }
         }
@@ -738,7 +739,7 @@ bool UPnPService::getLocalIPAddress() {
     for (const auto& ip : potentialIPs) {
         if (isInRange(ip, "192.168.")) {
             m_localIP = ip;
-            unified_event::logInfo("Network.UPnP", "Selected 192.168.x.x local IP: " + m_localIP);
+            unified_event::logDebug("Network.UPnP", "Selected 192.168.x.x local IP: " + m_localIP);
             return true;
         }
     }
@@ -747,7 +748,7 @@ bool UPnPService::getLocalIPAddress() {
     for (const auto& ip : potentialIPs) {
         if (isInRange(ip, "10.")) {
             m_localIP = ip;
-            unified_event::logInfo("Network.UPnP", "Selected 10.x.x.x local IP: " + m_localIP);
+            unified_event::logDebug("Network.UPnP", "Selected 10.x.x.x local IP: " + m_localIP);
             return true;
         }
     }
@@ -759,7 +760,7 @@ bool UPnPService::getLocalIPAddress() {
             int secondOctet = std::stoi(ip.substr(4, ip.find('.', 4) - 4));
             if (secondOctet >= 16 && secondOctet <= 31) {
                 m_localIP = ip;
-                unified_event::logInfo("Network.UPnP", "Selected 172.16-31.x.x local IP: " + m_localIP);
+                unified_event::logDebug("Network.UPnP", "Selected 172.16-31.x.x local IP: " + m_localIP);
                 return true;
             }
         }
@@ -769,7 +770,7 @@ bool UPnPService::getLocalIPAddress() {
     for (const auto& ip : potentialIPs) {
         if (!isInRange(ip, "100.")) {
             m_localIP = ip;
-            unified_event::logInfo("Network.UPnP", "Selected non-VPN local IP: " + m_localIP);
+            unified_event::logDebug("Network.UPnP", "Selected non-VPN local IP: " + m_localIP);
             return true;
         }
     }
@@ -781,7 +782,7 @@ bool UPnPService::getLocalIPAddress() {
 }
 
 bool UPnPService::parseDeviceDescription(const std::string& url) {
-    unified_event::logInfo("Network.UPnP", "Parsing device description: " + url);
+    unified_event::logDebug("Network.UPnP", "Parsing device description: " + url);
 
     // Download the device description
     std::string response;
@@ -880,13 +881,13 @@ bool UPnPService::parseDeviceDescription(const std::string& url) {
         }
     }
 
-    unified_event::logInfo("Network.UPnP", "Found service: " + m_serviceType);
-    unified_event::logInfo("Network.UPnP", "Control URL: " + m_controlURL);
+    unified_event::logDebug("Network.UPnP", "Found service: " + m_serviceType);
+    unified_event::logDebug("Network.UPnP", "Control URL: " + m_controlURL);
     return true;
 }
 
 bool UPnPService::httpGet(const std::string& url, std::string& response) {
-    unified_event::logInfo("Network.UPnP", "HTTP GET: " + url);
+    unified_event::logDebug("Network.UPnP", "HTTP GET: " + url);
 
     // Parse the URL to get the host, port, and path
     size_t hostStart = url.find("://");
@@ -956,6 +957,7 @@ bool UPnPService::httpGet(const std::string& url, std::string& response) {
     std::string request = "GET " + path + " HTTP/1.1\r\n";
     request += "Host: " + host + ":" + std::to_string(port) + "\r\n";
     request += "Connection: close\r\n";
+    request += "User-Agent: " + utility::network::getUserAgent() + "\r\n";
     request += "\r\n";
 
     // Send the request
@@ -998,7 +1000,7 @@ bool UPnPService::httpGet(const std::string& url, std::string& response) {
 }
 
 bool UPnPService::httpPost(const std::string& url, const std::string& contentType, const std::string& data, std::string& response) {
-    unified_event::logInfo("Network.UPnP", "HTTP POST: " + url);
+    unified_event::logDebug("Network.UPnP", "HTTP POST: " + url);
 
     // Parse the URL to get the host, port, and path
     size_t hostStart = url.find("://");
@@ -1070,6 +1072,7 @@ bool UPnPService::httpPost(const std::string& url, const std::string& contentTyp
     request += "Content-Type: " + contentType + "\r\n";
     request += "Content-Length: " + std::to_string(data.length()) + "\r\n";
     request += "Connection: close\r\n";
+    request += "User-Agent: " + utility::network::getUserAgent() + "\r\n";
     request += "\r\n";
     request += data;
 
@@ -1113,7 +1116,7 @@ bool UPnPService::httpPost(const std::string& url, const std::string& contentTyp
 }
 
 bool UPnPService::sendSOAPRequest(const std::string& soapAction, const std::string& soapBody, std::string& response) {
-    unified_event::logInfo("Network.UPnP", "Sending SOAP request: " + soapAction);
+    unified_event::logDebug("Network.UPnP", "Sending SOAP request: " + soapAction);
 
     // Prepare the HTTP headers
     std::string contentType = "text/xml; charset=\"utf-8\"";
@@ -1142,7 +1145,7 @@ std::string UPnPService::parseSOAPResponse(const std::string& response, const st
 }
 
 void UPnPService::refreshPortMappingsPeriodically() {
-    unified_event::logInfo("Network.UPnP", "Starting port mapping refresh thread");
+    unified_event::logDebug("Network.UPnP", "Starting port mapping refresh thread");
 
     while (m_running) {
         // Wait for the refresh interval or until shutdown

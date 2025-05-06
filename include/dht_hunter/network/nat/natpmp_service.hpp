@@ -74,6 +74,12 @@ public:
     std::string getExternalIPAddress() override;
 
     /**
+     * @brief Attempts to get the external IP address with retry logic
+     * @return The external IP address, or empty string if all attempts failed
+     */
+    std::string tryGetExternalIPAddress();
+
+    /**
      * @brief Gets the status of the NAT-PMP service
      * @return A string describing the status
      */
@@ -96,6 +102,11 @@ private:
      * @return True if the gateway supports NAT-PMP, false otherwise
      */
     bool testGateway();
+
+    /**
+     * @brief Logs network interface information for diagnostic purposes
+     */
+    void logNetworkInterfaces();
 
     /**
      * @brief Sends a NAT-PMP request to the gateway
@@ -130,10 +141,12 @@ private:
 
     // NAT-PMP state
     std::atomic<bool> m_initialized{false};
+    std::atomic<bool> m_externalIPFailed{false}; // Flag to indicate if external IP retrieval failed
     std::string m_externalIP;
     std::string m_gatewayIP;
     uint32_t m_epoch{0}; // NAT-PMP epoch time
     int m_socket{-1}; // Socket for NAT-PMP communication
+    int m_externalIPRetryCount{0}; // Counter for external IP retrieval attempts
 
     // Port mappings
     std::unordered_map<std::string, PortMapping> m_portMappings; // Key: externalPort:protocol
@@ -155,6 +168,7 @@ private:
     static constexpr uint8_t NATPMP_OP_MAP_TCP = 2; // Map TCP port
     static constexpr uint16_t NATPMP_RESULT_SUCCESS = 0; // Success result code
     static constexpr int NATPMP_TIMEOUT_SECONDS = 5; // Timeout for NAT-PMP requests
+    static constexpr int MAX_EXTERNAL_IP_RETRY_ATTEMPTS = 3; // Maximum number of retry attempts for external IP
 };
 
 } // namespace dht_hunter::network::nat

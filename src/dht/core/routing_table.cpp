@@ -389,10 +389,10 @@ size_t RoutingTable::getNodeCount() const {
 bool RoutingTable::saveToFile(const std::string& filePath) const {
     try {
         return utility::thread::withLock(m_mutex, [this, &filePath]() {
-            unified_event::logInfo("DHT.RoutingTable", "Saving routing table to " + filePath);
-            unified_event::logInfo("DHT.RoutingTable", "Current node ID: " + m_ownID.toString());
-            unified_event::logInfo("DHT.RoutingTable", "Current bucket count: " + std::to_string(m_buckets.size()));
-            unified_event::logInfo("DHT.RoutingTable", "Current node count: " + std::to_string(getNodeCount()));
+            unified_event::logDebug("DHT.RoutingTable", "Saving routing table to " + filePath);
+            unified_event::logDebug("DHT.RoutingTable", "Current node ID: " + m_ownID.toString());
+            unified_event::logDebug("DHT.RoutingTable", "Current bucket count: " + std::to_string(m_buckets.size()));
+            unified_event::logDebug("DHT.RoutingTable", "Current node count: " + std::to_string(getNodeCount()));
 
             std::ofstream file(filePath, std::ios::binary);
             if (!file) {
@@ -403,7 +403,7 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
             // Write the number of nodes
             size_t nodeCount = getNodeCount();
             file.write(reinterpret_cast<const char*>(&nodeCount), sizeof(nodeCount));
-            unified_event::logInfo("DHT.RoutingTable", "Writing " + std::to_string(nodeCount) + " nodes to file");
+            unified_event::logDebug("DHT.RoutingTable", "Writing " + std::to_string(nodeCount) + " nodes to file");
 
             // Write each node
             for (const auto& bucket : m_buckets) {
@@ -425,7 +425,7 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
                     file.write(reinterpret_cast<const char*>(&port), sizeof(port));
                 }
             }
-            unified_event::logInfo("DHT.RoutingTable", "Successfully saved routing table to " + filePath);
+            unified_event::logDebug("DHT.RoutingTable", "Successfully saved routing table to " + filePath);
             return true;
         }, "RoutingTable::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
@@ -437,10 +437,10 @@ bool RoutingTable::saveToFile(const std::string& filePath) const {
 bool RoutingTable::loadFromFile(const std::string& filePath) {
     try {
         return utility::thread::withLock(m_mutex, [this, &filePath]() {
-            unified_event::logInfo("DHT.RoutingTable", "Loading routing table from " + filePath);
-            unified_event::logInfo("DHT.RoutingTable", "Current node ID: " + m_ownID.toString());
-            unified_event::logInfo("DHT.RoutingTable", "Current bucket count: " + std::to_string(m_buckets.size()));
-            unified_event::logInfo("DHT.RoutingTable", "Current node count: " + std::to_string(getNodeCount()));
+            unified_event::logDebug("DHT.RoutingTable", "Loading routing table from " + filePath);
+            unified_event::logDebug("DHT.RoutingTable", "Current node ID: " + m_ownID.toString());
+            unified_event::logDebug("DHT.RoutingTable", "Current bucket count: " + std::to_string(m_buckets.size()));
+            unified_event::logDebug("DHT.RoutingTable", "Current node count: " + std::to_string(getNodeCount()));
 
             std::ifstream file(filePath, std::ios::binary);
             if (!file) {
@@ -457,12 +457,12 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
 
             // Restore our node ID
             m_ownID = ownID;
-            unified_event::logInfo("DHT.RoutingTable", "Restored node ID: " + m_ownID.toString());
+            unified_event::logDebug("DHT.RoutingTable", "Restored node ID: " + m_ownID.toString());
 
             // Read the number of nodes
             size_t nodeCount = 0;
             file.read(reinterpret_cast<char*>(&nodeCount), sizeof(nodeCount));
-            unified_event::logInfo("DHT.RoutingTable", "Found " + std::to_string(nodeCount) + " nodes in file");
+            unified_event::logDebug("DHT.RoutingTable", "Found " + std::to_string(nodeCount) + " nodes in file");
 
             if (nodeCount == 0) {
                 return true;
@@ -494,8 +494,8 @@ bool RoutingTable::loadFromFile(const std::string& filePath) {
             }
 
             // Log the results
-            unified_event::logInfo("DHT.RoutingTable", "Loaded " + std::to_string(getNodeCount()) + " nodes into routing table");
-            unified_event::logInfo("DHT.RoutingTable", "Current bucket count: " + std::to_string(m_buckets.size()));
+            unified_event::logDebug("DHT.RoutingTable", "Loaded " + std::to_string(getNodeCount()) + " nodes into routing table");
+            unified_event::logDebug("DHT.RoutingTable", "Current bucket count: " + std::to_string(m_buckets.size()));
             return true;
         }, "RoutingTable::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {

@@ -1,8 +1,8 @@
-# DHT-Hunter Metadata Acquisition System Enhancements
+# BitScrape Metadata Acquisition System Enhancements
 
 ## Overview
 
-This document describes the enhancements made to the DHT-Hunter metadata acquisition system. The system has been improved to increase the success rate of metadata acquisition for BitTorrent info hashes by implementing multiple acquisition methods, connection pooling, NAT traversal, and tracker integration.
+This document describes the enhancements made to the BitScrape metadata acquisition system. The system has been improved to increase the success rate of metadata acquisition for BitTorrent info hashes by implementing multiple acquisition methods, connection pooling, NAT traversal, and tracker integration.
 
 ## Table of Contents
 
@@ -131,7 +131,7 @@ The Connection Pool has been implemented to efficiently manage peer connections:
 
 ## Usage
 
-The metadata acquisition system is used by the DHT-Hunter application to acquire metadata for BitTorrent info hashes discovered by the DHT crawler. The system is initialized and started by the main application:
+The metadata acquisition system is used by the BitScrape application to acquire metadata for BitTorrent info hashes discovered by the DHT crawler. The system is initialized and started by the main application:
 
 ```cpp
 // Initialize the metadata acquisition manager

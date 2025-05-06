@@ -3,7 +3,7 @@
 
 namespace dht_hunter::dht::extensions {
 
-KademliaDHT::KademliaDHT(const DHTConfig& config, 
+KademliaDHT::KademliaDHT(const DHTConfig& config,
                        const NodeID& nodeID,
                        std::shared_ptr<RoutingTable> routingTable)
     : DHTExtension(config, nodeID),
@@ -34,7 +34,7 @@ bool KademliaDHT::initialize() {
     }
 
     // TODO: Implement Kademlia-specific initialization
-    unified_event::logInfo("DHT.KademliaDHT", "Initialized Kademlia DHT extension");
+    unified_event::logDebug("DHT.KademliaDHT", "Initialized Kademlia DHT extension");
 
     m_initialized = true;
     return true;

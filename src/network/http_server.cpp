@@ -1,5 +1,6 @@
 #include "dht_hunter/network/http_server.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
+#include "dht_hunter/utility/network/network_utils.hpp"
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -238,7 +239,7 @@ public:
         }
 
         // Add server header
-        responseStream << "Server: DHT-Hunter-WebServer/1.0\r\n";
+        responseStream << "Server: " << utility::network::getUserAgent() << "\r\n";
 
         // Add date header
         auto now = std::chrono::system_clock::now();

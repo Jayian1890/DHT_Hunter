@@ -52,7 +52,7 @@ public:
      * @param infoHash The info hash
      */
     InfoHashDiscoveredEvent(const std::string& source, const types::InfoHash& infoHash)
-        : Event(EventType::Custom, EventSeverity::Info, source) {
+        : Event(EventType::Custom, EventSeverity::Debug, source) {
         setProperty("infoHash", types::infoHashToString(infoHash));
     }
 

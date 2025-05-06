@@ -3,6 +3,7 @@
 #include "dht_hunter/utility/metadata/metadata_utils.hpp"
 #include "dht_hunter/utility/string/string_utils.hpp"
 #include "dht_hunter/utility/hash/hash_utils.hpp"
+#include "dht_hunter/utility/network/network_utils.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -556,11 +557,38 @@ bool MetadataExchange::sendHandshake(std::shared_ptr<PeerConnection> connection)
     // info_hash
     std::memcpy(handshake.data() + 28, connection->infoHash.data(), 20);
 
-    // peer_id (generate a random peer ID)
-    std::string peerId = "-DH0001-";
-    for (int i = 0; i < 12; i++) {
+    // peer_id (generate a peer ID based on the user agent)
+    std::string userAgent = utility::network::getUserAgent();
+    std::string peerId;
+
+    // Extract the client identifier from the user agent
+    size_t slashPos = userAgent.find('/');
+    if (slashPos != std::string::npos && slashPos > 0) {
+        // Format: -XX0001-randomchars
+        // XX = first two letters of client name
+        std::string clientName = userAgent.substr(0, std::min(slashPos, size_t(2)));
+        // Pad with 'X' if needed
+        while (clientName.length() < 2) {
+            clientName += 'X';
+        }
+        // Convert to uppercase
+        for (char& c : clientName) {
+            c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        }
+        peerId = "-" + clientName + "0001-";
+    } else {
+        // Default if no slash found
+        peerId = "-DH0001-";
+    }
+
+    // Add random characters to fill the remaining space
+    while (peerId.length() < 20) {
         peerId += static_cast<char>('0' + (rand() % 10));
     }
+
+    // Ensure it's exactly 20 bytes
+    peerId = peerId.substr(0, 20);
+
     std::memcpy(handshake.data() + 48, peerId.c_str(), 20);
 
     // Send the handshake

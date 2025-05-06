@@ -160,10 +160,46 @@ private:
     static std::shared_ptr<TrackerManager> s_instance;
     static std::mutex s_instanceMutex;
 
+    /**
+     * @brief Loads trackers from a URL
+     * @param url The URL to load trackers from
+     * @param trackerType The type of trackers to load ("UDP" or "HTTP")
+     * @return The number of trackers loaded
+     */
+    int loadTrackersFromUrl(const std::string& url, const std::string& trackerType);
+
+    /**
+     * @brief Loads trackers from the configured URLs
+     * @return The number of trackers loaded
+     */
+    int loadTrackersFromConfiguredUrls();
+
+    /**
+     * @brief Fetches content from a URL
+     * @param url The URL to fetch
+     * @param content The content will be stored here
+     * @return True if successful, false otherwise
+     */
+    bool fetchUrl(const std::string& url, std::string& content);
+
+    /**
+     * @brief Parses tracker URLs from content
+     * @param content The content to parse
+     * @param trackerType The type of trackers to parse ("UDP" or "HTTP")
+     * @return The parsed tracker URLs
+     */
+    std::vector<std::string> parseTrackerUrls(const std::string& content, const std::string& trackerType);
+
     // Trackers
     std::unordered_map<std::string, std::shared_ptr<Tracker>> m_trackers;
     mutable std::mutex m_trackersMutex;
     std::atomic<bool> m_initialized{false};
+
+    // Tracker list refresh thread
+    std::thread m_refreshThread;
+    std::atomic<bool> m_refreshThreadRunning{false};
+    std::condition_variable m_refreshCondition;
+    std::mutex m_refreshMutex;
 };
 
 } // namespace dht_hunter::bittorrent::tracker
