@@ -10,6 +10,10 @@
 
 namespace dht_hunter::network {
 
+// Forward declarations for TLS enums
+enum class TLSAlertLevel : uint8_t;
+enum class TLSAlertDescription : uint8_t;
+
 /**
  * @brief SSL/TLS client for secure connections
  *
@@ -165,6 +169,14 @@ private:
      * @brief Handle connection closed from the TCP client
      */
     void handleConnectionClosed();
+
+    /**
+     * @brief Generate a TLS alert message
+     * @param level The alert level (warning or fatal)
+     * @param description The alert description
+     * @return The alert message
+     */
+    std::vector<uint8_t> generateAlert(TLSAlertLevel level, TLSAlertDescription description);
 
     // TCP client for the underlying connection
     std::shared_ptr<TCPClient> m_tcpClient;

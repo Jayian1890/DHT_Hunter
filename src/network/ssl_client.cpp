@@ -15,6 +15,36 @@ enum class TLSRecordType : uint8_t {
     APPLICATION_DATA = 23
 };
 
+// TLS alert levels
+enum class TLSAlertLevel : uint8_t {
+    WARNING = 1,
+    FATAL = 2
+};
+
+// TLS alert descriptions
+enum class TLSAlertDescription : uint8_t {
+    CLOSE_NOTIFY = 0,
+    UNEXPECTED_MESSAGE = 10,
+    BAD_RECORD_MAC = 20,
+    RECORD_OVERFLOW = 22,
+    HANDSHAKE_FAILURE = 40,
+    BAD_CERTIFICATE = 42,
+    UNSUPPORTED_CERTIFICATE = 43,
+    CERTIFICATE_REVOKED = 44,
+    CERTIFICATE_EXPIRED = 45,
+    CERTIFICATE_UNKNOWN = 46,
+    ILLEGAL_PARAMETER = 47,
+    UNKNOWN_CA = 48,
+    ACCESS_DENIED = 49,
+    DECODE_ERROR = 50,
+    DECRYPT_ERROR = 51,
+    PROTOCOL_VERSION = 70,
+    INSUFFICIENT_SECURITY = 71,
+    INTERNAL_ERROR = 80,
+    USER_CANCELED = 90,
+    NO_RENEGOTIATION = 100
+};
+
 // TLS handshake types
 enum class TLSHandshakeType : uint8_t {
     HELLO_REQUEST = 0,
@@ -97,6 +127,34 @@ bool SSLClient::connect(const std::string& host, uint16_t port, int timeoutSec) 
     return true;
 }
 
+std::vector<uint8_t> SSLClient::generateAlert(TLSAlertLevel level, TLSAlertDescription description) {
+    unified_event::logDebug("Network.SSLClient", "Generating alert: level=" + std::to_string(static_cast<uint8_t>(level)) +
+                                              ", description=" + std::to_string(static_cast<uint8_t>(description)));
+
+    // Create a buffer for the TLS record
+    std::vector<uint8_t> record;
+
+    // TLS Record Header (5 bytes)
+    // Record Type: Alert (21)
+    record.push_back(static_cast<uint8_t>(TLSRecordType::ALERT));
+
+    // Protocol Version: TLS 1.2 (0x0303)
+    record.push_back(0x03); // Major version
+    record.push_back(0x03); // Minor version
+
+    // Length (2 bytes)
+    record.push_back(0x00);
+    record.push_back(0x02); // Alert messages are always 2 bytes
+
+    // Alert Level
+    record.push_back(static_cast<uint8_t>(level));
+
+    // Alert Description
+    record.push_back(static_cast<uint8_t>(description));
+
+    return record;
+}
+
 void SSLClient::disconnect() {
     if (!m_connected) {
         return;
@@ -104,7 +162,19 @@ void SSLClient::disconnect() {
 
     // Send close_notify alert if possible
     if (m_handshakeComplete) {
-        // TODO: Implement proper TLS close_notify alert
+        // Generate and send a close_notify alert
+        std::vector<uint8_t> closeNotify = generateAlert(TLSAlertLevel::WARNING, TLSAlertDescription::CLOSE_NOTIFY);
+
+        // Try to send the alert, but don't worry if it fails
+        if (m_tcpClient->send(closeNotify.data(), closeNotify.size())) {
+            unified_event::logDebug("Network.SSLClient", "Sent close_notify alert");
+        } else {
+            unified_event::logDebug("Network.SSLClient", "Failed to send close_notify alert");
+        }
+
+        // According to RFC 5246, we should wait for the peer's close_notify alert,
+        // but in practice many implementations don't send it, so we'll just continue
+        // with the disconnection process
     }
 
     m_tcpClient->disconnect();
