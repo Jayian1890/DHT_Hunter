@@ -330,8 +330,10 @@ bool ConfigurationManager::generateDefaultConfiguration(const std::string& confi
 
         // Logging settings
         json::JsonValue loggingConfig(json::JsonValue::createObject());
+        loggingConfig.getObject()->set("level", json::JsonValue("INFO"));
         loggingConfig.getObject()->set("consoleOutput", json::JsonValue(true));
         loggingConfig.getObject()->set("fileOutput", json::JsonValue(true));
+        loggingConfig.getObject()->set("filePath", json::JsonValue("bitscrape.log"));
         loggingConfig.getObject()->set("includeTimestamp", json::JsonValue(true));
         loggingConfig.getObject()->set("includeSeverity", json::JsonValue(true));
         loggingConfig.getObject()->set("includeSource", json::JsonValue(true));

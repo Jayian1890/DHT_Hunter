@@ -86,6 +86,9 @@ bool ApplicationController::initialize(const std::string& configFile, const std:
             m_webPort = webPort;
         }
 
+        // Configure logging level from configuration
+        configureLogging();
+
         // Register event handlers
         registerEventHandlers();
 
@@ -650,6 +653,57 @@ void ApplicationController::loadConfiguration() {
         unified_event::logInfo("Core.ApplicationController", "Reinitializing thread pool with " +
                              std::to_string(threadCount) + " threads");
         m_threadPool = std::make_shared<utility::thread::ThreadPool>(threadCount);
+    }
+}
+
+void ApplicationController::configureLogging() {
+    if (!m_configManager) {
+        return;
+    }
+
+    // Get the logging processor
+    auto loggingProcessor = unified_event::getLoggingProcessor();
+    if (!loggingProcessor) {
+        unified_event::logWarning("Core.ApplicationController", "Logging processor not found, using default settings");
+        return;
+    }
+
+    // Get log level from configuration
+    std::string logLevelStr = m_configManager->getString("logging.level", "INFO");
+    unified_event::EventSeverity logLevel = unified_event::EventSeverity::Info; // Default to Info
+
+    // Convert string to severity level
+    if (logLevelStr == "TRACE") {
+        logLevel = unified_event::EventSeverity::Trace;
+    } else if (logLevelStr == "DEBUG") {
+        logLevel = unified_event::EventSeverity::Debug;
+    } else if (logLevelStr == "INFO") {
+        logLevel = unified_event::EventSeverity::Info;
+    } else if (logLevelStr == "WARNING") {
+        logLevel = unified_event::EventSeverity::Warning;
+    } else if (logLevelStr == "ERROR") {
+        logLevel = unified_event::EventSeverity::Error;
+    } else if (logLevelStr == "CRITICAL") {
+        logLevel = unified_event::EventSeverity::Critical;
+    }
+
+    // Set the log level
+    loggingProcessor->setMinSeverity(logLevel);
+    unified_event::logInfo("Core.ApplicationController", "Log level set to " + logLevelStr);
+
+    // Configure console output
+    bool consoleOutput = m_configManager->getBool("logging.consoleOutput", true);
+    loggingProcessor->setConsoleOutput(consoleOutput);
+
+    // Configure file output
+    bool fileOutput = m_configManager->getBool("logging.fileOutput", false);
+    std::string logFilePath = m_configManager->getString("logging.filePath", "bitscrape.log");
+
+    if (fileOutput && !logFilePath.empty()) {
+        loggingProcessor->setFileOutput(true, logFilePath);
+        unified_event::logInfo("Core.ApplicationController", "Log file output enabled: " + logFilePath);
+    } else {
+        loggingProcessor->setFileOutput(false);
     }
 }
 

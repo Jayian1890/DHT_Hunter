@@ -228,6 +228,11 @@ private:
      */
     void registerEventHandlers();
 
+    /**
+     * @brief Configure logging settings from configuration
+     */
+    void configureLogging();
+
     // Singleton instance
     static std::shared_ptr<ApplicationController> s_instance;
     static std::mutex s_instanceMutex;
