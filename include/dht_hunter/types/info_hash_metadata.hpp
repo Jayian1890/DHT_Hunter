@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <memory>
 #include <optional>
+#include <mutex>
 
 namespace dht_hunter::types {
 

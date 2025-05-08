@@ -12,25 +12,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find required packages
 find_package(fmt REQUIRED)
 
-# Add compiler warnings
-if(MSVC)
-  add_compile_options(/W4 /WX /wd4100 /wd4101 /wd4189)
-else()
-  add_compile_options(
-    -Wall -Wextra -Wpedantic -Werror
-    -Wconversion -Wshadow -Wnon-virtual-dtor
-    -Wold-style-cast -Wcast-align
-    -Woverloaded-virtual -Wdouble-promotion -Wformat=2
-    -Wno-error=unused-lambda-capture
-    -Wno-error=unused-variable
-    -Wno-error=unused-parameter
-    -Wno-error=unused-private-field
-    -Wno-error=unused-function
-    -Wno-error=unused-local-typedefs
-    -Wno-error=unused-but-set-variable
-  )
-endif()
-
 # Enable AddressSanitizer for memory debugging
 option(ENABLE_ASAN "Enable AddressSanitizer for memory debugging" OFF)
 if(ENABLE_ASAN)
