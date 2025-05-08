@@ -130,7 +130,7 @@ private:
      */
     void setVerifyCertificates(bool verify);
 
-    std::string m_userAgent{"DHT-Hunter/1.0"};
+    std::string m_userAgent{"BitScrape/1.0"};
     int m_connectionTimeout{10};
     int m_requestTimeout{30};
     int m_maxRedirects{5};

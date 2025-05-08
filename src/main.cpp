@@ -16,14 +16,10 @@
 // Include thread utilities for the global shutdown flag
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 
-// Project includes - Types module
-#include "dht_hunter/types/event_types.hpp"
-
 // Project includes - DHT module
 #include "dht_hunter/dht/core/dht_config.hpp"
 #include "dht_hunter/dht/core/dht_node.hpp"
 #include "dht_hunter/dht/services/statistics_service.hpp"
-#include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/dht/core/persistence_manager.hpp"
 
 // Project includes - Network module

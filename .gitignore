@@ -46,6 +46,7 @@ Makefile
 *.log
 *.torrent
 *.dat
+.cache/
 
 # OS specific files
 .DS_Store
