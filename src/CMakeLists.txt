@@ -58,13 +58,8 @@ if(APPLE)
         )
     endif()
 
-    # Add a post-build command to copy the .app bundle to the build directory
-    add_custom_command(TARGET BitScrape POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            $<TARGET_BUNDLE_DIR:BitScrape>
-            ${CMAKE_BINARY_DIR}/BitScrape.app
-        COMMENT "Copying .app bundle to build directory"
-    )
+    # No need for additional commands to move the .app bundle
+    # The top-level CMakeLists.txt now sets the output directory for all targets
 else()
     add_executable(BitScrape main.cpp)
 endif()

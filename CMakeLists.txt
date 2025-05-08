@@ -9,6 +9,18 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Generate compile_commands.json for IDE integration
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Set output directories for all targets
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# For macOS, set the app bundle output directory
+if(APPLE)
+    set(CMAKE_MACOSX_BUNDLE TRUE)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR})
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
+endif()
+
 # Find required packages
 find_package(fmt REQUIRED)
 
