@@ -12,8 +12,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find required packages
 find_package(fmt REQUIRED)
 
-# JSON utility is part of the utility library
-
 # Add compiler warnings
 if(MSVC)
   add_compile_options(/W4 /WX /wd4100 /wd4101 /wd4189)
@@ -84,10 +82,91 @@ endif()
 # Copy web directory to build directory (for development mode)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/web DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
+# macOS specific settings for app bundle
+if(APPLE)
+    # Set the app icon path
+    set(APP_ICON_MACOSX "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/AppIcon.icns")
+
+    # Export variables for use in src/CMakeLists.txt
+    set(APP_ICON_PATH "${APP_ICON_MACOSX}" CACHE INTERNAL "Path to the app icon")
+
+    # Note: Bundle properties, Info.plist configuration, and icon handling are now done in src/CMakeLists.txt
+endif()
+
 # Install targets
-install(TARGETS dht_hunter
-    RUNTIME DESTINATION bin
-)
+if(APPLE)
+    install(TARGETS BitScrape
+        BUNDLE DESTINATION .
+    )
+else()
+    install(TARGETS BitScrape
+        RUNTIME DESTINATION bin
+    )
+endif()
+
+# CPack configuration
+set(CPACK_PACKAGE_NAME "BitScrape")
+set(CPACK_PACKAGE_VENDOR "BitScrape Project")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "BitTorrent DHT crawler and analyzer")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}")
+set(CPACK_PACKAGE_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
+set(CPACK_PACKAGE_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "BitScrape")
+
+# Platform-specific package settings
+if(APPLE)
+    # macOS specific settings
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_DMG_VOLUME_NAME "BitScrape")
+    set(CPACK_DMG_FORMAT "UDBZ")
+    set(CPACK_SYSTEM_NAME "macOS")
+    set(CPACK_PACKAGE_FILE_NAME "BitScrape-${CPACK_PACKAGE_VERSION}-macOS")
+
+    # Bundle all dependencies (macOS specific)
+    set(CPACK_BUNDLE_NAME "BitScrape")
+    set(CPACK_BUNDLE_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+
+    # Set icon and background image settings
+    if(EXISTS "${APP_ICON_PATH}")
+        set(CPACK_PACKAGE_ICON "${APP_ICON_PATH}")
+        set(CPACK_BUNDLE_ICON "${APP_ICON_PATH}")
+    endif()
+
+    # Set background image if available
+    set(DMG_BACKGROUND_PATH "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/dmg_background.png")
+    if(EXISTS "${DMG_BACKGROUND_PATH}")
+        set(CPACK_DMG_BACKGROUND_IMAGE "${DMG_BACKGROUND_PATH}")
+    endif()
+
+    # Additional DMG options
+    set(CPACK_DMG_DISABLE_APPLICATIONS_SYMLINK OFF)
+    set(CPACK_APPLE_BUNDLE_ID "${MACOSX_BUNDLE_GUI_IDENTIFIER}")
+
+    # Add Applications directory symlink to the DMG
+    set(CPACK_DMG_BACKGROUND_IMAGE_FOLDER "${CMAKE_CURRENT_BINARY_DIR}")
+    set(CPACK_DMG_VOLUME_NAME "BitScrape")
+elseif(WIN32)
+    # Windows specific settings
+    set(CPACK_GENERATOR "NSIS")
+    set(CPACK_NSIS_PACKAGE_NAME "BitScrape")
+    set(CPACK_NSIS_DISPLAY_NAME "BitScrape")
+    set(CPACK_NSIS_HELP_LINK "https://github.com/Jayian1890/bitscrape")
+    set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/Jayian1890/bitscrape")
+    set(CPACK_NSIS_CONTACT "jared@interlacedpixel.com")
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_PACKAGE_FILE_NAME "BitScrape-${CPACK_PACKAGE_VERSION}-Windows")
+else()
+    # Linux specific settings
+    set(CPACK_GENERATOR "DEB")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Jared Terrance <jared@interlacedpixel.com>")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "net")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libstdc++6")
+    set(CPACK_PACKAGE_FILE_NAME "bitscrape-${CPACK_PACKAGE_VERSION}-Linux")
+endif()
+
+# Include CPack module
+include(CPack)
 
 # Add CMake presets support
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19")
