@@ -8,13 +8,6 @@ add_subdirectory(bittorrent) # BitTorrent component
 add_subdirectory(unified_event) # Unified event system
 add_subdirectory(web)       # Web UI component
 
-# Removed components:
-# - crawler (not used in the build)
-# - metadata (not used in the build)
-# - service (not used in the build)
-# - storage (not used in the build)
-# - ui (not used in the build)
-
 # Main executable
 if(APPLE)
     # Set the icon file path
@@ -30,7 +23,6 @@ if(APPLE)
             MACOSX_PACKAGE_LOCATION "Resources"
         )
     else()
-        # Create the executable without the icon
         add_executable(BitScrape MACOSX_BUNDLE main.cpp)
     endif()
 
@@ -44,7 +36,7 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT "Copyright © 2025. All rights reserved."
+        MACOSX_BUNDLE_COPYRIGHT "Copyright © 2025 BitScrape. All rights reserved."
         MACOSX_BUNDLE_INFO_STRING "BitScrape - BitTorrent DHT crawler and analyzer"
         MACOSX_BUNDLE_EXECUTABLE_NAME "BitScrape"
     )
@@ -65,6 +57,14 @@ if(APPLE)
             COMMENT "Copying app icon to bundle"
         )
     endif()
+
+    # Add a post-build command to copy the .app bundle to the build directory
+    add_custom_command(TARGET BitScrape POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            $<TARGET_BUNDLE_DIR:BitScrape>
+            ${CMAKE_BINARY_DIR}/BitScrape.app
+        COMMENT "Copying .app bundle to build directory"
+    )
 else()
     add_executable(BitScrape main.cpp)
 endif()

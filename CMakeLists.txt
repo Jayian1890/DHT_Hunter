@@ -60,9 +60,6 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tools/web_bundler.py)
     endif()
 endif()
 
-# Copy web directory to build directory (for development mode)
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/web DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-
 # macOS specific settings for app bundle
 if(APPLE)
     # Set the app icon path
@@ -99,7 +96,7 @@ set(CPACK_PACKAGE_INSTALL_DIRECTORY "BitScrape")
 if(APPLE)
     # macOS specific settings
     set(CPACK_GENERATOR "DragNDrop")
-    set(CPACK_DMG_VOLUME_NAME "BitScrape")
+    set(CPACK_DMG_VOLUME_NAME "BitScrape-${CPACK_PACKAGE_VERSION}")
     set(CPACK_DMG_FORMAT "UDBZ")
     set(CPACK_SYSTEM_NAME "macOS")
     set(CPACK_PACKAGE_FILE_NAME "BitScrape-${CPACK_PACKAGE_VERSION}-macOS")
@@ -148,40 +145,3 @@ endif()
 
 # Include CPack module
 include(CPack)
-
-# Add CMake presets support
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19")
-  # Optional: Create a basic CMakePresets.json if it doesn't exist
-  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/CMakePresets.json")
-    file(WRITE "${CMAKE_SOURCE_DIR}/CMakePresets.json"
-    [[{
-      "version": 3,
-      "configurePresets": [
-        {
-          "name": "default",
-          "displayName": "Default Config",
-          "description": "Default build using Ninja generator",
-          "generator": "Ninja",
-          "binaryDir": "${sourceDir}/build"
-        },
-        {
-          "name": "debug",
-          "inherits": "default",
-          "displayName": "Debug Build",
-          "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "Debug",
-            "ENABLE_ASAN": "ON"
-          }
-        },
-        {
-          "name": "release",
-          "inherits": "default",
-          "displayName": "Release Build",
-          "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "Release"
-          }
-        }
-      ]
-    }]])
-  endif()
-endif()
