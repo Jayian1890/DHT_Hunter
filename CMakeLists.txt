@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
 project(BitScrape VERSION 0.1.0 LANGUAGES CXX)
 
+set(CMAKE_BUILD_TYPE Debug)
+
 # Set C++ standard globally
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -88,8 +90,9 @@ if(APPLE)
     install(TARGETS BitScrape
         BUNDLE DESTINATION .
     )
+    # BitScrape_cli is installed in src/CMakeLists.txt
 else()
-    install(TARGETS BitScrape
+    install(TARGETS BitScrape BitScrape_cli
         RUNTIME DESTINATION bin
     )
 endif()

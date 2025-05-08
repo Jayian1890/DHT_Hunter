@@ -8,12 +8,21 @@ add_subdirectory(bittorrent) # BitTorrent component
 add_subdirectory(unified_event) # Unified event system
 add_subdirectory(web)       # Web UI component
 
-# Main executable
+# Create two targets: one regular executable and one .app bundle
+
+# Regular executable (non-.app)
+add_executable(BitScrape_cli main.cpp)
+set_target_properties(BitScrape_cli PROPERTIES
+    OUTPUT_NAME "bitscrape"
+    MACOSX_BUNDLE FALSE
+)
+
+# App bundle (only on macOS)
 if(APPLE)
     # Set the icon file path
     set(APP_ICON_MACOSX "${CMAKE_CURRENT_SOURCE_DIR}/../resources/macos/AppIcon.icns")
 
-    # Create the executable with the icon file
+    # Create the .app bundle executable with the icon file
     if(EXISTS "${APP_ICON_MACOSX}")
         # Add the icon file to the executable
         add_executable(BitScrape MACOSX_BUNDLE main.cpp "${APP_ICON_MACOSX}")
@@ -23,6 +32,7 @@ if(APPLE)
             MACOSX_PACKAGE_LOCATION "Resources"
         )
     else()
+        # Create the executable without the icon
         add_executable(BitScrape MACOSX_BUNDLE main.cpp)
     endif()
 
@@ -38,7 +48,6 @@ if(APPLE)
         MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_COPYRIGHT "Copyright © 2025 BitScrape. All rights reserved."
         MACOSX_BUNDLE_INFO_STRING "BitScrape - BitTorrent DHT crawler and analyzer"
-        MACOSX_BUNDLE_EXECUTABLE_NAME "BitScrape"
     )
 
     # Add a post-build command to ensure the Resources directory exists
@@ -57,15 +66,14 @@ if(APPLE)
             COMMENT "Copying app icon to bundle"
         )
     endif()
-
-    # No need for additional commands to move the .app bundle
-    # The top-level CMakeLists.txt now sets the output directory for all targets
 else()
+    # On non-macOS platforms, just create the regular executable
     add_executable(BitScrape main.cpp)
 endif()
 
-# Link with component libraries
-target_link_libraries(BitScrape
+# Link with component libraries for both targets
+foreach(target BitScrape BitScrape_cli)
+    target_link_libraries(${target}
         PRIVATE
         dht_hunter_types
         dht_hunter_utility
@@ -74,7 +82,14 @@ target_link_libraries(BitScrape
         dht_hunter_bittorrent
         dht_hunter_unified_event
         dht_hunter_web
-)
+    )
+
+    # Set include directories
+    target_include_directories(${target}
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+endforeach()
 
 # Link with platform-specific libraries
 if(APPLE)
@@ -84,19 +99,22 @@ if(APPLE)
         "-framework CoreFoundation"
         "-framework IOKit"
     )
+
+    target_link_libraries(BitScrape_cli
+        PRIVATE
+        "-framework CoreFoundation"
+        "-framework IOKit"
+    )
 endif()
 
-# Set include directories
-target_include_directories(BitScrape
-        PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-)
-
-# Install the executable
+# Install the executables
 if(APPLE)
     # For macOS bundles, installation is handled in the top-level CMakeLists.txt
+    install(TARGETS BitScrape_cli
+            RUNTIME DESTINATION bin
+    )
 else()
-    install(TARGETS BitScrape
+    install(TARGETS BitScrape BitScrape_cli
             RUNTIME DESTINATION bin
     )
 endif()
