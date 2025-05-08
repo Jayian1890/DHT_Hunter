@@ -1,4 +1,5 @@
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <filesystem>
@@ -143,6 +144,7 @@ int main(int argc, char* argv[]) {
     std::string configDir;
     std::string configFile;
     std::string webRoot = "web";
+    std::string logLevel = "";
     bool generateDefaultConfig = false;
 
 #ifdef _WIN32
@@ -204,6 +206,21 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: --web-port requires a port number" << std::endl;
                 return 1;
             }
+        } else if (arg == "--log-level" || arg == "-l") {
+            if (i + 1 < argc) {
+                logLevel = argv[++i];
+                // Convert to uppercase for consistency
+                std::transform(logLevel.begin(), logLevel.end(), logLevel.begin(), ::toupper);
+                // Validate log level
+                if (logLevel != "TRACE" && logLevel != "DEBUG" && logLevel != "INFO" &&
+                    logLevel != "WARNING" && logLevel != "ERROR" && logLevel != "CRITICAL") {
+                    std::cerr << "Error: --log-level must be one of: TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL" << std::endl;
+                    return 1;
+                }
+            } else {
+                std::cerr << "Error: --log-level requires a level (TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL)" << std::endl;
+                return 1;
+            }
         }
     }
 
@@ -234,8 +251,8 @@ int main(int argc, char* argv[]) {
     // Get the application controller instance
     g_appController = dht_hunter::core::ApplicationController::getInstance();
 
-    // Initialize the application controller with web port
-    if (!g_appController->initialize(configFile, webRoot, webPort)) {
+    // Initialize the application controller with web port and log level
+    if (!g_appController->initialize(configFile, webRoot, webPort, logLevel)) {
         dht_hunter::unified_event::logError("Main", "Failed to initialize application controller");
         return 1;
     }

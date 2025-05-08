@@ -49,7 +49,8 @@ ApplicationController::~ApplicationController() {
     stop();
 }
 
-bool ApplicationController::initialize(const std::string& configFile, const std::string& webRoot, uint16_t webPort) {
+bool ApplicationController::initialize(const std::string& configFile, const std::string& webRoot,
+                                 uint16_t webPort, const std::string& logLevel) {
     if (m_initialized) {
         unified_event::logWarning("Core.ApplicationController", "Application already initialized");
         return true;
@@ -57,6 +58,7 @@ bool ApplicationController::initialize(const std::string& configFile, const std:
 
     m_configFile = configFile;
     m_webRoot = webRoot;
+    m_overrideLogLevel = logLevel;
 
     // If a specific web port was provided, use it
     if (webPort > 0) {
@@ -668,8 +670,14 @@ void ApplicationController::configureLogging() {
         return;
     }
 
-    // Get log level from configuration
-    std::string logLevelStr = m_configManager->getString("logging.level", "INFO");
+    // Get log level from configuration or override
+    std::string logLevelStr;
+    if (!m_overrideLogLevel.empty()) {
+        logLevelStr = m_overrideLogLevel;
+        unified_event::logInfo("Core.ApplicationController", "Using override log level: " + logLevelStr);
+    } else {
+        logLevelStr = m_configManager->getString("logging.level", "INFO");
+    }
     unified_event::EventSeverity logLevel = unified_event::EventSeverity::Info; // Default to Info
 
     // Convert string to severity level

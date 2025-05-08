@@ -69,9 +69,11 @@ public:
      * @param configFile Path to the configuration file
      * @param webRoot Path to the web root directory
      * @param webPort Optional web server port (overrides config file)
+     * @param logLevel Optional log level (overrides config file)
      * @return True if initialization was successful, false otherwise
      */
-    bool initialize(const std::string& configFile, const std::string& webRoot, uint16_t webPort = 0);
+    bool initialize(const std::string& configFile, const std::string& webRoot, uint16_t webPort = 0,
+                   const std::string& logLevel = "");
 
     /**
      * @brief Generate default configuration file
@@ -246,6 +248,7 @@ private:
     // Configuration
     std::string m_configFile;
     std::string m_webRoot;
+    std::string m_overrideLogLevel;
     uint16_t m_webPort;
     uint16_t m_dhtPort;
 
