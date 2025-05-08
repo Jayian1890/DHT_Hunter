@@ -7,6 +7,7 @@ add_subdirectory(dht)       # DHT component
 add_subdirectory(bittorrent) # BitTorrent component
 add_subdirectory(unified_event) # Unified event system
 add_subdirectory(web)       # Web UI component
+add_subdirectory(core)      # Core application components
 
 # Create two targets: one regular executable and one .app bundle
 
@@ -82,6 +83,7 @@ foreach(target BitScrape BitScrape_cli)
         dht_hunter_bittorrent
         dht_hunter_unified_event
         dht_hunter_web
+        dht_hunter_core_impl
     )
 
     # Set include directories

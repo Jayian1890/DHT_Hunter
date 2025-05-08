@@ -46,7 +46,7 @@ struct TaskInfo {
 
 /**
  * @brief Application controller class
- * 
+ *
  * Manages the application lifecycle and provides centralized control
  * for all application components. Implements async task execution for
  * improved performance.
@@ -68,9 +68,16 @@ public:
      * @brief Initialize the application
      * @param configFile Path to the configuration file
      * @param webRoot Path to the web root directory
+     * @param webPort Optional web server port (overrides config file)
      * @return True if initialization was successful, false otherwise
      */
-    bool initialize(const std::string& configFile, const std::string& webRoot);
+    bool initialize(const std::string& configFile, const std::string& webRoot, uint16_t webPort = 0);
+
+    /**
+     * @brief Generate default configuration file
+     * @return True if the configuration was generated successfully, false otherwise
+     */
+    bool generateDefaultConfig();
 
     /**
      * @brief Start the application

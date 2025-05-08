@@ -49,7 +49,7 @@ ApplicationController::~ApplicationController() {
     stop();
 }
 
-bool ApplicationController::initialize(const std::string& configFile, const std::string& webRoot) {
+bool ApplicationController::initialize(const std::string& configFile, const std::string& webRoot, uint16_t webPort) {
     if (m_initialized) {
         unified_event::logWarning("Core.ApplicationController", "Application already initialized");
         return true;
@@ -57,6 +57,11 @@ bool ApplicationController::initialize(const std::string& configFile, const std:
 
     m_configFile = configFile;
     m_webRoot = webRoot;
+
+    // If a specific web port was provided, use it
+    if (webPort > 0) {
+        m_webPort = webPort;
+    }
 
     try {
         // Initialize the configuration manager
@@ -75,6 +80,11 @@ bool ApplicationController::initialize(const std::string& configFile, const std:
 
         // Load configuration settings
         loadConfiguration();
+
+        // If a specific web port was provided, override the one from config
+        if (webPort > 0) {
+            m_webPort = webPort;
+        }
 
         // Register event handlers
         registerEventHandlers();
@@ -103,8 +113,8 @@ bool ApplicationController::start() {
         unified_event::logInfo("Core.ApplicationController", "Starting application");
 
         // Create and start the UDP server
-        m_udpServer = std::make_shared<network::UDPServer>(m_dhtPort);
-        if (!m_udpServer->start()) {
+        m_udpServer = std::make_shared<network::UDPServer>();
+        if (!m_udpServer->start(m_dhtPort)) {
             unified_event::logError("Core.ApplicationController", "Failed to start UDP server");
             return false;
         }
@@ -641,6 +651,16 @@ void ApplicationController::loadConfiguration() {
                              std::to_string(threadCount) + " threads");
         m_threadPool = std::make_shared<utility::thread::ThreadPool>(threadCount);
     }
+}
+
+bool ApplicationController::generateDefaultConfig() {
+    if (!m_configManager) {
+        unified_event::logError("Core.ApplicationController", "Cannot generate default configuration: Configuration manager not initialized");
+        return false;
+    }
+
+    // Use the static method from ConfigurationManager to generate the default configuration
+    return utility::config::ConfigurationManager::generateDefaultConfiguration(m_configFile);
 }
 
 void ApplicationController::registerEventHandlers() {
