@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <ctime>
-#include <iomanip>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -11,7 +10,6 @@
 #include "dht_hunter/dht/services/statistics_service.hpp"
 #include "dht_hunter/unified_event/events/custom_events.hpp"
 #include "dht_hunter/unified_event/events/peer_events.hpp"
-#include "dht_hunter/utility/thread/thread_utils.hpp"
 
 namespace dht_hunter::core {
 
