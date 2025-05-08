@@ -113,6 +113,37 @@ private:
     bool verifyCertificate(const std::vector<uint8_t>& certificate);
 
     /**
+     * @brief Process a handshake record
+     * @param data The handshake record data (without the record header)
+     * @param length The length of the record data
+     */
+    void processHandshakeRecord(const uint8_t* data, size_t length);
+
+    /**
+     * @brief Process a certificate message
+     * @param data The certificate message data (including the handshake header)
+     * @param length The length of the message data
+     * @return True if the certificate was processed successfully, false otherwise
+     */
+    bool processCertificate(const uint8_t* data, size_t length);
+
+    /**
+     * @brief Process a server key exchange message
+     * @param data The server key exchange message data (including the handshake header)
+     * @param length The length of the message data
+     * @return True if the message was processed successfully, false otherwise
+     */
+    bool processServerKeyExchange(const uint8_t* data, size_t length);
+
+    /**
+     * @brief Process a server hello done message
+     * @param data The server hello done message data (including the handshake header)
+     * @param length The length of the message data
+     * @return True if the message was processed successfully, false otherwise
+     */
+    bool processServerHelloDone(const uint8_t* data, size_t length);
+
+    /**
      * @brief Generate a client key exchange message
      * @return The client key exchange message
      */
