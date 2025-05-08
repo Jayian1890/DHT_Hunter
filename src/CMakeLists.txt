@@ -76,14 +76,15 @@ endif()
 foreach(target BitScrape BitScrape_cli)
     target_link_libraries(${target}
         PRIVATE
-        dht_hunter_types
-        dht_hunter_utility
-        dht_hunter_network
-        dht_hunter_dht
-        dht_hunter_bittorrent
-        dht_hunter_unified_event
-        dht_hunter_web
         dht_hunter_core_impl
+        # Remove these as they're already linked through dht_hunter_core_impl
+        # dht_hunter_types
+        # dht_hunter_utility
+        # dht_hunter_network
+        # dht_hunter_dht
+        # dht_hunter_bittorrent
+        # dht_hunter_unified_event
+        # dht_hunter_web
     )
 
     # Set include directories

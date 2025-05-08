@@ -1,5 +1,8 @@
 # Utility library
 add_library(dht_hunter_utility
+        # Common utilities
+        common/common_utils.cpp
+
         # String utilities
         string/string_utils.cpp
 

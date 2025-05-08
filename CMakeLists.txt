@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.16)
 project(BitScrape VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_BUILD_TYPE Debug)
@@ -25,6 +25,8 @@ endif()
 
 # Find required packages
 find_package(fmt REQUIRED)
+find_package(CURL REQUIRED)
+find_package(Threads REQUIRED)
 
 # Enable AddressSanitizer for memory debugging
 option(ENABLE_ASAN "Enable AddressSanitizer for memory debugging" OFF)
@@ -44,6 +46,11 @@ endif()
 add_library(dht_hunter_core INTERFACE)
 target_include_directories(dht_hunter_core INTERFACE
   ${CMAKE_SOURCE_DIR}/include
+)
+
+# Set up precompiled header
+target_precompile_headers(dht_hunter_core INTERFACE
+  ${CMAKE_SOURCE_DIR}/include/dht_hunter/utility/common/common_utils.hpp
 )
 
 # Add subdirectories

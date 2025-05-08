@@ -3,8 +3,12 @@
 #include <string>
 #include <fstream>
 #include <filesystem>
+#include "dht_hunter/utility/common/common_utils.hpp"
 
 namespace dht_hunter::utility::file {
+
+// Import the Result class into this namespace for backward compatibility
+using common::Result;
 
 /**
  * @brief Checks if a file exists
@@ -42,16 +46,16 @@ inline size_t getFileSize(const std::string& filePath) {
 /**
  * @brief Reads a file into a string
  * @param filePath The file path
- * @return The file content as a string, or empty string if the file doesn't exist
+ * @return Result containing the file content or an error message
  */
-inline std::string readFile(const std::string& filePath) {
+inline Result<std::string> readFile(const std::string& filePath) {
     if (!fileExists(filePath)) {
-        return "";
+        return Result<std::string>::Error("File does not exist: " + filePath);
     }
 
     std::ifstream file(filePath, std::ios::binary);
     if (!file.is_open()) {
-        return "";
+        return Result<std::string>::Error("Failed to open file: " + filePath);
     }
 
     file.seekg(0, std::ios::end);
@@ -61,24 +65,32 @@ inline std::string readFile(const std::string& filePath) {
     std::string content(static_cast<size_t>(fileSize), '\0');
     file.read(&content[0], static_cast<std::streamsize>(fileSize));
 
-    return content;
+    if (!file.good()) {
+        return Result<std::string>::Error("Failed to read file: " + filePath);
+    }
+
+    return Result<std::string>(content);
 }
 
 /**
  * @brief Writes a string to a file
  * @param filePath The file path
  * @param content The content to write
- * @return True if the file was written successfully, false otherwise
+ * @return Result indicating success or failure with an error message
  */
-inline bool writeFile(const std::string& filePath, const std::string& content) {
+inline Result<void> writeFile(const std::string& filePath, const std::string& content) {
     std::ofstream file(filePath, std::ios::binary | std::ios::trunc);
     if (!file.is_open()) {
-        return false;
+        return Result<void>::Error("Failed to open file for writing: " + filePath);
     }
 
     file.write(content.data(), static_cast<std::streamsize>(content.size()));
 
-    return file.good();
+    if (!file.good()) {
+        return Result<void>::Error("Failed to write to file: " + filePath);
+    }
+
+    return Result<void>();
 }
 
 } // namespace dht_hunter::utility::file
