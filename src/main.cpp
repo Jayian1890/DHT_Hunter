@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
     std::string configDir;
     std::string configFile;
     std::string webRoot = "web";
-    std::string logLevel = "";
+    std::string logLevel = "INFO";
     bool generateDefaultConfig = false;
 
 #ifdef _WIN32
