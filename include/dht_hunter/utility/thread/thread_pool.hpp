@@ -43,6 +43,14 @@ public:
     auto enqueue(F&& f, Args&&... args)
         -> std::future<typename std::invoke_result<F, Args...>::type>;
 
+    /**
+     * @brief Get the number of threads in the pool
+     * @return The number of threads
+     */
+    size_t getThreadCount() const {
+        return m_workers.size();
+    }
+
 private:
     // Worker threads
     std::vector<std::thread> m_workers;
