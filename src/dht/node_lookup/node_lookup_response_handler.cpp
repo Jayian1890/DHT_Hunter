@@ -1,8 +1,10 @@
 #include "dht_hunter/dht/node_lookup/node_lookup_response_handler.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup_utils.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include <algorithm>
+
+// Constants
+constexpr int DEFAULT_MAX_RESULTS = 20;
 
 namespace dht_hunter::dht {
 
@@ -15,11 +17,11 @@ NodeLookupResponseHandler::NodeLookupResponseHandler(const DHTConfig& config,
 }
 
 bool NodeLookupResponseHandler::handleResponse(
-    const std::string& /*lookupID*/, 
+    const std::string& /*lookupID*/,
     NodeLookupState& lookup,
-    std::shared_ptr<FindNodeResponse> response, 
+    std::shared_ptr<FindNodeResponse> response,
     const network::EndPoint& /*sender*/) {
-    
+
     // Variables to store data we'll need after processing
     std::vector<std::shared_ptr<Node>> nodesToAdd;
     bool shouldSendQueries = false;
@@ -77,9 +79,9 @@ bool NodeLookupResponseHandler::handleResponse(
 
 bool NodeLookupResponseHandler::handleError(
     NodeLookupState& lookup,
-    std::shared_ptr<ErrorMessage> /*error*/, 
+    std::shared_ptr<ErrorMessage> /*error*/,
     const network::EndPoint& sender) {
-    
+
     // Find the node
     auto nodeIt = std::find_if(lookup.nodes.begin(), lookup.nodes.end(),
         [&sender](const std::shared_ptr<Node>& node) {
@@ -100,9 +102,9 @@ bool NodeLookupResponseHandler::handleError(
 }
 
 bool NodeLookupResponseHandler::handleTimeout(
-    NodeLookupState& lookup, 
+    NodeLookupState& lookup,
     const NodeID& nodeID) {
-    
+
     std::string nodeIDStr = nodeIDToString(nodeID);
 
     // Remove the node from the active queries
@@ -116,14 +118,14 @@ void NodeLookupResponseHandler::completeLookup(NodeLookupState& lookup) const {
     // Call the callback
     if (lookup.callback) {
         // Sort the nodes by distance to the target
-        std::vector<std::shared_ptr<Node>> sortedNodes = 
+        std::vector<std::shared_ptr<Node>> sortedNodes =
             node_lookup_utils::sortNodesByDistance(lookup.nodes, lookup.targetID);
-        
+
         // Limit the number of nodes to return
-        if (sortedNodes.size() > m_config.getMaxResults()) {
-            sortedNodes.resize(m_config.getMaxResults());
+        if (sortedNodes.size() > DEFAULT_MAX_RESULTS) {
+            sortedNodes.resize(DEFAULT_MAX_RESULTS);
         }
-        
+
         lookup.callback(sortedNodes);
     }
 }

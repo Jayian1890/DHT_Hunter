@@ -6,7 +6,6 @@
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/unified_event/events/node_events.hpp"
 #include "dht_hunter/unified_event/events/peer_events.hpp"
 #include "dht_hunter/unified_event/events/message_events.hpp"
@@ -241,10 +240,10 @@ std::vector<InfoHash> Crawler::getDiscoveredInfoHashes(size_t maxInfoHashes) con
     }
 }
 
-std::vector<network::EndPoint> Crawler::getPeersForInfoHash(const InfoHash& infoHash) const {
+std::vector<EndPoint> Crawler::getPeersForInfoHash(const InfoHash& infoHash) const {
     try {
         return utility::thread::withLock(m_mutex, [this, &infoHash]() {
-            std::vector<network::EndPoint> peers;
+            std::vector<EndPoint> peers;
             std::string infoHashStr = infoHashToString(infoHash);
 
             auto it = m_infoHashPeers.find(infoHashStr);
@@ -256,7 +255,7 @@ std::vector<network::EndPoint> Crawler::getPeersForInfoHash(const InfoHash& info
                         std::string ip = peerStr.substr(0, colonPos);
                         uint16_t port = static_cast<uint16_t>(std::stoi(peerStr.substr(colonPos + 1)));
                         network::NetworkAddress address(ip);
-                        network::EndPoint endpoint(address, port);
+                        EndPoint endpoint(address, port);
                         peers.push_back(endpoint);
                     }
                 }
@@ -266,7 +265,7 @@ std::vector<network::EndPoint> Crawler::getPeersForInfoHash(const InfoHash& info
         }, "Crawler::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.Crawler", e.what());
-        return std::vector<network::EndPoint>();
+        return std::vector<EndPoint>();
     }
 }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
@@ -9,6 +9,8 @@
 #include <functional>
 
 namespace dht_hunter::dht {
+
+using dht_hunter::utils::dht_core::DHTConfig;
 
 // Forward declarations
 class TransactionManager;
@@ -27,11 +29,11 @@ public:
      * @param transactionManager The transaction manager
      * @param messageSender The message sender
      */
-    PeerLookupAnnounceManager(const DHTConfig& config, 
+    PeerLookupAnnounceManager(const DHTConfig& config,
                              const NodeID& nodeID,
                              std::shared_ptr<TransactionManager> transactionManager,
                              std::shared_ptr<MessageSender> messageSender);
-    
+
     /**
      * @brief Announces a peer to nodes with tokens
      * @param lookupID The lookup ID
@@ -42,19 +44,19 @@ public:
      * @return True if announcements were sent, false otherwise
      */
     bool announceToNodes(
-        const std::string& lookupID, 
+        const std::string& lookupID,
         PeerLookupState& lookup,
-        std::function<void(std::shared_ptr<ResponseMessage>, const network::EndPoint&)> responseCallback,
-        std::function<void(std::shared_ptr<ErrorMessage>, const network::EndPoint&)> errorCallback,
+        std::function<void(std::shared_ptr<ResponseMessage>, const EndPoint&)> responseCallback,
+        std::function<void(std::shared_ptr<ErrorMessage>, const EndPoint&)> errorCallback,
         std::function<void(const std::string&)> timeoutCallback);
-    
+
     /**
      * @brief Completes an announcement
      * @param lookup The lookup state
      * @param success Whether the announcement was successful
      */
     void completeAnnouncement(PeerLookupState& lookup, bool success) const;
-    
+
 private:
     DHTConfig m_config;
     NodeID m_nodeID;

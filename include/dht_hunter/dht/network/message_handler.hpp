@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/message.hpp"
 #include "dht_hunter/dht/network/query_message.hpp"
@@ -16,7 +16,7 @@
 namespace dht_hunter::dht {
 
 // Forward declarations
-class RoutingTable;
+// RoutingTable is now defined in utils/dht_core_utils.hpp
 class TokenManager;
 class PeerStorage;
 class TransactionManager;
@@ -41,7 +41,7 @@ public:
         const DHTConfig& config,
         const NodeID& nodeID,
         std::shared_ptr<MessageSender> messageSender,
-        std::shared_ptr<RoutingTable> routingTable,
+        std::shared_ptr<dht::RoutingTable> routingTable,
         std::shared_ptr<TokenManager> tokenManager,
         std::shared_ptr<PeerStorage> peerStorage,
         std::shared_ptr<TransactionManager> transactionManager);
@@ -148,7 +148,7 @@ private:
     MessageHandler(const DHTConfig& config,
                   const NodeID& nodeID,
                   std::shared_ptr<MessageSender> messageSender,
-                  std::shared_ptr<RoutingTable> routingTable,
+                  std::shared_ptr<dht::RoutingTable> routingTable,
                   std::shared_ptr<TokenManager> tokenManager,
                   std::shared_ptr<PeerStorage> peerStorage,
                   std::shared_ptr<TransactionManager> transactionManager);
@@ -160,7 +160,7 @@ private:
     DHTConfig m_config;
     NodeID m_nodeID;
     std::shared_ptr<MessageSender> m_messageSender;
-    std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<dht::RoutingTable> m_routingTable;
     std::shared_ptr<TokenManager> m_tokenManager;
     std::shared_ptr<PeerStorage> m_peerStorage;
     std::shared_ptr<TransactionManager> m_transactionManager;

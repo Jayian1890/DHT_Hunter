@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/transactions/interfaces/transaction_component.hpp"
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include <atomic>
 #include <mutex>
@@ -10,7 +10,7 @@ namespace dht_hunter::dht::transactions {
 
 /**
  * @brief Base class for transaction components
- * 
+ *
  * This class provides common functionality for all transaction components.
  */
 class BaseTransactionComponent : public TransactionComponent {

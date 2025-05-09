@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
@@ -11,7 +11,7 @@
 namespace dht_hunter::dht {
 
 // Forward declarations
-class RoutingTable;
+// RoutingTable is now defined in utils/dht_core_utils.hpp
 struct NodeLookupState;
 
 /**
@@ -27,8 +27,8 @@ public:
      */
     NodeLookupResponseHandler(const DHTConfig& config,
                              const NodeID& nodeID,
-                             std::shared_ptr<RoutingTable> routingTable);
-    
+                             std::shared_ptr<dht::RoutingTable> routingTable);
+
     /**
      * @brief Handles a find_node response
      * @param lookupID The lookup ID
@@ -38,11 +38,11 @@ public:
      * @return True if more queries should be sent, false otherwise
      */
     bool handleResponse(
-        const std::string& lookupID, 
+        const std::string& lookupID,
         NodeLookupState& lookup,
-        std::shared_ptr<FindNodeResponse> response, 
+        std::shared_ptr<FindNodeResponse> response,
         const network::EndPoint& sender);
-    
+
     /**
      * @brief Handles an error
      * @param lookup The lookup state
@@ -52,9 +52,9 @@ public:
      */
     bool handleError(
         NodeLookupState& lookup,
-        std::shared_ptr<ErrorMessage> error, 
+        std::shared_ptr<ErrorMessage> error,
         const network::EndPoint& sender);
-    
+
     /**
      * @brief Handles a timeout
      * @param lookup The lookup state
@@ -62,19 +62,19 @@ public:
      * @return True if more queries should be sent, false otherwise
      */
     bool handleTimeout(
-        NodeLookupState& lookup, 
+        NodeLookupState& lookup,
         const NodeID& nodeID);
-    
+
     /**
      * @brief Completes a lookup
      * @param lookup The lookup state
      */
     void completeLookup(NodeLookupState& lookup) const;
-    
+
 private:
     DHTConfig m_config;
     NodeID m_nodeID;
-    std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<dht::RoutingTable> m_routingTable;
 };
 
 } // namespace dht_hunter::dht

@@ -1,15 +1,18 @@
 #include "dht_hunter/dht/peer_lookup/peer_lookup_query_manager.hpp"
 #include "dht_hunter/dht/peer_lookup/peer_lookup.hpp"
 #include "dht_hunter/dht/peer_lookup/peer_lookup_utils.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include <algorithm>
+
+// Constants
+constexpr int LOOKUP_MAX_ITERATIONS = 10;
+constexpr int DEFAULT_ALPHA = 3;
+constexpr int DEFAULT_MAX_RESULTS = 20;
 
 namespace dht_hunter::dht {
 
-PeerLookupQueryManager::PeerLookupQueryManager(const DHTConfig& config, 
+PeerLookupQueryManager::PeerLookupQueryManager(const DHTConfig& config,
                                              const NodeID& nodeID,
                                              std::shared_ptr<RoutingTable> routingTable,
                                              std::shared_ptr<TransactionManager> transactionManager,
@@ -22,12 +25,12 @@ PeerLookupQueryManager::PeerLookupQueryManager(const DHTConfig& config,
 }
 
 bool PeerLookupQueryManager::sendQueries(
-    const std::string& lookupID, 
+    const std::string& lookupID,
     PeerLookupState& lookup,
-    std::function<void(std::shared_ptr<ResponseMessage>, const network::EndPoint&)> responseCallback,
-    std::function<void(std::shared_ptr<ErrorMessage>, const network::EndPoint&)> errorCallback,
+    std::function<void(std::shared_ptr<ResponseMessage>, const EndPoint&)> responseCallback,
+    std::function<void(std::shared_ptr<ErrorMessage>, const EndPoint&)> errorCallback,
     std::function<void(const NodeID&)> timeoutCallback) {
-    
+
     // Check if we've reached the maximum number of iterations
     if (lookup.iteration >= LOOKUP_MAX_ITERATIONS) {
         return false;
@@ -52,7 +55,7 @@ bool PeerLookupQueryManager::sendQueries(
         queriesToSend++;
 
         // Stop if we've reached the alpha value
-        if (queriesToSend >= m_config.getAlpha()) {
+        if (queriesToSend >= DEFAULT_ALPHA) {
             break;
         }
     }
@@ -103,7 +106,7 @@ bool PeerLookupQueryManager::sendQueries(
                 queriesSent++;
 
                 // Stop if we've sent enough queries
-                if (queriesSent >= m_config.getAlpha()) {
+                if (queriesSent >= DEFAULT_ALPHA) {
                     break;
                 }
             }
@@ -125,7 +128,7 @@ bool PeerLookupQueryManager::isLookupComplete(const PeerLookupState& lookup, siz
     }
 
     // If we've found enough peers, the lookup is complete
-    if (lookup.peers.size() >= m_config.getMaxResults()) {
+    if (lookup.peers.size() >= DEFAULT_MAX_RESULTS) {
         return true;
     }
 
@@ -135,7 +138,7 @@ bool PeerLookupQueryManager::isLookupComplete(const PeerLookupState& lookup, siz
     }
 
     // Sort the nodes by distance to the target
-    std::vector<std::shared_ptr<Node>> sortedNodes = 
+    std::vector<std::shared_ptr<Node>> sortedNodes =
         peer_lookup_utils::sortNodesByDistance(lookup.nodes, NodeID(lookup.infoHash));
 
     // Check if we've queried the k closest nodes

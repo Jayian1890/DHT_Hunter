@@ -1,6 +1,9 @@
 #include "dht_hunter/dht/storage/peer_storage.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
+
+// Constants
+constexpr int PEER_TTL = 1800;           // 30 minutes
+constexpr int PEER_CLEANUP_INTERVAL = 30; // 30 seconds
 
 namespace dht_hunter::dht {
 
@@ -83,7 +86,7 @@ bool dht_hunter::dht::PeerStorage::isRunning() const {
     return m_running.load(std::memory_order_acquire);
 }
 
-void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_hunter::network::EndPoint& endpoint) {
+void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const EndPoint& endpoint) {
     std::string infoHashStr = types::infoHashToString(infoHash);
     try {
         utility::thread::withLock(m_mutex, [this, &infoHash, &endpoint, &infoHashStr]() {
@@ -129,17 +132,17 @@ void dht_hunter::dht::PeerStorage::addPeer(const InfoHash& infoHash, const dht_h
     }
 }
 
-std::vector<dht_hunter::network::EndPoint> dht_hunter::dht::PeerStorage::getPeers(const InfoHash& infoHash) {
+std::vector<EndPoint> dht_hunter::dht::PeerStorage::getPeers(const InfoHash& infoHash) {
     try {
         return utility::thread::withLock(m_mutex, [this, &infoHash]() {
             // Check if the info hash exists
             auto it = m_peers.find(infoHash);
             if (it == m_peers.end()) {
-                return std::vector<dht_hunter::network::EndPoint>{};
+                return std::vector<EndPoint>{};
             }
 
             // Convert the timestamped peers to endpoints
-            std::vector<dht_hunter::network::EndPoint> endpoints;
+            std::vector<EndPoint> endpoints;
             for (const auto& peer : it->second) {
                 endpoints.push_back(peer.endpoint);
             }
@@ -148,7 +151,7 @@ std::vector<dht_hunter::network::EndPoint> dht_hunter::dht::PeerStorage::getPeer
         }, "PeerStorage::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerStorage", e.what());
-        return std::vector<dht_hunter::network::EndPoint>{};
+        return std::vector<EndPoint>{};
     }
 }
 

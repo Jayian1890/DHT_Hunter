@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include <memory>

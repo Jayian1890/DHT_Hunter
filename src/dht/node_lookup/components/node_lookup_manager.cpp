@@ -1,9 +1,15 @@
 #include "dht_hunter/dht/node_lookup/components/node_lookup_manager.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+
+// Constants
+constexpr int DEFAULT_MAX_RESULTS = 20;
+constexpr int DEFAULT_ALPHA = 3;
+constexpr int DEFAULT_MAX_ITERATIONS = 10;
+constexpr int DEFAULT_MAX_QUERIES = 100;
+constexpr int DEFAULT_K_BUCKET_SIZE = 8;
 
 namespace dht_hunter::dht::node_lookup {
 
@@ -57,7 +63,7 @@ void NodeLookupManager::lookup(const NodeID& targetID, std::function<void(const 
 
             // Get the closest nodes from the routing table
             if (m_routingTable) {
-                lookup.setNodes(m_routingTable->getClosestNodes(targetID, m_config.getMaxResults()));
+                lookup.setNodes(m_routingTable->getClosestNodes(targetID, DEFAULT_MAX_RESULTS));
             }
 
             // Add the lookup
@@ -257,7 +263,7 @@ void NodeLookupManager::sendQueries(const std::string& lookupID) {
                         queriesSent++;
 
                         // Stop if we've sent enough queries
-                        if (queriesSent >= m_config.getAlpha()) {
+                        if (queriesSent >= DEFAULT_ALPHA) {
                             break;
                         }
                     }
@@ -286,12 +292,12 @@ bool NodeLookupManager::isLookupComplete(const std::string& lookupID) {
             }
 
             // If we've reached the maximum number of iterations, the lookup is complete
-            if (lookup.getIteration() >= m_config.getMaxIterations()) {
+            if (lookup.getIteration() >= DEFAULT_MAX_ITERATIONS) {
                 return true;
             }
 
             // If we've queried enough nodes, the lookup is complete
-            if (lookup.getQueriedNodes().size() >= m_config.getMaxQueries()) {
+            if (lookup.getQueriedNodes().size() >= DEFAULT_MAX_QUERIES) {
                 return true;
             }
 
@@ -321,8 +327,8 @@ void NodeLookupManager::completeLookup(const std::string& lookupID) {
             });
 
             // Limit the number of nodes
-            if (nodes.size() > m_config.getKBucketSize()) {
-                nodes.resize(m_config.getKBucketSize());
+            if (nodes.size() > DEFAULT_K_BUCKET_SIZE) {
+                nodes.resize(DEFAULT_K_BUCKET_SIZE);
             }
 
             // Call the callback

@@ -2,10 +2,12 @@
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 #include "dht_hunter/dht/routing/routing_manager.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include <random>
 #include <netdb.h>
 #include <arpa/inet.h>
+
+// Constants
+constexpr uint16_t DEFAULT_PORT = 6881;
 
 namespace dht_hunter::dht {
 
@@ -106,7 +108,7 @@ void Bootstrapper::bootstrap(std::function<void(bool)> callback) {
 
         // Resolve the bootstrap nodes
         unified_event::logTrace("DHT.Bootstrapper", "TRACE: Resolving bootstrap nodes");
-        std::vector<network::EndPoint> endpoints;
+        std::vector<EndPoint> endpoints;
 
         for (const auto& node : bootstrapNodes) {
             unified_event::logTrace("DHT.Bootstrapper", "TRACE: Resolving bootstrap node: " + node);
@@ -159,9 +161,9 @@ void Bootstrapper::bootstrap(std::function<void(bool)> callback) {
     unified_event::logTrace("DHT.Bootstrapper", "TRACE: bootstrap() exit");
 }
 
-std::vector<network::EndPoint> Bootstrapper::resolveBootstrapNode(const std::string& node) {
+std::vector<EndPoint> Bootstrapper::resolveBootstrapNode(const std::string& node) {
     unified_event::logTrace("DHT.Bootstrapper", "TRACE: resolveBootstrapNode() entry for node: " + node);
-    std::vector<network::EndPoint> endpoints;
+    std::vector<EndPoint> endpoints;
 
     // Parse the node string
     std::string host;
@@ -202,7 +204,7 @@ std::vector<network::EndPoint> Bootstrapper::resolveBootstrapNode(const std::str
 
             unified_event::logTrace("DHT.Bootstrapper", "TRACE: Resolved IP: " + std::string(ipStr));
             network::NetworkAddress address(ipStr);
-            network::EndPoint endpoint(address, port);
+            EndPoint endpoint(address, port);
 
             unified_event::logTrace("DHT.Bootstrapper", "TRACE: Adding endpoint: " + endpoint.toString());
             endpoints.push_back(endpoint);

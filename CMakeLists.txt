@@ -57,6 +57,9 @@ target_precompile_headers(dht_hunter_core INTERFACE
 # Add subdirectories
 add_subdirectory(src)
 
+# Enable testing
+enable_testing()
+
 # Include the web bundler module
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WebBundler.cmake)
 

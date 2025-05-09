@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dht_hunter/types/info_hash.hpp"
-#include "dht_hunter/dht/core/dht_node.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include "dht_hunter/unified_event/event_bus.hpp"
 #include "dht_hunter/bittorrent/metadata/metadata_validator.hpp"

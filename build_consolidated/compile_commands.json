@@ -42,6 +42,12 @@
   "output": "src/utils/CMakeFiles/bitscrape_utils.dir/system_utils.cpp.o"
 },
 {
+  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/utils",
+  "command": "/usr/bin/c++  -I/Volumes/Media/projects/coding/bitscrape/include -g -std=c++2b -arch arm64 -o CMakeFiles/bitscrape_utils.dir/dht_core_utils.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/utils/dht_core_utils.cpp",
+  "file": "/Volumes/Media/projects/coding/bitscrape/src/utils/dht_core_utils.cpp",
+  "output": "src/utils/CMakeFiles/bitscrape_utils.dir/dht_core_utils.cpp.o"
+},
+{
   "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/types",
   "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -emit-pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/types/CMakeFiles/dht_hunter_types.dir/cmake_pch.hxx -x c++-header -o CMakeFiles/dht_hunter_types.dir/cmake_pch.hxx.pch -c /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/types/CMakeFiles/dht_hunter_types.dir/cmake_pch.hxx.cxx",
   "file": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/types/CMakeFiles/dht_hunter_types.dir/cmake_pch.hxx.cxx",
@@ -202,42 +208,6 @@
   "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -emit-pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx -x c++-header -o CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch -c /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.cxx",
   "file": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.cxx",
   "output": "src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch"
-},
-{
-  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht",
-  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx -o CMakeFiles/dht_hunter_dht.dir/core/dht_node.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_node.cpp",
-  "file": "/Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_node.cpp",
-  "output": "src/dht/CMakeFiles/dht_hunter_dht.dir/core/dht_node.cpp.o"
-},
-{
-  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht",
-  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx -o CMakeFiles/dht_hunter_dht.dir/core/dht_event_handlers.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_event_handlers.cpp",
-  "file": "/Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_event_handlers.cpp",
-  "output": "src/dht/CMakeFiles/dht_hunter_dht.dir/core/dht_event_handlers.cpp.o"
-},
-{
-  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht",
-  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx -o CMakeFiles/dht_hunter_dht.dir/core/dht_config.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_config.cpp",
-  "file": "/Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_config.cpp",
-  "output": "src/dht/CMakeFiles/dht_hunter_dht.dir/core/dht_config.cpp.o"
-},
-{
-  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht",
-  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx -o CMakeFiles/dht_hunter_dht.dir/core/dht_constants.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_constants.cpp",
-  "file": "/Volumes/Media/projects/coding/bitscrape/src/dht/core/dht_constants.cpp",
-  "output": "src/dht/CMakeFiles/dht_hunter_dht.dir/core/dht_constants.cpp.o"
-},
-{
-  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht",
-  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx -o CMakeFiles/dht_hunter_dht.dir/core/routing_table.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/dht/core/routing_table.cpp",
-  "file": "/Volumes/Media/projects/coding/bitscrape/src/dht/core/routing_table.cpp",
-  "output": "src/dht/CMakeFiles/dht_hunter_dht.dir/core/routing_table.cpp.o"
-},
-{
-  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht",
-  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht/CMakeFiles/dht_hunter_dht.dir/cmake_pch.hxx -o CMakeFiles/dht_hunter_dht.dir/core/persistence_manager.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/dht/core/persistence_manager.cpp",
-  "file": "/Volumes/Media/projects/coding/bitscrape/src/dht/core/persistence_manager.cpp",
-  "output": "src/dht/CMakeFiles/dht_hunter_dht.dir/core/persistence_manager.cpp.o"
 },
 {
   "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/dht",
@@ -658,5 +628,17 @@
   "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/core/CMakeFiles/dht_hunter_core_impl.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/core/CMakeFiles/dht_hunter_core_impl.dir/cmake_pch.hxx -o CMakeFiles/dht_hunter_core_impl.dir/application_controller.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/core/application_controller.cpp",
   "file": "/Volumes/Media/projects/coding/bitscrape/src/core/application_controller.cpp",
   "output": "src/core/CMakeFiles/dht_hunter_core_impl.dir/application_controller.cpp.o"
+},
+{
+  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/tests",
+  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -emit-pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/tests/CMakeFiles/test_dht_core_utils.dir/cmake_pch.hxx -x c++-header -o CMakeFiles/test_dht_core_utils.dir/cmake_pch.hxx.pch -c /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/tests/CMakeFiles/test_dht_core_utils.dir/cmake_pch.hxx.cxx",
+  "file": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/tests/CMakeFiles/test_dht_core_utils.dir/cmake_pch.hxx.cxx",
+  "output": "src/tests/CMakeFiles/test_dht_core_utils.dir/cmake_pch.hxx.pch"
+},
+{
+  "directory": "/Volumes/Media/projects/coding/bitscrape/build_consolidated/src/tests",
+  "command": "/usr/bin/c++ -DFMT_SHARED -I/Volumes/Media/projects/coding/bitscrape/include -isystem /opt/homebrew/include -g -std=c++2b -arch arm64 -Winvalid-pch -Xclang -include-pch -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/tests/CMakeFiles/test_dht_core_utils.dir/cmake_pch.hxx.pch -Xclang -include -Xclang /Volumes/Media/projects/coding/bitscrape/build_consolidated/src/tests/CMakeFiles/test_dht_core_utils.dir/cmake_pch.hxx -o CMakeFiles/test_dht_core_utils.dir/test_dht_core_utils.cpp.o -c /Volumes/Media/projects/coding/bitscrape/src/tests/test_dht_core_utils.cpp",
+  "file": "/Volumes/Media/projects/coding/bitscrape/src/tests/test_dht_core_utils.cpp",
+  "output": "src/tests/CMakeFiles/test_dht_core_utils.dir/test_dht_core_utils.cpp.o"
 }
 ]

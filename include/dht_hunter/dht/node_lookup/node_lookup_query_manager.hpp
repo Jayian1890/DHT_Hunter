@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
@@ -11,7 +11,7 @@
 namespace dht_hunter::dht {
 
 // Forward declarations
-class RoutingTable;
+// RoutingTable is now defined in utils/dht_core_utils.hpp
 class TransactionManager;
 class MessageSender;
 struct NodeLookupState;
@@ -29,12 +29,12 @@ public:
      * @param transactionManager The transaction manager
      * @param messageSender The message sender
      */
-    NodeLookupQueryManager(const DHTConfig& config, 
+    NodeLookupQueryManager(const DHTConfig& config,
                           const NodeID& nodeID,
-                          std::shared_ptr<RoutingTable> routingTable,
+                          std::shared_ptr<dht::RoutingTable> routingTable,
                           std::shared_ptr<TransactionManager> transactionManager,
                           std::shared_ptr<MessageSender> messageSender);
-    
+
     /**
      * @brief Sends find_node queries to the closest nodes
      * @param lookupID The lookup ID
@@ -45,12 +45,12 @@ public:
      * @return True if queries were sent, false otherwise
      */
     bool sendQueries(
-        const std::string& lookupID, 
+        const std::string& lookupID,
         NodeLookupState& lookup,
         std::function<void(std::shared_ptr<ResponseMessage>, const network::EndPoint&)> responseCallback,
         std::function<void(std::shared_ptr<ErrorMessage>, const network::EndPoint&)> errorCallback,
         std::function<void(const NodeID&)> timeoutCallback);
-    
+
     /**
      * @brief Checks if a lookup is complete
      * @param lookup The lookup state
@@ -58,11 +58,11 @@ public:
      * @return True if the lookup is complete, false otherwise
      */
     bool isLookupComplete(const NodeLookupState& lookup, size_t kBucketSize) const;
-    
+
 private:
     DHTConfig m_config;
     NodeID m_nodeID;
-    std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<dht::RoutingTable> m_routingTable;
     std::shared_ptr<TransactionManager> m_transactionManager;
     std::shared_ptr<MessageSender> m_messageSender;
 };

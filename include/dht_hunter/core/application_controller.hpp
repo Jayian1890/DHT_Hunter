@@ -10,8 +10,7 @@
 #include <vector>
 
 #include "dht_hunter/bittorrent/metadata/metadata_acquisition_manager.hpp"
-#include "dht_hunter/dht/core/dht_node.hpp"
-#include "dht_hunter/dht/core/persistence_manager.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/network/udp_server.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include "dht_hunter/utility/config/configuration_manager.hpp"

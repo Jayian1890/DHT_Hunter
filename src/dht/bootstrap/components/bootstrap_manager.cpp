@@ -1,9 +1,11 @@
 #include "dht_hunter/dht/bootstrap/components/bootstrap_manager.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <random>
+
+// Constants
+constexpr uint16_t DEFAULT_PORT = 6881;
 
 namespace dht_hunter::dht::bootstrap {
 

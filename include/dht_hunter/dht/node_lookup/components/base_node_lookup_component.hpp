@@ -1,8 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/node_lookup/interfaces/node_lookup_component.hpp"
-#include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include <atomic>
 #include <mutex>
@@ -11,7 +10,7 @@ namespace dht_hunter::dht::node_lookup {
 
 /**
  * @brief Base class for node lookup components
- * 
+ *
  * This class provides common functionality for all node lookup components.
  */
 class BaseNodeLookupComponent : public NodeLookupComponent {

@@ -1,6 +1,5 @@
 #include "dht_hunter/dht/network/message_handler.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
@@ -15,7 +14,7 @@ std::shared_ptr<MessageHandler> MessageHandler::getInstance(
     const DHTConfig& config,
     const NodeID& nodeID,
     std::shared_ptr<MessageSender> messageSender,
-    std::shared_ptr<RoutingTable> routingTable,
+    std::shared_ptr<dht::RoutingTable> routingTable,
     std::shared_ptr<TokenManager> tokenManager,
     std::shared_ptr<PeerStorage> peerStorage,
     std::shared_ptr<TransactionManager> transactionManager) {
@@ -37,7 +36,7 @@ std::shared_ptr<MessageHandler> MessageHandler::getInstance(
 MessageHandler::MessageHandler(const DHTConfig& config,
                              const NodeID& nodeID,
                              std::shared_ptr<MessageSender> messageSender,
-                             std::shared_ptr<RoutingTable> routingTable,
+                             std::shared_ptr<dht::RoutingTable> routingTable,
                              std::shared_ptr<TokenManager> tokenManager,
                              std::shared_ptr<PeerStorage> peerStorage,
                              std::shared_ptr<TransactionManager> transactionManager)

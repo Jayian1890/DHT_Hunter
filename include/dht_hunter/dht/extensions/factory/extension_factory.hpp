@@ -1,8 +1,7 @@
 #pragma once
 
 #include "dht_hunter/dht/extensions/dht_extension.hpp"
-#include "dht_hunter/dht/core/dht_config.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
+#include "utils/dht_core_utils.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -11,7 +10,7 @@ namespace dht_hunter::dht::extensions {
 
 /**
  * @brief Factory for creating DHT extensions
- * 
+ *
  * This class is responsible for creating and managing DHT extensions.
  * It follows the singleton pattern to ensure only one instance exists.
  */

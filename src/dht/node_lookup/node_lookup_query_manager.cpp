@@ -1,15 +1,17 @@
 #include "dht_hunter/dht/node_lookup/node_lookup_query_manager.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup_utils.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include <algorithm>
+
+// Constants
+constexpr int LOOKUP_MAX_ITERATIONS = 10;
+constexpr int DEFAULT_ALPHA = 3;
 
 namespace dht_hunter::dht {
 
-NodeLookupQueryManager::NodeLookupQueryManager(const DHTConfig& config, 
+NodeLookupQueryManager::NodeLookupQueryManager(const DHTConfig& config,
                                              const NodeID& nodeID,
                                              std::shared_ptr<RoutingTable> routingTable,
                                              std::shared_ptr<TransactionManager> transactionManager,
@@ -22,12 +24,12 @@ NodeLookupQueryManager::NodeLookupQueryManager(const DHTConfig& config,
 }
 
 bool NodeLookupQueryManager::sendQueries(
-    const std::string& lookupID, 
+    const std::string& lookupID,
     NodeLookupState& lookup,
     std::function<void(std::shared_ptr<ResponseMessage>, const network::EndPoint&)> responseCallback,
     std::function<void(std::shared_ptr<ErrorMessage>, const network::EndPoint&)> errorCallback,
     std::function<void(const NodeID&)> timeoutCallback) {
-    
+
     // Check if we've reached the maximum number of iterations
     if (lookup.iteration >= LOOKUP_MAX_ITERATIONS) {
         return false;
@@ -52,7 +54,7 @@ bool NodeLookupQueryManager::sendQueries(
         queriesToSend++;
 
         // Stop if we've reached the alpha value
-        if (queriesToSend >= m_config.getAlpha()) {
+        if (queriesToSend >= DEFAULT_ALPHA) {
             break;
         }
     }
@@ -103,7 +105,7 @@ bool NodeLookupQueryManager::sendQueries(
                 queriesSent++;
 
                 // Stop if we've sent enough queries
-                if (queriesSent >= m_config.getAlpha()) {
+                if (queriesSent >= DEFAULT_ALPHA) {
                     break;
                 }
             }
@@ -130,7 +132,7 @@ bool NodeLookupQueryManager::isLookupComplete(const NodeLookupState& lookup, siz
     }
 
     // Sort the nodes by distance to the target
-    std::vector<std::shared_ptr<Node>> sortedNodes = 
+    std::vector<std::shared_ptr<Node>> sortedNodes =
         node_lookup_utils::sortNodesByDistance(lookup.nodes, lookup.targetID);
 
     // Check if we've queried the k closest nodes

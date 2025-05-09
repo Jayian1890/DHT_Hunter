@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
@@ -10,8 +10,10 @@
 
 namespace dht_hunter::dht {
 
+using dht_hunter::utils::dht_core::DHTConfig;
+
 // Forward declarations
-class RoutingTable;
+// RoutingTable is now defined in utils/dht_core_utils.hpp
 class PeerStorage;
 struct PeerLookupState;
 
@@ -29,9 +31,9 @@ public:
      */
     PeerLookupResponseHandler(const DHTConfig& config,
                              const NodeID& nodeID,
-                             std::shared_ptr<RoutingTable> routingTable,
+                             std::shared_ptr<dht::RoutingTable> routingTable,
                              std::shared_ptr<PeerStorage> peerStorage);
-    
+
     /**
      * @brief Handles a get_peers response
      * @param lookupID The lookup ID
@@ -41,11 +43,11 @@ public:
      * @return True if more queries should be sent, false otherwise
      */
     bool handleResponse(
-        const std::string& lookupID, 
+        const std::string& lookupID,
         PeerLookupState& lookup,
-        std::shared_ptr<GetPeersResponse> response, 
-        const network::EndPoint& sender);
-    
+        std::shared_ptr<GetPeersResponse> response,
+        const EndPoint& sender);
+
     /**
      * @brief Handles an error
      * @param lookup The lookup state
@@ -55,9 +57,9 @@ public:
      */
     bool handleError(
         PeerLookupState& lookup,
-        std::shared_ptr<ErrorMessage> error, 
-        const network::EndPoint& sender);
-    
+        std::shared_ptr<ErrorMessage> error,
+        const EndPoint& sender);
+
     /**
      * @brief Handles a timeout
      * @param lookup The lookup state
@@ -65,9 +67,9 @@ public:
      * @return True if more queries should be sent, false otherwise
      */
     bool handleTimeout(
-        PeerLookupState& lookup, 
+        PeerLookupState& lookup,
         const NodeID& nodeID);
-    
+
     /**
      * @brief Handles an announce_peer response
      * @param lookup The lookup state
@@ -77,9 +79,9 @@ public:
      */
     bool handleAnnounceResponse(
         PeerLookupState& lookup,
-        std::shared_ptr<AnnouncePeerResponse> response, 
-        const network::EndPoint& sender);
-    
+        std::shared_ptr<AnnouncePeerResponse> response,
+        const EndPoint& sender);
+
     /**
      * @brief Handles an announce_peer error
      * @param lookup The lookup state
@@ -89,9 +91,9 @@ public:
      */
     bool handleAnnounceError(
         PeerLookupState& lookup,
-        std::shared_ptr<ErrorMessage> error, 
-        const network::EndPoint& sender);
-    
+        std::shared_ptr<ErrorMessage> error,
+        const EndPoint& sender);
+
     /**
      * @brief Handles an announce_peer timeout
      * @param lookup The lookup state
@@ -101,17 +103,17 @@ public:
     bool handleAnnounceTimeout(
         PeerLookupState& lookup,
         const NodeID& nodeID);
-    
+
     /**
      * @brief Completes a lookup
      * @param lookup The lookup state
      */
     void completeLookup(PeerLookupState& lookup) const;
-    
+
 private:
     DHTConfig m_config;
     NodeID m_nodeID;
-    std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<dht::RoutingTable> m_routingTable;
     std::shared_ptr<PeerStorage> m_peerStorage;
 };
 

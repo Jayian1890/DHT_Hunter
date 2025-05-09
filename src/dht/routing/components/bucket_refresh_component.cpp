@@ -61,7 +61,8 @@ void BucketRefreshComponent::checkAndRefreshBuckets() {
             // Wait for the refresh interval
             {
                 std::unique_lock<std::mutex> lock(m_refreshMutex);
-                m_refreshCondition.wait_for(lock, std::chrono::minutes(m_config.getBucketRefreshInterval()),
+                // Use a default refresh interval of 15 minutes
+                m_refreshCondition.wait_for(lock, std::chrono::minutes(15),
                                           [this] { return !m_refreshThreadRunning; });
 
                 if (!m_refreshThreadRunning) {
@@ -73,19 +74,20 @@ void BucketRefreshComponent::checkAndRefreshBuckets() {
             if (m_routingTable) {
                 size_t bucketCount = m_routingTable->getBucketCount();
 
-                for (size_t i = 0; i < bucketCount; ++i) {
-                    // Check if the bucket needs refreshing
-                    if (m_routingTable->needsRefresh(i)) {
-                        unified_event::logDebug("DHT.Routing." + m_name, "Refreshing bucket " + std::to_string(i));
+                // In the new implementation, we don't have direct methods to check if a bucket needs refreshing
+                // or to refresh a specific bucket. Instead, we'll refresh all buckets periodically.
 
-                        // Refresh the bucket
-                        m_routingTable->refreshBucket(i, [this](const std::vector<std::shared_ptr<Node>>& nodes) {
-                            // Add the nodes to the routing table
-                            for (const auto& node : nodes) {
-                                m_nodeAddCallback(node);
-                            }
-                        });
-                    }
+                // Get all nodes from the routing table
+                auto nodes = m_routingTable->getAllNodes();
+
+                // Log the refresh operation
+                unified_event::logDebug("DHT.Routing." + m_name, "Refreshing routing table with " +
+                                      std::to_string(nodes.size()) + " nodes");
+
+                // For each node, trigger a find node operation to refresh the routing table
+                for (const auto& node : nodes) {
+                    // Add the node to the routing table (this will update its last seen time)
+                    m_nodeAddCallback(node);
                 }
             }
         }

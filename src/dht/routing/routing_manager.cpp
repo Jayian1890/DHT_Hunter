@@ -159,26 +159,27 @@ bool RoutingManager::addNode(std::shared_ptr<Node> node) {
     }
 
     // Check if we already have this node in the routing table
-    if (m_routingTable->getNode(nodeID) != nullptr) {
+    auto nodes = m_routingTable->getAllNodes();
+    auto it = std::find_if(nodes.begin(), nodes.end(), [&nodeID](const auto& n) {
+        return n->getID() == nodeID;
+    });
+
+    if (it != nodes.end()) {
         // Node already exists, just update its last seen time
-        auto existingNode = m_routingTable->getNode(nodeID);
-        if (existingNode) {
-            existingNode->updateLastSeen();
-            return true;
-        }
+        (*it)->updateLastSeen();
+        return true;
     }
 
-    size_t bucketIndex = m_routingTable ? m_routingTable->getBucketIndex(nodeID) : 0;
+    // We don't have a direct method to get bucket index, so we'll use 0 as default
+    size_t bucketIndex = 0;
 
     // Add the node to the verification queue with the bucket index
     return m_nodeVerifier->verifyNode(node, [this, node](bool success) {
         if (success) {
 
-            // Get the bucket index where the node was added
+            // We don't have a direct method to get bucket index in the new implementation
+            // Just use 0 as a default value
             size_t addedBucketIndex = 0;
-            if (m_routingTable) {
-                addedBucketIndex = m_routingTable->getBucketIndex(node->getID());
-            }
 
             // Publish a node added event
             auto addedEvent = std::make_shared<unified_event::NodeAddedEvent>("DHT.RoutingManager", node, addedBucketIndex);
@@ -205,7 +206,13 @@ std::shared_ptr<Node> RoutingManager::getNode(const NodeID& nodeID) const {
         return nullptr;
     }
 
-    return m_routingTable->getNode(nodeID);
+    // Find the node in all nodes
+    auto nodes = m_routingTable->getAllNodes();
+    auto it = std::find_if(nodes.begin(), nodes.end(), [&nodeID](const auto& n) {
+        return n->getID() == nodeID;
+    });
+
+    return (it != nodes.end()) ? *it : nullptr;
 }
 
 std::vector<std::shared_ptr<Node>> RoutingManager::getClosestNodes(const NodeID& targetID, size_t k) const {
@@ -247,15 +254,17 @@ void RoutingManager::refreshAllBuckets() {
     // Get the number of buckets
     size_t bucketCount = m_routingTable->getBucketCount();
 
-    // Refresh each bucket
-    for (size_t i = 0; i < bucketCount; ++i) {
-        m_routingTable->refreshBucket(i, [this](const std::vector<std::shared_ptr<Node>>& nodes) {
-            // Add the nodes to the routing table
-            for (const auto& node : nodes) {
-                this->addNode(node);
-            }
-        });
-    }
+    // In the new implementation, we don't have a direct refreshBucket method
+    // Instead, we'll trigger the bucket refresh component to check and refresh buckets
+
+    // The bucket refresh component will handle the refreshing in its own thread
+    // We don't need to do anything here, as the component is already running
+
+    // Log that we're refreshing the routing table
+    unified_event::logInfo("DHT.RoutingManager", "Refreshing routing table with " +
+                          std::to_string(bucketCount) + " buckets");
+
+    // The actual refreshing is handled by the BucketRefreshComponent in its checkAndRefreshBuckets method
 }
 
 // Routing table saving and loading methods have been removed

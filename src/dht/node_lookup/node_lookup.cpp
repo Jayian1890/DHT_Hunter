@@ -2,12 +2,13 @@
 #include "dht_hunter/dht/node_lookup/node_lookup_query_manager.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup_response_handler.hpp"
 #include "dht_hunter/dht/node_lookup/node_lookup_utils.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 #include <algorithm>
+
+// Constants
+constexpr int LOOKUP_MAX_ITERATIONS = 10;
 
 namespace dht_hunter::dht {
 
@@ -101,7 +102,8 @@ void NodeLookup::lookup(const NodeID& targetID, std::function<void(const std::ve
             // Get the closest nodes from the routing table
             if (m_routingTable) {
                 unified_event::logTrace("DHT.NodeLookup", "TRACE: Getting closest nodes from routing table");
-                lookup.nodes = m_routingTable->getClosestNodes(targetID, m_config.getMaxResults());
+                // Use a default value of 20 for max results
+                lookup.nodes = m_routingTable->getClosestNodes(targetID, 20);
                 unified_event::logTrace("DHT.NodeLookup", "TRACE: Got " + std::to_string(lookup.nodes.size()) + " closest nodes from routing table");
             } else {
                 unified_event::logTrace("DHT.NodeLookup", "TRACE: Routing table is null");

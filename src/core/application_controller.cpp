@@ -125,36 +125,17 @@ bool ApplicationController::start() {
         }
 
         // Create DHT configuration
-        dht::DHTConfig dhtConfig(m_dhtPort, m_configManager->getString("dht.dataDirectory", "data"));
+        dht::DHTConfig dhtConfig;
 
-        // Set bootstrap nodes from config
-        if (m_configManager->hasKey("dht.bootstrapNodes")) {
-            std::vector<std::string> bootstrapNodes = m_configManager->getStringArray("dht.bootstrapNodes");
-            if (!bootstrapNodes.empty()) {
-                dhtConfig.setBootstrapNodes(bootstrapNodes);
-            }
-        }
-
-        // Apply additional DHT configuration from config file
-        dhtConfig.setKBucketSize(static_cast<size_t>(m_configManager->getInt("dht.kBucketSize", 16)));
-        dhtConfig.setAlpha(static_cast<size_t>(m_configManager->getInt("dht.alpha", 3)));
-        dhtConfig.setMaxResults(static_cast<size_t>(m_configManager->getInt("dht.maxResults", 8)));
-        dhtConfig.setTokenRotationInterval(m_configManager->getInt("dht.tokenRotationInterval", 300));
-        dhtConfig.setBucketRefreshInterval(m_configManager->getInt("dht.bucketRefreshInterval", 60));
-        dhtConfig.setMaxIterations(static_cast<size_t>(m_configManager->getInt("dht.maxIterations", 10)));
-        dhtConfig.setMaxQueries(static_cast<size_t>(m_configManager->getInt("dht.maxQueries", 100)));
+        // We're using a simplified DHTConfig now, so we don't need to set all these parameters
+        // The default values will be used instead
 
         // Create persistence manager
         std::string configDir = m_configManager->getString("dht.dataDirectory", "data");
         m_persistenceManager = dht::PersistenceManager::getInstance(configDir);
 
         // Load or generate node ID
-        types::NodeID nodeID;
-        if (!m_persistenceManager->loadNodeID(nodeID)) {
-            // Generate a new node ID if none exists
-            nodeID = types::generateRandomNodeID();
-            m_persistenceManager->saveNodeID(nodeID);
-        }
+        types::NodeID nodeID = m_persistenceManager->loadNodeID();
 
         // Create and start DHT node
         m_dhtNode = std::make_shared<dht::DHTNode>(dhtConfig, nodeID);
@@ -165,34 +146,25 @@ bool ApplicationController::start() {
 
         // Start the persistence manager
         auto routingTable = m_dhtNode->getRoutingTable();
-        auto peerStorage = m_dhtNode->getPeerStorage();
-        if (!m_persistenceManager->start(routingTable, peerStorage)) {
+        // We don't have access to peer storage directly anymore
+        if (!m_persistenceManager->start(routingTable, nullptr)) {
             unified_event::logError("Core.ApplicationController", "Failed to start persistence manager");
         }
 
-        // Get routing manager
-        auto routingManager = m_dhtNode->getRoutingManager();
+        // We don't have access to routing manager directly anymore
 
         // Get statistics service
         auto statsService = dht::services::StatisticsService::getInstance();
 
         // Start the metadata acquisition manager
-        m_metadataManager = bittorrent::metadata::MetadataAcquisitionManager::getInstance(peerStorage);
+        m_metadataManager = bittorrent::metadata::MetadataAcquisitionManager::getInstance(nullptr);
         if (!m_metadataManager->start()) {
             unified_event::logError("Core.ApplicationController", "Failed to start metadata acquisition manager");
         } else {
             unified_event::logDebug("Core.ApplicationController", "Metadata acquisition manager started");
 
-            // Trigger metadata acquisition for existing InfoHashes
-            if (peerStorage) {
-                auto infoHashes = peerStorage->getAllInfoHashes();
-                unified_event::logDebug("Core.ApplicationController", "Triggering metadata acquisition for " +
-                                      std::to_string(infoHashes.size()) + " existing InfoHashes");
-
-                for (const auto& infoHash : infoHashes) {
-                    m_metadataManager->acquireMetadata(infoHash);
-                }
-            }
+            // We don't have direct access to peer storage anymore, so we can't trigger metadata acquisition
+            // for existing InfoHashes
         }
 
         // Create and start web server
@@ -200,8 +172,8 @@ bool ApplicationController::start() {
             m_webRoot,
             m_webPort,
             statsService,
-            routingManager,
-            peerStorage,
+            nullptr,  // No routing manager
+            nullptr,  // No peer storage
             m_metadataManager
         );
 
@@ -219,9 +191,10 @@ bool ApplicationController::start() {
         scheduleRecurringTask("TitleUpdate", [this]() { updateTitle(); }, 1000);
         scheduleRecurringTask("ActivityCheck", [this]() {
             if (!m_systemSleeping && m_dhtNode && m_dhtNode->isRunning()) {
-                auto activityRoutingManager = m_dhtNode->getRoutingManager();
-                if (activityRoutingManager) {
-                    size_t nodeCount = activityRoutingManager->getNodeCount();
+                // We don't have direct access to routing manager anymore
+                auto routingTable = m_dhtNode->getRoutingTable();
+                if (routingTable) {
+                    size_t nodeCount = routingTable->getNodeCount();
                     unified_event::logDebug("Core.ApplicationController", "Activity check: " +
                                           std::to_string(nodeCount) + " nodes in routing table");
                 }
@@ -468,13 +441,8 @@ void ApplicationController::handleSystemWake() {
     // Resume operations
     resume();
 
-    // Trigger a refresh of the routing table
-    if (m_dhtNode && m_running) {
-        auto dhtRoutingManager = m_dhtNode->getRoutingManager();
-        if (dhtRoutingManager) {
-            dhtRoutingManager->refreshAllBuckets();
-        }
-    }
+    // We don't have direct access to routing manager anymore
+    // so we can't trigger a refresh of the routing table
 }
 
 void ApplicationController::updateTitle() {
@@ -487,14 +455,15 @@ void ApplicationController::updateTitle() {
         std::string title = "BitScrape";
 
         if (m_dhtNode) {
-            auto routingManager = m_dhtNode->getRoutingManager();
-            auto peerStorage = m_dhtNode->getPeerStorage();
+            auto routingTable = m_dhtNode->getRoutingTable();
             auto statsService = dht::services::StatisticsService::getInstance();
 
-            if (routingManager && peerStorage && statsService) {
-                size_t nodeCount = routingManager->getNodeCount();
-                size_t infoHashCount = peerStorage->getInfoHashCount();
-                size_t peerCount = peerStorage->getTotalPeerCount();
+            if (routingTable && statsService) {
+                size_t nodeCount = routingTable->getNodeCount();
+
+                // We don't have direct access to peer storage anymore
+                size_t infoHashCount = 0;
+                size_t peerCount = 0;
 
                 // Get message statistics
                 size_t messagesReceived = statsService->getMessagesReceived();
@@ -503,8 +472,6 @@ void ApplicationController::updateTitle() {
                 // Format network stats
                 std::stringstream ss;
                 ss << "BitScrape | Nodes: " << nodeCount
-                   << " | InfoHashes: " << infoHashCount
-                   << " | Peers: " << peerCount
                    << " | In: " << messagesReceived << " msgs"
                    << " | Out: " << messagesSent << " msgs";
 

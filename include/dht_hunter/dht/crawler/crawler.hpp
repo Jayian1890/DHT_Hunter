@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 #include "dht_hunter/unified_event/event_bus.hpp"
@@ -16,6 +16,8 @@
 
 namespace dht_hunter::dht {
 
+using dht_hunter::utils::dht_core::DHTConfig;
+
 // Forward declarations
 class RoutingManager;
 class NodeLookup;
@@ -30,16 +32,16 @@ class PeerStorage;
 struct CrawlerConfig {
     // How many nodes to crawl in parallel
     size_t parallelCrawls = 10;
-    
+
     // How often to refresh the crawler (in seconds)
     uint32_t refreshInterval = 15;
-    
+
     // Maximum number of nodes to store
     size_t maxNodes = 1000000;
-    
+
     // Maximum number of info hashes to track
     size_t maxInfoHashes = 1000000;
-    
+
     // Whether to automatically start crawling on initialization
     bool autoStart = true;
 };
@@ -50,35 +52,35 @@ struct CrawlerConfig {
 struct CrawlerStatistics {
     // Number of nodes discovered
     size_t nodesDiscovered = 0;
-    
+
     // Number of nodes that responded
     size_t nodesResponded = 0;
-    
+
     // Number of info hashes discovered
     size_t infoHashesDiscovered = 0;
-    
+
     // Number of peers discovered
     size_t peersDiscovered = 0;
-    
+
     // Number of queries sent
     size_t queriesSent = 0;
-    
+
     // Number of responses received
     size_t responsesReceived = 0;
-    
+
     // Number of errors received
     size_t errorsReceived = 0;
-    
+
     // Number of timeouts
     size_t timeouts = 0;
-    
+
     // Time when the crawler started
     std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
 };
 
 /**
  * @brief DHT network crawler (Singleton)
- * 
+ *
  * The crawler systematically explores the DHT network to discover nodes,
  * monitor info hashes, and collect statistics.
  */
@@ -163,7 +165,7 @@ public:
      * @param infoHash The info hash
      * @return The peers for the info hash
      */
-    std::vector<network::EndPoint> getPeersForInfoHash(const InfoHash& infoHash) const;
+    std::vector<EndPoint> getPeersForInfoHash(const InfoHash& infoHash) const;
 
     /**
      * @brief Adds an info hash to monitor

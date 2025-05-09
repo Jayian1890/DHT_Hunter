@@ -1,14 +1,13 @@
 #pragma once
 
 #include "dht_hunter/dht/extensions/dht_extension.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include <memory>
 
 namespace dht_hunter::dht::extensions {
 
 /**
  * @brief Implementation of the Azureus (Vuze) DHT protocol
- * 
+ *
  * Azureus DHT is a DHT implementation used by the Vuze (formerly Azureus) BitTorrent client.
  * It has some differences from the Mainline DHT, including a different node ID format and
  * different message types.
@@ -21,9 +20,9 @@ public:
      * @param nodeID The node ID
      * @param routingTable The routing table
      */
-    AzureusDHT(const DHTConfig& config, 
+    AzureusDHT(const DHTConfig& config,
               const NodeID& nodeID,
-              std::shared_ptr<RoutingTable> routingTable);
+              std::shared_ptr<dht::RoutingTable> routingTable);
 
     /**
      * @brief Destructor
@@ -60,7 +59,7 @@ public:
     bool isInitialized() const override;
 
 private:
-    std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<dht::RoutingTable> m_routingTable;
     bool m_initialized;
 };
 

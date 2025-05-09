@@ -1,14 +1,13 @@
 #pragma once
 
 #include "dht_hunter/dht/extensions/dht_extension.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include <memory>
 
 namespace dht_hunter::dht::extensions {
 
 /**
  * @brief Implementation of the Mainline DHT protocol
- * 
+ *
  * Mainline DHT is the most widely used DHT implementation in BitTorrent clients.
  * It is based on the Kademlia algorithm and is used for peer discovery.
  */
@@ -20,9 +19,9 @@ public:
      * @param nodeID The node ID
      * @param routingTable The routing table
      */
-    MainlineDHT(const DHTConfig& config, 
+    MainlineDHT(const DHTConfig& config,
                const NodeID& nodeID,
-               std::shared_ptr<RoutingTable> routingTable);
+               std::shared_ptr<dht::RoutingTable> routingTable);
 
     /**
      * @brief Destructor
@@ -59,7 +58,7 @@ public:
     bool isInitialized() const override;
 
 private:
-    std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<dht::RoutingTable> m_routingTable;
     bool m_initialized;
 };
 

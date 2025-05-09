@@ -9,6 +9,7 @@ add_subdirectory(bittorrent) # BitTorrent component
 add_subdirectory(unified_event) # Unified event system
 add_subdirectory(web)       # Web UI component
 add_subdirectory(core)      # Core application components
+add_subdirectory(tests)     # Tests
 
 # Create two targets: one regular executable and one .app bundle
 

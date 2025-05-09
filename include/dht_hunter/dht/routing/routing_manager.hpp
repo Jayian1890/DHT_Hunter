@@ -1,8 +1,7 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/types.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/routing/components/node_verifier_component.hpp"
 #include "dht_hunter/dht/routing/components/bucket_refresh_component.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"

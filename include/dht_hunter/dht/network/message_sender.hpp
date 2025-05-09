@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/dht/network/socket_manager.hpp"
 #include "dht_hunter/dht/network/message.hpp"
 #include "dht_hunter/dht/network/query_message.hpp"

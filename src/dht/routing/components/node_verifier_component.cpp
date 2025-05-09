@@ -71,13 +71,17 @@ bool NodeVerifierComponent::verifyNode(std::shared_ptr<Node> node, std::function
     }
 
     // Check if the node is already in the routing table
-    if (m_routingTable && m_routingTable->getNode(node->getID())) {
-        unified_event::logDebug("DHT.Routing." + m_name, "Node " + nodeIDToString(node->getID()) + " is already in the routing table");
+    if (m_routingTable) {
+        auto nodes = m_routingTable->getAllNodes();
+        auto it = std::find_if(nodes.begin(), nodes.end(), [&node](const auto& n) {
+            return n->getID() == node->getID();
+        });
 
-        // Update the node's last seen time
-        auto existingNode = m_routingTable->getNode(node->getID());
-        if (existingNode) {
-            existingNode->updateLastSeen();
+        if (it != nodes.end()) {
+            unified_event::logDebug("DHT.Routing." + m_name, "Node " + nodeIDToString(node->getID()) + " is already in the routing table");
+
+            // Update the node's last seen time
+            (*it)->updateLastSeen();
         }
 
         if (callback) {
@@ -251,10 +255,14 @@ bool NodeVerifierComponent::addVerifiedNode(std::shared_ptr<Node> node) {
     }
 
     // Check if we already have this node in the routing table
-    auto existingNode = m_routingTable->getNode(node->getID());
-    if (existingNode) {
+    auto nodes = m_routingTable->getAllNodes();
+    auto it = std::find_if(nodes.begin(), nodes.end(), [&node](const auto& n) {
+        return n->getID() == node->getID();
+    });
+
+    if (it != nodes.end()) {
         // Node already exists, just update its last seen time
-        existingNode->updateLastSeen();
+        (*it)->updateLastSeen();
         unified_event::logDebug("DHT.Routing." + m_name, "Updated existing node " + nodeIDToString(node->getID()) + " in routing table");
         return true;
     }

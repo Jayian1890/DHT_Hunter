@@ -3,12 +3,13 @@ add_library(dht_hunter_dht
         # Types components have been moved to the types module
 
         # Core components
-        core/dht_node.cpp
-        core/dht_event_handlers.cpp
-        core/dht_config.cpp
-        core/dht_constants.cpp
-        core/routing_table.cpp
-        core/persistence_manager.cpp
+        # The following components have been moved to utils/dht_core_utils.cpp
+        # core/dht_node.cpp
+        # core/dht_event_handlers.cpp
+        # core/dht_config.cpp
+        # core/dht_constants.cpp
+        # core/routing_table.cpp
+        # core/persistence_manager.cpp
 
         # Network components
         network/socket_manager.cpp
@@ -99,5 +100,6 @@ target_link_libraries(dht_hunter_dht
         dht_hunter_network
         dht_hunter_unified_event
         dht_hunter_bencode
+        bitscrape_utils
 )
 

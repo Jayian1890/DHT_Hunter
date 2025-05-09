@@ -1,6 +1,5 @@
 #include "dht_hunter/dht/peer_lookup/peer_lookup_response_handler.hpp"
 #include "dht_hunter/dht/peer_lookup/peer_lookup.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
 #include <algorithm>
 
@@ -17,14 +16,14 @@ PeerLookupResponseHandler::PeerLookupResponseHandler(const DHTConfig& config,
 }
 
 bool PeerLookupResponseHandler::handleResponse(
-    const std::string& /*lookupID*/, 
+    const std::string& /*lookupID*/,
     PeerLookupState& lookup,
-    std::shared_ptr<GetPeersResponse> response, 
-    const network::EndPoint& /*sender*/) {
-    
+    std::shared_ptr<GetPeersResponse> response,
+    const EndPoint& /*sender*/) {
+
     // Variables to store data we'll need after processing
     std::vector<std::shared_ptr<Node>> nodesToAdd;
-    std::vector<network::EndPoint> peersToAdd;
+    std::vector<EndPoint> peersToAdd;
     bool shouldSendQueries = false;
 
     // Get the node ID from the response
@@ -105,9 +104,9 @@ bool PeerLookupResponseHandler::handleResponse(
 
 bool PeerLookupResponseHandler::handleError(
     PeerLookupState& lookup,
-    std::shared_ptr<ErrorMessage> /*error*/, 
-    const network::EndPoint& sender) {
-    
+    std::shared_ptr<ErrorMessage> /*error*/,
+    const EndPoint& sender) {
+
     // Find the node
     auto nodeIt = std::find_if(lookup.nodes.begin(), lookup.nodes.end(),
         [&sender](const std::shared_ptr<Node>& node) {
@@ -128,9 +127,9 @@ bool PeerLookupResponseHandler::handleError(
 }
 
 bool PeerLookupResponseHandler::handleTimeout(
-    PeerLookupState& lookup, 
+    PeerLookupState& lookup,
     const NodeID& nodeID) {
-    
+
     std::string nodeIDStr = nodeIDToString(nodeID);
 
     // Remove the node from the active queries
@@ -142,9 +141,9 @@ bool PeerLookupResponseHandler::handleTimeout(
 
 bool PeerLookupResponseHandler::handleAnnounceResponse(
     PeerLookupState& lookup,
-    std::shared_ptr<AnnouncePeerResponse> response, 
-    const network::EndPoint& /*sender*/) {
-    
+    std::shared_ptr<AnnouncePeerResponse> response,
+    const EndPoint& /*sender*/) {
+
     // Get the node ID from the response
     if (!response->getNodeID()) {
         return false;
@@ -164,9 +163,9 @@ bool PeerLookupResponseHandler::handleAnnounceResponse(
 
 bool PeerLookupResponseHandler::handleAnnounceError(
     PeerLookupState& lookup,
-    std::shared_ptr<ErrorMessage> /*error*/, 
-    const network::EndPoint& sender) {
-    
+    std::shared_ptr<ErrorMessage> /*error*/,
+    const EndPoint& sender) {
+
     // Find the node
     auto nodeIt = std::find_if(lookup.nodes.begin(), lookup.nodes.end(),
         [&sender](const std::shared_ptr<Node>& node) {
@@ -189,7 +188,7 @@ bool PeerLookupResponseHandler::handleAnnounceError(
 bool PeerLookupResponseHandler::handleAnnounceTimeout(
     PeerLookupState& lookup,
     const NodeID& nodeID) {
-    
+
     std::string nodeIDStr = nodeIDToString(nodeID);
 
     // Remove the node from the active announcements

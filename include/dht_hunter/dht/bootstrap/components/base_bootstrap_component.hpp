@@ -1,16 +1,18 @@
 #pragma once
 
 #include "dht_hunter/dht/bootstrap/interfaces/bootstrap_component.hpp"
-#include "dht_hunter/dht/core/dht_config.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/unified_event/unified_event.hpp"
 #include <atomic>
 #include <mutex>
 
 namespace dht_hunter::dht::bootstrap {
 
+using dht_hunter::utils::dht_core::DHTConfig;
+
 /**
  * @brief Base class for bootstrap components
- * 
+ *
  * This class provides common functionality for all bootstrap components.
  */
 class BaseBootstrapComponent : public BootstrapComponent {

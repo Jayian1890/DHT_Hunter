@@ -1,14 +1,13 @@
 #pragma once
 
 #include "dht_hunter/dht/extensions/dht_extension.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include <memory>
 
 namespace dht_hunter::dht::extensions {
 
 /**
  * @brief Implementation of the Kademlia DHT protocol
- * 
+ *
  * Kademlia is the distributed hash table algorithm that forms the basis for most DHT implementations.
  * This is a pure implementation of the Kademlia algorithm as described in the original paper.
  */
@@ -20,9 +19,9 @@ public:
      * @param nodeID The node ID
      * @param routingTable The routing table
      */
-    KademliaDHT(const DHTConfig& config, 
+    KademliaDHT(const DHTConfig& config,
                const NodeID& nodeID,
-               std::shared_ptr<RoutingTable> routingTable);
+               std::shared_ptr<dht::RoutingTable> routingTable);
 
     /**
      * @brief Destructor
@@ -59,7 +58,7 @@ public:
     bool isInitialized() const override;
 
 private:
-    std::shared_ptr<RoutingTable> m_routingTable;
+    std::shared_ptr<dht::RoutingTable> m_routingTable;
     bool m_initialized;
 };
 

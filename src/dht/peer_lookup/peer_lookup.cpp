@@ -3,15 +3,18 @@
 #include "dht_hunter/dht/peer_lookup/peer_lookup_announce_manager.hpp"
 #include "dht_hunter/dht/peer_lookup/peer_lookup_response_handler.hpp"
 #include "dht_hunter/dht/peer_lookup/peer_lookup_utils.hpp"
-#include "dht_hunter/dht/core/routing_table.hpp"
 #include "dht_hunter/dht/transactions/transaction_manager.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/dht/storage/peer_storage.hpp"
-#include "dht_hunter/dht/core/dht_constants.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 #include <algorithm>
 #include <random>
+
+// Constants
+constexpr int LOOKUP_MAX_ITERATIONS = 10;
+constexpr int DEFAULT_MAX_RESULTS = 20;
+constexpr int DEFAULT_K_BUCKET_SIZE = 8;
 
 namespace dht_hunter::dht {
 
@@ -87,7 +90,7 @@ void PeerLookup::lookup(const InfoHash& infoHash, std::function<void(const std::
 
             // Get the closest nodes from the routing table
             if (m_routingTable) {
-                lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
+                lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), DEFAULT_MAX_RESULTS);
             }
 
             // Add the lookup
@@ -117,7 +120,7 @@ void PeerLookup::announce(const InfoHash& infoHash, uint16_t port, std::function
 
             // Get the closest nodes from the routing table
             if (m_routingTable) {
-                lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), m_config.getMaxResults());
+                lookup.nodes = m_routingTable->getClosestNodes(NodeID(infoHash), DEFAULT_MAX_RESULTS);
             }
 
             // Add the lookup
@@ -157,7 +160,7 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
             }
 
             // Check if the lookup is complete
-            if (queryManager.isLookupComplete(lookup, m_config.getKBucketSize())) {
+            if (queryManager.isLookupComplete(lookup, DEFAULT_K_BUCKET_SIZE)) {
                 if (lookup.announcing) {
                     announceToNodes(lookupID);
                 } else {
@@ -170,13 +173,13 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
             bool queriesSent = queryManager.sendQueries(
                 lookupID,
                 lookup,
-                [this, lookupID](std::shared_ptr<ResponseMessage> response, const network::EndPoint& sender) {
+                [this, lookupID](std::shared_ptr<ResponseMessage> response, const EndPoint& sender) {
                     auto getPeersResponse = std::dynamic_pointer_cast<GetPeersResponse>(response);
                     if (getPeersResponse) {
                         handleResponse(lookupID, getPeersResponse, sender);
                     }
                 },
-                [this, lookupID](std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
+                [this, lookupID](std::shared_ptr<ErrorMessage> error, const EndPoint& sender) {
                     handleError(lookupID, error, sender);
                 },
                 [this, lookupID](const NodeID& nodeID) {
@@ -185,7 +188,7 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
 
             // If no queries were sent, check if the lookup is complete
             if (!queriesSent) {
-                if (queryManager.isLookupComplete(lookup, m_config.getKBucketSize())) {
+                if (queryManager.isLookupComplete(lookup, DEFAULT_K_BUCKET_SIZE)) {
                     if (lookup.announcing) {
                         announceToNodes(lookupID);
                     } else {
@@ -199,7 +202,7 @@ void PeerLookup::sendQueries(const std::string& lookupID) {
     }
 }
 
-void PeerLookup::handleResponse(const std::string& lookupID, std::shared_ptr<GetPeersResponse> response, const network::EndPoint& sender) {
+void PeerLookup::handleResponse(const std::string& lookupID, std::shared_ptr<GetPeersResponse> response, const EndPoint& sender) {
     try {
         utility::thread::withLock(m_mutex, [this, &lookupID, &response, &sender]() {
             // Find the lookup
@@ -226,7 +229,7 @@ void PeerLookup::handleResponse(const std::string& lookupID, std::shared_ptr<Get
     }
 }
 
-void PeerLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
+void PeerLookup::handleError(const std::string& lookupID, std::shared_ptr<ErrorMessage> error, const EndPoint& sender) {
     try {
         utility::thread::withLock(m_mutex, [this, &lookupID, &error, &sender]() {
             // Find the lookup
@@ -295,7 +298,7 @@ bool PeerLookup::isLookupComplete(const std::string& lookupID) {
             PeerLookupQueryManager queryManager(m_config, m_nodeID, m_routingTable, m_transactionManager, m_messageSender);
 
             // Use the query manager to check if the lookup is complete
-            return queryManager.isLookupComplete(lookup, m_config.getKBucketSize());
+            return queryManager.isLookupComplete(lookup, DEFAULT_K_BUCKET_SIZE);
         }, "PeerLookup::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
         unified_event::logError("DHT.PeerLookup", e.what());
@@ -346,13 +349,13 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
             bool announcementsSent = announceManager.announceToNodes(
                 lookupID,
                 lookup,
-                [this, lookupID](std::shared_ptr<ResponseMessage> response, const network::EndPoint& sender) {
+                [this, lookupID](std::shared_ptr<ResponseMessage> response, const EndPoint& sender) {
                     auto announcePeerResponse = std::dynamic_pointer_cast<AnnouncePeerResponse>(response);
                     if (announcePeerResponse) {
                         handleAnnounceResponse(lookupID, announcePeerResponse, sender);
                     }
                 },
-                [this, lookupID](std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
+                [this, lookupID](std::shared_ptr<ErrorMessage> error, const EndPoint& sender) {
                     handleAnnounceError(lookupID, error, sender);
                 },
                 [this, lookupID](const std::string& nodeIDStr) {
@@ -377,7 +380,7 @@ void PeerLookup::announceToNodes(const std::string& lookupID) {
     }
 }
 
-void PeerLookup::handleAnnounceResponse(const std::string& lookupID, std::shared_ptr<AnnouncePeerResponse> response, const network::EndPoint& sender) {
+void PeerLookup::handleAnnounceResponse(const std::string& lookupID, std::shared_ptr<AnnouncePeerResponse> response, const EndPoint& sender) {
     try {
         utility::thread::withLock(m_mutex, [this, &lookupID, &response, &sender]() {
             // Find the lookup
@@ -404,7 +407,7 @@ void PeerLookup::handleAnnounceResponse(const std::string& lookupID, std::shared
     }
 }
 
-void PeerLookup::handleAnnounceError(const std::string& lookupID, std::shared_ptr<ErrorMessage> error, const network::EndPoint& sender) {
+void PeerLookup::handleAnnounceError(const std::string& lookupID, std::shared_ptr<ErrorMessage> error, const EndPoint& sender) {
     try {
         utility::thread::withLock(m_mutex, [this, &lookupID, &error, &sender]() {
             // Find the lookup
