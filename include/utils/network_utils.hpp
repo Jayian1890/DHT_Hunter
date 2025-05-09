@@ -9,6 +9,8 @@
  * - HTTP server and client
  * - Network address and endpoint
  * - NAT traversal services
+ * - DHT-specific network components (SocketManager, MessageSender, MessageHandler)
+ * - Transaction management
  */
 
 // Standard library includes
@@ -22,13 +24,41 @@
 #include <map>
 #include <unordered_map>
 #include <sys/types.h>  // for ssize_t
+#include <chrono>
+#include <random>
 
 // Project includes
 #include "utils/common_utils.hpp"
 #include "utils/system_utils.hpp"
+#include "utils/dht_core_utils.hpp"
 #include "dht_hunter/types/endpoint.hpp"
+#include "dht_hunter/types/node_id.hpp"
+#include "dht_hunter/types/info_hash.hpp"
+
+// Forward declarations
+namespace dht_hunter {
+    namespace utils {
+        namespace dht_core {
+            class DHTConfig;
+            class RoutingTable;
+        }
+        namespace common {
+            class BencodeValue;
+        }
+    }
+    namespace types {
+        class NodeID;
+        class InfoHash;
+        class EndPoint;
+    }
+}
 
 namespace dht_hunter::utils::network {
+
+// Namespace aliases for convenience
+namespace dht_core = dht_hunter::utils::dht_core;
+namespace common = dht_hunter::utils::common;
+namespace types = dht_hunter::types;
 
 //=============================================================================
 // Constants
@@ -350,6 +380,685 @@ public:
 private:
     class Impl;
     std::unique_ptr<Impl> m_impl;
+};
+
+//=============================================================================
+// DHT Socket Manager
+//=============================================================================
+
+/**
+ * @class SocketManager
+ * @brief Manages the UDP socket for a DHT node (Singleton)
+ */
+class SocketManager {
+public:
+    /**
+     * @brief Gets the singleton instance of the socket manager
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @return The singleton instance
+     */
+    static std::shared_ptr<SocketManager> getInstance(const dht_core::DHTConfig& config);
+
+    /**
+     * @brief Destructor
+     */
+    ~SocketManager();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    SocketManager(const SocketManager&) = delete;
+    SocketManager& operator=(const SocketManager&) = delete;
+    SocketManager(SocketManager&&) = delete;
+    SocketManager& operator=(SocketManager&&) = delete;
+
+    /**
+     * @brief Starts the socket manager
+     * @param receiveCallback The callback to call when data is received
+     * @return True if the socket manager was started successfully, false otherwise
+     */
+    bool start(std::function<void(const uint8_t*, size_t, const types::EndPoint&)> receiveCallback);
+
+    /**
+     * @brief Stops the socket manager
+     */
+    void stop();
+
+    /**
+     * @brief Checks if the socket manager is running
+     * @return True if the socket manager is running, false otherwise
+     */
+    bool isRunning() const;
+
+    /**
+     * @brief Gets the port
+     * @return The port
+     */
+    uint16_t getPort() const;
+
+    /**
+     * @brief Sends data to an endpoint
+     * @param data The data to send
+     * @param size The size of the data
+     * @param endpoint The endpoint to send to
+     * @return The number of bytes sent, or -1 on error
+     */
+    ssize_t sendTo(const void* data, size_t size, const types::EndPoint& endpoint);
+
+private:
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    explicit SocketManager(const dht_core::DHTConfig& config);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<SocketManager> s_instance;
+    static std::recursive_mutex s_instanceMutex;
+
+    dht_core::DHTConfig m_config;
+    uint16_t m_port;
+    std::atomic<bool> m_running;
+    std::unique_ptr<UDPSocket> m_socket;
+    std::recursive_mutex m_mutex;
+};
+
+//=============================================================================
+// DHT Message Types
+//=============================================================================
+
+/**
+ * @brief DHT message types
+ */
+enum class MessageType {
+    QUERY,
+    RESPONSE,
+    ERROR
+};
+
+/**
+ * @brief DHT query types
+ */
+enum class QueryType {
+    PING,
+    FIND_NODE,
+    GET_PEERS,
+    ANNOUNCE_PEER,
+    UNKNOWN
+};
+
+/**
+ * @brief Base class for DHT messages
+ */
+class Message {
+public:
+    /**
+     * @brief Constructor
+     * @param type The message type
+     */
+    explicit Message(MessageType type);
+
+    /**
+     * @brief Destructor
+     */
+    virtual ~Message() = default;
+
+    /**
+     * @brief Gets the message type
+     * @return The message type
+     */
+    MessageType getType() const;
+
+    /**
+     * @brief Encodes the message to a bencode dictionary
+     * @return The encoded message
+     */
+    virtual std::shared_ptr<common::BencodeValue> encode() const = 0;
+
+    /**
+     * @brief Decodes a bencode dictionary to a message
+     * @param dict The bencode dictionary
+     * @return True if the message was decoded successfully, false otherwise
+     */
+    virtual bool decode(const std::shared_ptr<common::BencodeValue>& dict) = 0;
+
+protected:
+    MessageType m_type;
+};
+
+/**
+ * @brief DHT query message
+ */
+class QueryMessage : public Message {
+public:
+    /**
+     * @brief Constructor
+     * @param queryType The query type
+     */
+    explicit QueryMessage(QueryType queryType);
+
+    /**
+     * @brief Gets the query type
+     * @return The query type
+     */
+    QueryType getQueryType() const;
+
+    /**
+     * @brief Sets the transaction ID
+     * @param transactionID The transaction ID
+     */
+    void setTransactionID(const std::string& transactionID);
+
+    /**
+     * @brief Gets the transaction ID
+     * @return The transaction ID
+     */
+    const std::string& getTransactionID() const;
+
+    /**
+     * @brief Sets the node ID
+     * @param nodeID The node ID
+     */
+    void setNodeID(const types::NodeID& nodeID);
+
+    /**
+     * @brief Gets the node ID
+     * @return The node ID
+     */
+    const types::NodeID& getNodeID() const;
+
+    /**
+     * @brief Encodes the message to a bencode dictionary
+     * @return The encoded message
+     */
+    std::shared_ptr<common::BencodeValue> encode() const override;
+
+    /**
+     * @brief Decodes a bencode dictionary to a message
+     * @param dict The bencode dictionary
+     * @return True if the message was decoded successfully, false otherwise
+     */
+    bool decode(const std::shared_ptr<common::BencodeValue>& dict) override;
+
+protected:
+    QueryType m_queryType;
+    std::string m_transactionID;
+    types::NodeID m_nodeID;
+};
+
+/**
+ * @brief DHT response message
+ */
+class ResponseMessage : public Message {
+public:
+    /**
+     * @brief Constructor
+     */
+    ResponseMessage();
+
+    /**
+     * @brief Sets the transaction ID
+     * @param transactionID The transaction ID
+     */
+    void setTransactionID(const std::string& transactionID);
+
+    /**
+     * @brief Gets the transaction ID
+     * @return The transaction ID
+     */
+    const std::string& getTransactionID() const;
+
+    /**
+     * @brief Sets the node ID
+     * @param nodeID The node ID
+     */
+    void setNodeID(const types::NodeID& nodeID);
+
+    /**
+     * @brief Gets the node ID
+     * @return The node ID
+     */
+    const types::NodeID& getNodeID() const;
+
+    /**
+     * @brief Encodes the message to a bencode dictionary
+     * @return The encoded message
+     */
+    std::shared_ptr<common::BencodeValue> encode() const override;
+
+    /**
+     * @brief Decodes a bencode dictionary to a message
+     * @param dict The bencode dictionary
+     * @return True if the message was decoded successfully, false otherwise
+     */
+    bool decode(const std::shared_ptr<common::BencodeValue>& dict) override;
+
+protected:
+    std::string m_transactionID;
+    types::NodeID m_nodeID;
+};
+
+/**
+ * @brief DHT error message
+ */
+class ErrorMessage : public Message {
+public:
+    /**
+     * @brief Constructor
+     */
+    ErrorMessage();
+
+    /**
+     * @brief Sets the transaction ID
+     * @param transactionID The transaction ID
+     */
+    void setTransactionID(const std::string& transactionID);
+
+    /**
+     * @brief Gets the transaction ID
+     * @return The transaction ID
+     */
+    const std::string& getTransactionID() const;
+
+    /**
+     * @brief Sets the error code
+     * @param code The error code
+     */
+    void setErrorCode(int code);
+
+    /**
+     * @brief Gets the error code
+     * @return The error code
+     */
+    int getErrorCode() const;
+
+    /**
+     * @brief Sets the error message
+     * @param message The error message
+     */
+    void setErrorMessage(const std::string& message);
+
+    /**
+     * @brief Gets the error message
+     * @return The error message
+     */
+    const std::string& getErrorMessage() const;
+
+    /**
+     * @brief Encodes the message to a bencode dictionary
+     * @return The encoded message
+     */
+    std::shared_ptr<common::BencodeValue> encode() const override;
+
+    /**
+     * @brief Decodes a bencode dictionary to a message
+     * @param dict The bencode dictionary
+     * @return True if the message was decoded successfully, false otherwise
+     */
+    bool decode(const std::shared_ptr<common::BencodeValue>& dict) override;
+
+protected:
+    std::string m_transactionID;
+    int m_errorCode;
+    std::string m_errorMessage;
+};
+
+//=============================================================================
+// DHT Message Sender
+//=============================================================================
+
+/**
+ * @brief Sends DHT messages (Singleton)
+ */
+class MessageSender {
+public:
+    /**
+     * @brief Gets the singleton instance of the message sender
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @param socketManager The socket manager (only used if instance doesn't exist yet)
+     * @return The singleton instance
+     */
+    static std::shared_ptr<MessageSender> getInstance(
+        const dht_core::DHTConfig& config,
+        const types::NodeID& nodeID,
+        std::shared_ptr<SocketManager> socketManager);
+
+    /**
+     * @brief Destructor
+     */
+    ~MessageSender();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    MessageSender(const MessageSender&) = delete;
+    MessageSender& operator=(const MessageSender&) = delete;
+    MessageSender(MessageSender&&) = delete;
+    MessageSender& operator=(MessageSender&&) = delete;
+
+    /**
+     * @brief Sends a query message
+     * @param query The query message
+     * @param endpoint The endpoint to send to
+     * @return True if the message was sent successfully, false otherwise
+     */
+    bool sendQuery(std::shared_ptr<QueryMessage> query, const types::EndPoint& endpoint);
+
+    /**
+     * @brief Sends a response message
+     * @param response The response message
+     * @param endpoint The endpoint to send to
+     * @return True if the message was sent successfully, false otherwise
+     */
+    bool sendResponse(std::shared_ptr<ResponseMessage> response, const types::EndPoint& endpoint);
+
+    /**
+     * @brief Sends an error message
+     * @param error The error message
+     * @param endpoint The endpoint to send to
+     * @return True if the message was sent successfully, false otherwise
+     */
+    bool sendError(std::shared_ptr<ErrorMessage> error, const types::EndPoint& endpoint);
+
+private:
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    MessageSender(
+        const dht_core::DHTConfig& config,
+        const types::NodeID& nodeID,
+        std::shared_ptr<SocketManager> socketManager);
+
+    /**
+     * @brief Sends a message
+     * @param message The message
+     * @param endpoint The endpoint to send to
+     * @return True if the message was sent successfully, false otherwise
+     */
+    bool sendMessage(std::shared_ptr<Message> message, const types::EndPoint& endpoint);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<MessageSender> s_instance;
+    static std::mutex s_instanceMutex;
+
+    dht_core::DHTConfig m_config;
+    types::NodeID m_nodeID;
+    std::shared_ptr<SocketManager> m_socketManager;
+    std::mutex m_mutex;
+};
+
+//=============================================================================
+// DHT Message Handler
+//=============================================================================
+
+/**
+ * @brief Handles DHT messages (Singleton)
+ */
+class MessageHandler {
+public:
+    /**
+     * @brief Gets the singleton instance of the message handler
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @param messageSender The message sender (only used if instance doesn't exist yet)
+     * @param routingTable The routing table (only used if instance doesn't exist yet)
+     * @return The singleton instance
+     */
+    static std::shared_ptr<MessageHandler> getInstance(
+        const dht_core::DHTConfig& config,
+        const types::NodeID& nodeID,
+        std::shared_ptr<MessageSender> messageSender,
+        std::shared_ptr<dht_core::RoutingTable> routingTable);
+
+    /**
+     * @brief Destructor
+     */
+    ~MessageHandler();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    MessageHandler(const MessageHandler&) = delete;
+    MessageHandler& operator=(const MessageHandler&) = delete;
+    MessageHandler(MessageHandler&&) = delete;
+    MessageHandler& operator=(MessageHandler&&) = delete;
+
+    /**
+     * @brief Handles a received message
+     * @param data The message data
+     * @param size The message size
+     * @param endpoint The endpoint the message was received from
+     */
+    void handleMessage(const uint8_t* data, size_t size, const types::EndPoint& endpoint);
+
+private:
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    MessageHandler(
+        const dht_core::DHTConfig& config,
+        const types::NodeID& nodeID,
+        std::shared_ptr<MessageSender> messageSender,
+        std::shared_ptr<dht_core::RoutingTable> routingTable);
+
+    /**
+     * @brief Handles a query message
+     * @param query The query message
+     * @param endpoint The endpoint the message was received from
+     */
+    void handleQuery(std::shared_ptr<QueryMessage> query, const types::EndPoint& endpoint);
+
+    /**
+     * @brief Handles a response message
+     * @param response The response message
+     * @param endpoint The endpoint the message was received from
+     */
+    void handleResponse(std::shared_ptr<ResponseMessage> response, const types::EndPoint& endpoint);
+
+    /**
+     * @brief Handles an error message
+     * @param error The error message
+     * @param endpoint The endpoint the message was received from
+     */
+    void handleError(std::shared_ptr<ErrorMessage> error, const types::EndPoint& endpoint);
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<MessageHandler> s_instance;
+    static std::mutex s_instanceMutex;
+
+    dht_core::DHTConfig m_config;
+    types::NodeID m_nodeID;
+    std::shared_ptr<MessageSender> m_messageSender;
+    std::shared_ptr<dht_core::RoutingTable> m_routingTable;
+    std::mutex m_mutex;
+};
+
+//=============================================================================
+// DHT Transaction Manager
+//=============================================================================
+
+/**
+ * @brief Callback for transaction responses
+ */
+using TransactionResponseCallback = std::function<void(std::shared_ptr<ResponseMessage>, const types::EndPoint&)>;
+
+/**
+ * @brief Callback for transaction errors
+ */
+using TransactionErrorCallback = std::function<void(std::shared_ptr<ErrorMessage>, const types::EndPoint&)>;
+
+/**
+ * @brief Callback for transaction timeouts
+ */
+using TransactionTimeoutCallback = std::function<void()>;
+
+/**
+ * @brief A transaction
+ */
+class Transaction {
+public:
+    /**
+     * @brief Constructs a transaction
+     * @param id The transaction ID
+     * @param query The query message
+     * @param endpoint The endpoint
+     * @param responseCallback The response callback
+     * @param errorCallback The error callback
+     * @param timeoutCallback The timeout callback
+     */
+    Transaction(const std::string& id,
+               std::shared_ptr<QueryMessage> query,
+               const types::EndPoint& endpoint,
+               TransactionResponseCallback responseCallback,
+               TransactionErrorCallback errorCallback,
+               TransactionTimeoutCallback timeoutCallback);
+
+    /**
+     * @brief Gets the transaction ID
+     * @return The transaction ID
+     */
+    const std::string& getID() const;
+
+    /**
+     * @brief Gets the query message
+     * @return The query message
+     */
+    std::shared_ptr<QueryMessage> getQuery() const;
+
+    /**
+     * @brief Gets the endpoint
+     * @return The endpoint
+     */
+    const types::EndPoint& getEndpoint() const;
+
+    /**
+     * @brief Gets the timestamp
+     * @return The timestamp
+     */
+    const std::chrono::steady_clock::time_point& getTimestamp() const;
+
+    /**
+     * @brief Handles a response
+     * @param response The response message
+     * @param endpoint The endpoint
+     */
+    void handleResponse(std::shared_ptr<ResponseMessage> response, const types::EndPoint& endpoint);
+
+    /**
+     * @brief Handles an error
+     * @param error The error message
+     * @param endpoint The endpoint
+     */
+    void handleError(std::shared_ptr<ErrorMessage> error, const types::EndPoint& endpoint);
+
+    /**
+     * @brief Handles a timeout
+     */
+    void handleTimeout();
+
+private:
+    std::string m_id;
+    std::shared_ptr<QueryMessage> m_query;
+    types::EndPoint m_endpoint;
+    std::chrono::steady_clock::time_point m_timestamp;
+    TransactionResponseCallback m_responseCallback;
+    TransactionErrorCallback m_errorCallback;
+    TransactionTimeoutCallback m_timeoutCallback;
+};
+
+/**
+ * @brief Manages DHT transactions (Singleton)
+ */
+class TransactionManager {
+public:
+    /**
+     * @brief Gets the singleton instance of the transaction manager
+     * @param config The DHT configuration (only used if instance doesn't exist yet)
+     * @param nodeID The node ID (only used if instance doesn't exist yet)
+     * @return The singleton instance
+     */
+    static std::shared_ptr<TransactionManager> getInstance(
+        const dht_core::DHTConfig& config,
+        const types::NodeID& nodeID);
+
+    /**
+     * @brief Destructor
+     */
+    ~TransactionManager();
+
+    /**
+     * @brief Delete copy constructor and assignment operator
+     */
+    TransactionManager(const TransactionManager&) = delete;
+    TransactionManager& operator=(const TransactionManager&) = delete;
+    TransactionManager(TransactionManager&&) = delete;
+    TransactionManager& operator=(TransactionManager&&) = delete;
+
+    /**
+     * @brief Creates a transaction
+     * @param query The query message
+     * @param endpoint The endpoint
+     * @param responseCallback The response callback
+     * @param errorCallback The error callback
+     * @param timeoutCallback The timeout callback
+     * @return The transaction ID
+     */
+    std::string createTransaction(std::shared_ptr<QueryMessage> query,
+                                 const types::EndPoint& endpoint,
+                                 TransactionResponseCallback responseCallback,
+                                 TransactionErrorCallback errorCallback,
+                                 TransactionTimeoutCallback timeoutCallback);
+
+    /**
+     * @brief Handles a response
+     * @param response The response message
+     * @param endpoint The endpoint
+     * @return True if the response was handled, false otherwise
+     */
+    bool handleResponse(std::shared_ptr<ResponseMessage> response, const types::EndPoint& endpoint);
+
+    /**
+     * @brief Handles an error
+     * @param error The error message
+     * @param endpoint The endpoint
+     * @return True if the error was handled, false otherwise
+     */
+    bool handleError(std::shared_ptr<ErrorMessage> error, const types::EndPoint& endpoint);
+
+private:
+    /**
+     * @brief Private constructor for singleton pattern
+     */
+    TransactionManager(const dht_core::DHTConfig& config, const types::NodeID& nodeID);
+
+    /**
+     * @brief Generates a random transaction ID
+     * @return The transaction ID
+     */
+    std::string generateTransactionID();
+
+    /**
+     * @brief Checks for timed out transactions
+     */
+    void checkTimeouts();
+
+    /**
+     * @brief Checks for timed out transactions periodically
+     */
+    void checkTimeoutsPeriodically();
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<TransactionManager> s_instance;
+    static std::mutex s_instanceMutex;
+
+    dht_core::DHTConfig m_config;
+    types::NodeID m_nodeID;
+    std::unordered_map<std::string, std::shared_ptr<Transaction>> m_transactions;
+    std::atomic<bool> m_running;
+    std::thread m_timeoutThread;
+    std::mutex m_mutex;
+    std::random_device m_rd;
+    std::mt19937 m_gen;
 };
 
 } // namespace dht_hunter::utils::network
