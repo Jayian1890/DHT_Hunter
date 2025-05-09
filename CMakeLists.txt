@@ -50,7 +50,8 @@ target_include_directories(dht_hunter_core INTERFACE
 
 # Set up precompiled header
 target_precompile_headers(dht_hunter_core INTERFACE
-  ${CMAKE_SOURCE_DIR}/include/dht_hunter/utility/common/common_utils.hpp
+  ${CMAKE_SOURCE_DIR}/include/common.hpp
+  ${CMAKE_SOURCE_DIR}/include/utils/utility.hpp
 )
 
 # Add subdirectories

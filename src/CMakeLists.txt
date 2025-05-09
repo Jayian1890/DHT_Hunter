@@ -1,6 +1,7 @@
 # Add all components in the correct dependency order
+add_subdirectory(utils)     # Consolidated utility functions
 add_subdirectory(types)     # Types component
-add_subdirectory(utility)   # Utility functions
+add_subdirectory(utility)   # Utility functions (legacy)
 add_subdirectory(network)   # Network component
 add_subdirectory(bencode)   # Bencode component
 add_subdirectory(dht)       # DHT component

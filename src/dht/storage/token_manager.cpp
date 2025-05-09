@@ -1,8 +1,7 @@
 #include "dht_hunter/dht/storage/token_manager.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
-#include "dht_hunter/utility/hash/hash_utils.hpp"
 #include "dht_hunter/utility/random/random_utils.hpp"
-#include "dht_hunter/utility/string/string_utils.hpp"
+#include "utils/utility.hpp"
 #include <random>
 #include <sstream>
 #include <iomanip>

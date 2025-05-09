@@ -1,6 +1,5 @@
 #include "dht_hunter/bittorrent/metadata/dht_metadata_provider.hpp"
 #include "dht_hunter/utility/metadata/metadata_utils.hpp"
-#include "dht_hunter/utility/hash/hash_utils.hpp"
 #include "dht_hunter/utility/random/random_utils.hpp"
 #include "dht_hunter/bencode/bencode.hpp"
 #include "dht_hunter/dht/network/message_sender.hpp"
@@ -8,6 +7,7 @@
 #include "dht_hunter/dht/network/response_message.hpp"
 #include "dht_hunter/dht/network/error_message.hpp"
 #include "dht_hunter/dht/transactions/components/transaction_manager.hpp"
+#include "utils/utility.hpp"
 #include <chrono>
 #include <thread>
 #include <algorithm>

@@ -1,25 +1,10 @@
-# Utility library
+# Utility library (legacy components)
 add_library(dht_hunter_utility
         # Common utilities
         common/common_utils.cpp
 
-        # String utilities
-        string/string_utils.cpp
-
         # Random utilities
         random/random_utils.cpp
-
-        # Node utilities
-        node/node_utils.cpp
-
-        # Hash utilities
-        hash/hash_utils.cpp
-
-        # Filesystem utilities
-        filesystem/filesystem_utils.cpp
-
-        # File utilities
-        file/file_utils.cpp
 
         # Thread utilities
         thread/thread_pool.cpp
@@ -31,14 +16,8 @@ add_library(dht_hunter_utility
         # System utilities
         system/memory_utils.cpp
 
-        # Network utilities
-        network/network_utils.cpp
-
         # JSON utilities
         json/json.cpp
-
-        # Metadata utilities
-        metadata/metadata_utils.cpp
 
         # Configuration utilities
         config/configuration_manager.cpp
@@ -60,6 +39,7 @@ target_compile_features(dht_hunter_utility
 target_link_libraries(dht_hunter_utility
         PUBLIC
         dht_hunter_types
+        bitscrape_utils
 )
 
 # Export the library

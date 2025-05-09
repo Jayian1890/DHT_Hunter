@@ -1,9 +1,8 @@
 #include "dht_hunter/bittorrent/metadata/metadata_exchange.hpp"
 #include "dht_hunter/types/info_hash_metadata.hpp"
 #include "dht_hunter/utility/metadata/metadata_utils.hpp"
-#include "dht_hunter/utility/string/string_utils.hpp"
-#include "dht_hunter/utility/hash/hash_utils.hpp"
 #include "dht_hunter/utility/network/network_utils.hpp"
+#include "utils/utility.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -997,8 +996,8 @@ bool MetadataExchange::processCompleteMetadata(std::shared_ptr<PeerConnection> c
         }
 
         // Verify the info hash
-        std::array<uint8_t, 20> hash = utility::hash::sha1(completeMetadata);
-        if (std::memcmp(hash.data(), connection->infoHash.data(), 20) != 0) {
+        std::vector<uint8_t> hashVec = utility::hash::sha1(completeMetadata);
+        if (hashVec.size() != 20 || std::memcmp(hashVec.data(), connection->infoHash.data(), 20) != 0) {
             unified_event::logWarning("BitTorrent.MetadataExchange", "Metadata hash mismatch");
             return false;
         }

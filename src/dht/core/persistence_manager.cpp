@@ -1,7 +1,7 @@
 #include "dht_hunter/dht/core/persistence_manager.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
 
-#include "dht_hunter/utility/hash/hash_utils.hpp"
+#include "utils/utility.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>

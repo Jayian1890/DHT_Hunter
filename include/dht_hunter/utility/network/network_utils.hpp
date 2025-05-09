@@ -1,13 +1,13 @@
 #pragma once
 
-#include <string>
-
-namespace dht_hunter::utility::network {
-
 /**
- * @brief Gets the user agent string from the configuration
- * @return The user agent string
+ * @file network_utils.hpp
+ * @brief Legacy network utilities header that forwards to the new consolidated utilities
+ *
+ * This file provides backward compatibility for legacy code that still includes
+ * the old network utilities header. It forwards to the new consolidated utilities.
+ *
+ * @deprecated Use utils/domain_utils.hpp instead
  */
-std::string getUserAgent();
 
-} // namespace dht_hunter::utility::network
+#include "dht_hunter/utility/legacy_utils.hpp"

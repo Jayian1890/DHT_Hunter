@@ -2,8 +2,8 @@
 
 #include "dht_hunter/bencode/bencode.hpp"
 #include "dht_hunter/types/info_hash.hpp"
-#include "dht_hunter/utility/file/file_utils.hpp"
 #include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
+#include "utils/utility.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
