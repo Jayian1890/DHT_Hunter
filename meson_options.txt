@@ -1,0 +1,4 @@
+option('enable_asan', type: 'boolean', value: false, description: 'Enable AddressSanitizer for memory debugging')
+option('build_tests', type: 'boolean', value: true, description: 'Build test executables')
+option('build_app_bundle', type: 'boolean', value: true, description: 'Build macOS app bundle (macOS only)')
+option('web_root', type: 'string', value: 'web', description: 'Path to web root directory')
