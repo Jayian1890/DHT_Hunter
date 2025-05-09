@@ -66,15 +66,17 @@ This document captures the current state of the BitScrape optimization project t
   - Documented legacy code removal in `docs/inprogress/legacy_code_removal_summary_part3.md`
 
 - 🔄 **Phase 3: Core Module Consolidation** (In Progress)
-  - **Phase 3.1: DHT Core Components Consolidation** (In Progress)
+  - ✅ **Phase 3.1: DHT Core Components Consolidation** (Completed)
     - ✅ Analyze DHT core components and their dependencies
     - ✅ Create consolidated header file `include/utils/dht_core_utils.hpp`
     - ✅ Create consolidated implementation file `src/utils/dht_core_utils.cpp`
     - ✅ Merge routing table, DHT node, and DHT configuration components
     - ✅ Create test program to verify consolidated components
     - ✅ Document changes in `docs/inprogress/phase3_summary_part1.md`
-    - 🔄 Update references to use the new consolidated utilities
-    - 🔄 Remove legacy implementation files
+    - ✅ Update references to use the new consolidated utilities
+    - ✅ Add support for metadata acquisition through the DHT
+    - ✅ Make DHTNode constructor and key methods public
+    - ✅ Implement findNodesWithMetadata method in DHTNode class
   - **Phase 3.2: Network Components Consolidation** (Not Started)
     - Analyze network components and their dependencies
     - Create consolidated header file `include/utils/network_utils.hpp`
@@ -187,21 +189,7 @@ src/
 
 The next immediate steps are:
 
-1. Complete Phase 3.1: DHT Core Components Consolidation
-   - Update references throughout the codebase to use the new consolidated utilities:
-     - Replace includes of original header files with `include/utils/dht_core_utils.hpp`
-     - Update class and function references to use the consolidated components
-   - Test the updated references to ensure everything works correctly
-   - Remove legacy implementation files after successful consolidation:
-     - `include/dht_hunter/dht/core/dht_node.hpp` and `src/dht/core/dht_node.cpp`
-     - `include/dht_hunter/dht/core/routing_table.hpp` and `src/dht/core/routing_table.cpp`
-     - `include/dht_hunter/dht/core/dht_config.hpp` and `src/dht/core/dht_config.cpp`
-     - `include/dht_hunter/dht/core/persistence_manager.hpp` and `src/dht/core/persistence_manager.cpp`
-     - `include/dht_hunter/dht/core/dht_constants.hpp` and `src/dht/core/dht_constants.cpp`
-   - Update the CMake configuration to remove references to the removed files
-   - Document the legacy code removal in `docs/inprogress/legacy_code_removal_summary_part4.md`
-
-2. Proceed to Phase 3.2: Network Components Consolidation
+1. Proceed to Phase 3.2: Network Components Consolidation
    - Analyze network components and their dependencies:
      - `MessageHandler` and message processing
      - `MessageSender` and message creation
@@ -216,6 +204,21 @@ The next immediate steps are:
    - Test the consolidated components thoroughly
    - Remove legacy implementation files after successful consolidation
    - Document the changes and improvements in `docs/inprogress/phase3_summary_part2.md`
+
+2. Proceed to Phase 3.3: Event System Components Consolidation
+   - Analyze event system components and their dependencies:
+     - `EventBus` and event distribution
+     - Event processors and handlers
+     - Event adapters for different subsystems
+   - Create the consolidated event utilities module:
+     - Create `include/utils/event_utils.hpp` header file
+     - Create `src/utils/event_utils.cpp` implementation file
+   - Consolidate the event system components
+   - Create a test program to verify the consolidated components
+   - Update references throughout the codebase to use the new consolidated utilities
+   - Test the consolidated components thoroughly
+   - Remove legacy implementation files after successful consolidation
+   - Document the changes and improvements in `docs/inprogress/phase3_summary_part3.md`
 
 3. Proceed to Phase 3.3: Event System Components Consolidation
    - Analyze event system components and their dependencies:
@@ -264,12 +267,17 @@ Based on previous interactions, the user prefers:
 ## Recent Changes
 
 Recent significant changes to the codebase include:
-- Progress on Phase 3.1: DHT Core Components Consolidation
+- Completion of Phase 3.1: DHT Core Components Consolidation
   - Creation of consolidated DHT core utilities module in `include/utils/dht_core_utils.hpp` and `src/utils/dht_core_utils.cpp`
   - Consolidation of DHT constants, DHTConfig, RoutingTable, KBucket, DHTNode, and PersistenceManager classes
   - Implementation of thread-safe singleton pattern for all components
-  - Creation of test program to verify consolidated components
-  - Documentation of changes in `docs/inprogress/phase3_summary_part1.md`
+  - Made DHTNode constructor and key methods public
+  - Added support for metadata acquisition through the DHT
+  - Implemented findNodesWithMetadata method in DHTNode class
+  - Updated application_controller.cpp to work with the new DHTNode and DHTConfig classes
+  - Fixed build issues related to missing DHT constants
+  - Fixed metadata acquisition in the DHTMetadataProvider
+  - Documentation of changes in `docs/changes/dht_core_refactoring.md` and `docs/technical/dht_core_implementation.md`
 - Completion of Phase 2.4: Consolidation of system utilities
   - Consolidation of thread, process, and memory utilities into system_utils module
   - Removal of legacy thread, process, and memory utility implementation files
