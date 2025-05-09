@@ -13,12 +13,13 @@ dht_hunter_bittorrent_sources = [
 ]
 
 bittorrent_deps = [
-  dht_hunter_core_dep,
   dht_hunter_types_dep,
   dht_hunter_utility_dep,
   dht_hunter_network_dep,
   dht_hunter_dht_dep,
   dht_hunter_bencode_dep,
+  fmt_dep,
+  thread_dep,
 ]
 
 dht_hunter_bittorrent_lib = library('dht_hunter_bittorrent',

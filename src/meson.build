@@ -17,12 +17,21 @@ endif
 # Create two targets: one regular executable and one .app bundle
 
 # Regular executable (non-.app)
-bitscrape_cli = executable('bitscrape_cli',
+executable('bitscrape_cli',
   'main.cpp',
   install: true,
   install_dir: get_option('bindir'),
   dependencies: [
     dht_hunter_core_impl_dep,
+    dht_hunter_types_dep,
+    dht_hunter_utility_dep,
+    dht_hunter_network_dep,
+    dht_hunter_bencode_dep,
+    dht_hunter_dht_dep,
+    dht_hunter_bittorrent_dep,
+    dht_hunter_unified_event_dep,
+    dht_hunter_web_dep,
+    bitscrape_utils_dep,
     thread_dep,
     fmt_dep,
     curl_dep,
@@ -38,10 +47,19 @@ if is_macos and get_option('build_app_bundle')
   app_icon_macosx = meson.project_source_root() / 'resources/macos/AppIcon.icns'
 
   # Create the .app bundle executable
-  bitscrape_app = executable('BitScrape',
+  app_executable = executable('BitScrape',
     'main.cpp',
     dependencies: [
       dht_hunter_core_impl_dep,
+      dht_hunter_types_dep,
+      dht_hunter_utility_dep,
+      dht_hunter_network_dep,
+      dht_hunter_bencode_dep,
+      dht_hunter_dht_dep,
+      dht_hunter_bittorrent_dep,
+      dht_hunter_unified_event_dep,
+      dht_hunter_web_dep,
+      bitscrape_utils_dep,
       thread_dep,
       fmt_dep,
       curl_dep,
@@ -54,7 +72,7 @@ if is_macos and get_option('build_app_bundle')
 
   # Custom target to create app bundle structure
   custom_target('app_bundle',
-    input: bitscrape_app,
+    input: app_executable,
     output: 'BitScrape.app',
     command: [
       'mkdir', '-p', '@OUTPUT@/Contents/MacOS', '@OUTPUT@/Contents/Resources',
@@ -71,6 +89,15 @@ else
     'main.cpp',
     dependencies: [
       dht_hunter_core_impl_dep,
+      dht_hunter_types_dep,
+      dht_hunter_utility_dep,
+      dht_hunter_network_dep,
+      dht_hunter_bencode_dep,
+      dht_hunter_dht_dep,
+      dht_hunter_bittorrent_dep,
+      dht_hunter_unified_event_dep,
+      dht_hunter_web_dep,
+      bitscrape_utils_dep,
       thread_dep,
       fmt_dep,
       curl_dep,

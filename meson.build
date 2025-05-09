@@ -48,9 +48,31 @@ endif
 # Create a common include directory variable
 inc_dirs = include_directories('include')
 
-# Simple executable for initial testing
+# Find all source files recursively
+all_sources = []
+subdir_list = [
+  'src/types',
+  'src/utility',
+  'src/utils',
+  'src/network',
+  'src/bencode',
+  'src/dht',
+  'src/bittorrent',
+  'src/unified_event',
+  'src/web',
+  'src/core'
+]
+
+foreach subdir : subdir_list
+  subdir_sources = run_command('find', subdir, '-name', '*.cpp', check: false).stdout().strip().split('\n')
+  if subdir_sources[0] != ''
+    all_sources += subdir_sources
+  endif
+endforeach
+
+# Create a single executable with all sources
 executable('bitscrape_cli',
-  'src/main.cpp',
+  ['src/main.cpp'] + all_sources,
   include_directories: inc_dirs,
   dependencies: [
     thread_dep,
@@ -63,11 +85,38 @@ executable('bitscrape_cli',
   install_dir: get_option('bindir'),
 )
 
-# Installation
-if is_macos
-  # macOS app bundle installation
-  install_data(
-    'resources/macos/AppIcon.icns',
-    install_dir: join_paths(get_option('datadir'), 'BitScrape.app/Contents/Resources')
+# Create macOS app bundle if requested
+if is_macos and get_option('build_app_bundle')
+  # Set the icon file path
+  app_icon_macosx = meson.project_source_root() / 'resources/macos/AppIcon.icns'
+
+  # Create the .app bundle executable
+  app_executable = executable('BitScrape',
+    ['src/main.cpp'] + all_sources,
+    include_directories: inc_dirs,
+    dependencies: [
+      thread_dep,
+      fmt_dep,
+      curl_dep,
+      platform_deps,
+    ],
+    install: true,
+    install_dir: get_option('bindir'),
+  )
+
+  # Custom target to create app bundle structure
+  custom_target('app_bundle',
+    input: app_executable,
+    output: 'BitScrape.app',
+    command: [
+      'mkdir', '-p', '@OUTPUT@/Contents/MacOS', '@OUTPUT@/Contents/Resources',
+      '&&', 'cp', '@INPUT@', '@OUTPUT@/Contents/MacOS/',
+      '&&', 'cp', app_icon_macosx, '@OUTPUT@/Contents/Resources/AppIcon.icns',
+    ],
+    build_by_default: true,
+    install: true,
+    install_dir: get_option('bindir'),
   )
 endif
+
+

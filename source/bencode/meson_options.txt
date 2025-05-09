@@ -1,0 +1,2 @@
+option('enable_asan', type : 'boolean', value : false, description : 'Enable AddressSanitizer for memory debugging')
+option('build_examples', type : 'boolean', value : true, description : 'Build example applications')

@@ -1,9 +1,9 @@
 #include "dht_hunter/types/info_hash_metadata.hpp"
 #include "dht_hunter/utility/thread/thread_utils.hpp"
-#include "dht_hunter/unified_event/adapters/logger_adapter.hpp"
 
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 
 namespace dht_hunter::types {
 
@@ -185,7 +185,7 @@ InfoHashMetadataRegistry::~InfoHashMetadataRegistry() {
             }
         }, "InfoHashMetadataRegistry::s_instanceMutex");
     } catch (const utility::thread::LockTimeoutException& e) {
-        unified_event::logError("Types.InfoHashMetadataRegistry", e.what());
+        std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
     }
 }
 
@@ -198,7 +198,7 @@ std::shared_ptr<InfoHashMetadataRegistry> InfoHashMetadataRegistry::getInstance(
             return s_instance;
         }, "InfoHashMetadataRegistry::s_instanceMutex");
     } catch (const utility::thread::LockTimeoutException& e) {
-        unified_event::logError("Types.InfoHashMetadataRegistry", e.what());
+        std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return nullptr;
     }
 }
@@ -211,7 +211,7 @@ void InfoHashMetadataRegistry::registerMetadata(const InfoHashMetadata& metadata
             m_metadata[infoHash] = metadataPtr;
         }, "InfoHashMetadataRegistry::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
-        unified_event::logError("Types.InfoHashMetadataRegistry", e.what());
+        std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
     }
 }
 
@@ -225,7 +225,7 @@ std::shared_ptr<InfoHashMetadata> InfoHashMetadataRegistry::getMetadata(const In
             return nullptr;
         }, "InfoHashMetadataRegistry::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
-        unified_event::logError("Types.InfoHashMetadataRegistry", e.what());
+        std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return nullptr;
     }
 }
@@ -241,7 +241,7 @@ std::vector<std::shared_ptr<InfoHashMetadata>> InfoHashMetadataRegistry::getAllM
             return result;
         }, "InfoHashMetadataRegistry::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
-        unified_event::logError("Types.InfoHashMetadataRegistry", e.what());
+        std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return {};
     }
 }
@@ -276,7 +276,7 @@ std::vector<uint8_t> InfoHashMetadataRegistry::serializeAll() const {
             return result;
         }, "InfoHashMetadataRegistry::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
-        unified_event::logError("Types.InfoHashMetadataRegistry", e.what());
+        std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return {};
     }
 }
@@ -333,7 +333,7 @@ bool InfoHashMetadataRegistry::deserializeAll(const std::vector<uint8_t>& data) 
             return true;
         }, "InfoHashMetadataRegistry::m_mutex");
     } catch (const utility::thread::LockTimeoutException& e) {
-        unified_event::logError("Types.InfoHashMetadataRegistry", e.what());
+        std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return false;
     }
 }

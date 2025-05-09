@@ -11,7 +11,8 @@ bitscrape_utils_lib = library('bitscrape_utils',
   bitscrape_utils_sources,
   include_directories: inc_dirs,
   dependencies: [
-    dht_hunter_core_dep,
+    thread_dep,
+    fmt_dep,
   ],
   install: true,
 )

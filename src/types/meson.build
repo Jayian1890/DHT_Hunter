@@ -14,7 +14,6 @@ dht_hunter_types_lib = library('dht_hunter_types',
   dht_hunter_types_sources,
   include_directories: inc_dirs,
   dependencies: [
-    dht_hunter_core_dep,
     fmt_dep,
   ],
   install: true,
