@@ -688,6 +688,317 @@ private:
     std::shared_ptr<dht::PeerStorage> m_peerStorage;
 };
 
+//=============================================================================
+// Node Lookup
+//=============================================================================
+
+/**
+ * @brief A lookup state for node lookups
+ */
+struct NodeLookupState {
+    types::NodeID targetID;
+    std::vector<std::shared_ptr<types::Node>> nodes;
+    std::unordered_set<std::string> queriedNodes;
+    std::unordered_set<std::string> respondedNodes;
+    std::unordered_set<std::string> activeQueries;
+    size_t iteration;
+    std::function<void(const std::vector<std::shared_ptr<types::Node>>&)> callback;
+
+    /**
+     * @brief Constructor
+     * @param targetID The target ID
+     * @param callback The callback function
+     */
+    NodeLookupState(const types::NodeID& targetID,
+                   std::function<void(const std::vector<std::shared_ptr<types::Node>>&)> callback)
+        : targetID(targetID), iteration(0), callback(callback) {}
+};
+
+/**
+ * @brief Performs a node lookup
+ */
+class NodeLookup {
+public:
+    /**
+     * @brief Gets the singleton instance
+     * @param config The DHT configuration
+     * @param nodeID The node ID
+     * @param routingTable The routing table
+     * @return The singleton instance
+     */
+    static std::shared_ptr<NodeLookup> getInstance(
+        const DHTConfig& config,
+        const types::NodeID& nodeID,
+        std::shared_ptr<RoutingTable> routingTable);
+
+    /**
+     * @brief Destructor
+     */
+    ~NodeLookup();
+
+    /**
+     * @brief Performs a node lookup
+     * @param targetID The target ID
+     * @param callback The callback to call with the result
+     */
+    void lookup(const types::NodeID& targetID,
+               std::function<void(const std::vector<std::shared_ptr<types::Node>>&)> callback);
+
+    /**
+     * @brief Handles a find_node response
+     * @param lookupID The lookup ID
+     * @param response The response
+     * @param sender The sender
+     */
+    void handleResponse(const std::string& lookupID,
+                       const std::vector<std::shared_ptr<types::Node>>& nodes,
+                       const types::EndPoint& sender);
+
+    /**
+     * @brief Handles an error
+     * @param lookupID The lookup ID
+     * @param sender The sender
+     */
+    void handleError(const std::string& lookupID, const types::EndPoint& sender);
+
+    /**
+     * @brief Handles a timeout
+     * @param lookupID The lookup ID
+     * @param nodeID The node ID
+     */
+    void handleTimeout(const std::string& lookupID, const types::NodeID& nodeID);
+
+private:
+    /**
+     * @brief Constructor
+     * @param config The DHT configuration
+     * @param nodeID The node ID
+     * @param routingTable The routing table
+     */
+    NodeLookup(const DHTConfig& config,
+              const types::NodeID& nodeID,
+              std::shared_ptr<RoutingTable> routingTable);
+
+    /**
+     * @brief Sends queries for a lookup
+     * @param lookupID The lookup ID
+     */
+    void sendQueries(const std::string& lookupID);
+
+    /**
+     * @brief Checks if a lookup is complete
+     * @param lookupID The lookup ID
+     * @return True if the lookup is complete, false otherwise
+     */
+    bool isLookupComplete(const std::string& lookupID);
+
+    /**
+     * @brief Completes a lookup
+     * @param lookupID The lookup ID
+     */
+    void completeLookup(const std::string& lookupID);
+
+    /**
+     * @brief Generates a lookup ID
+     * @param targetID The target ID
+     * @return The lookup ID
+     */
+    std::string generateLookupID(const types::NodeID& targetID) const;
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<NodeLookup> s_instance;
+    static std::mutex s_instanceMutex;
+
+    DHTConfig m_config;
+    types::NodeID m_nodeID;
+    std::shared_ptr<RoutingTable> m_routingTable;
+    std::unordered_map<std::string, NodeLookupState> m_lookups;
+    mutable std::mutex m_mutex;
+};
+
+//=============================================================================
+// Peer Lookup
+//=============================================================================
+
+/**
+ * @brief A lookup state for peer lookups
+ */
+struct PeerLookupState {
+    types::InfoHash infoHash;
+    std::vector<std::shared_ptr<types::Node>> nodes;
+    std::vector<types::EndPoint> peers;
+    std::unordered_set<std::string> queriedNodes;
+    std::unordered_set<std::string> respondedNodes;
+    std::unordered_set<std::string> activeQueries;
+    std::unordered_map<std::string, std::string> nodeTokens;
+    std::unordered_set<std::string> announcedNodes;
+    std::unordered_set<std::string> activeAnnouncements;
+    size_t iteration;
+    uint16_t port;
+    std::function<void(const std::vector<types::EndPoint>&)> lookupCallback;
+    std::function<void(bool)> announceCallback;
+    bool announcing;
+
+    /**
+     * @brief Constructor for lookup
+     * @param infoHash The info hash
+     * @param callback The callback function
+     */
+    PeerLookupState(const types::InfoHash& infoHash,
+                   std::function<void(const std::vector<types::EndPoint>&)> callback)
+        : infoHash(infoHash), iteration(0), port(0), lookupCallback(callback), announcing(false) {}
+
+    /**
+     * @brief Constructor for announce
+     * @param infoHash The info hash
+     * @param port The port
+     * @param callback The callback function
+     */
+    PeerLookupState(const types::InfoHash& infoHash,
+                   uint16_t port,
+                   std::function<void(bool)> callback)
+        : infoHash(infoHash), iteration(0), port(port), announceCallback(callback), announcing(true) {}
+};
+
+/**
+ * @brief Performs a peer lookup
+ */
+class PeerLookup {
+public:
+    /**
+     * @brief Gets the singleton instance
+     * @param config The DHT configuration
+     * @param nodeID The node ID
+     * @param routingTable The routing table
+     * @return The singleton instance
+     */
+    static std::shared_ptr<PeerLookup> getInstance(
+        const DHTConfig& config,
+        const types::NodeID& nodeID,
+        std::shared_ptr<RoutingTable> routingTable);
+
+    /**
+     * @brief Destructor
+     */
+    ~PeerLookup();
+
+    /**
+     * @brief Performs a peer lookup
+     * @param infoHash The info hash
+     * @param callback The callback to call with the result
+     */
+    void lookup(const types::InfoHash& infoHash,
+               std::function<void(const std::vector<types::EndPoint>&)> callback);
+
+    /**
+     * @brief Announces a peer
+     * @param infoHash The info hash
+     * @param port The port
+     * @param callback The callback to call with the result
+     */
+    void announce(const types::InfoHash& infoHash,
+                 uint16_t port,
+                 std::function<void(bool)> callback);
+
+    /**
+     * @brief Handles a get_peers response
+     * @param lookupID The lookup ID
+     * @param nodes The nodes
+     * @param peers The peers
+     * @param token The token
+     * @param sender The sender
+     */
+    void handleGetPeersResponse(const std::string& lookupID,
+                              const std::vector<std::shared_ptr<types::Node>>& nodes,
+                              const std::vector<types::EndPoint>& peers,
+                              const std::string& token,
+                              const types::EndPoint& sender);
+
+    /**
+     * @brief Handles an announce_peer response
+     * @param lookupID The lookup ID
+     * @param sender The sender
+     */
+    void handleAnnouncePeerResponse(const std::string& lookupID,
+                                  const types::EndPoint& sender);
+
+    /**
+     * @brief Handles an error
+     * @param lookupID The lookup ID
+     * @param sender The sender
+     */
+    void handleError(const std::string& lookupID,
+                    const types::EndPoint& sender);
+
+    /**
+     * @brief Handles a timeout
+     * @param lookupID The lookup ID
+     * @param nodeID The node ID
+     */
+    void handleTimeout(const std::string& lookupID,
+                      const types::NodeID& nodeID);
+
+private:
+    /**
+     * @brief Constructor
+     * @param config The DHT configuration
+     * @param nodeID The node ID
+     * @param routingTable The routing table
+     */
+    PeerLookup(const DHTConfig& config,
+              const types::NodeID& nodeID,
+              std::shared_ptr<RoutingTable> routingTable);
+
+    /**
+     * @brief Sends queries for a lookup
+     * @param lookupID The lookup ID
+     */
+    void sendQueries(const std::string& lookupID);
+
+    /**
+     * @brief Sends announcements for a lookup
+     * @param lookupID The lookup ID
+     */
+    void sendAnnouncements(const std::string& lookupID);
+
+    /**
+     * @brief Checks if a lookup is complete
+     * @param lookupID The lookup ID
+     * @return True if the lookup is complete, false otherwise
+     */
+    bool isLookupComplete(const std::string& lookupID);
+
+    /**
+     * @brief Completes a lookup
+     * @param lookupID The lookup ID
+     */
+    void completeLookup(const std::string& lookupID);
+
+    /**
+     * @brief Completes an announcement
+     * @param lookupID The lookup ID
+     * @param success Whether the announcement was successful
+     */
+    void completeAnnouncement(const std::string& lookupID, bool success);
+
+    /**
+     * @brief Generates a lookup ID
+     * @param infoHash The info hash
+     * @return The lookup ID
+     */
+    std::string generateLookupID(const types::InfoHash& infoHash) const;
+
+    // Static instance for singleton pattern
+    static std::shared_ptr<PeerLookup> s_instance;
+    static std::mutex s_instanceMutex;
+
+    DHTConfig m_config;
+    types::NodeID m_nodeID;
+    std::shared_ptr<RoutingTable> m_routingTable;
+    std::unordered_map<std::string, PeerLookupState> m_lookups;
+    mutable std::mutex m_mutex;
+};
+
 } // namespace dht_hunter::utils::dht_core
 
 // Forward declarations for DHT components
@@ -702,8 +1013,6 @@ namespace dht_hunter::dht {
     class PeerStorage;
     class TransactionManager;
     class RoutingManager;
-    class NodeLookup;
-    class PeerLookup;
     class Bootstrapper;
     class Crawler;
 }
@@ -715,6 +1024,10 @@ namespace dht_hunter::dht {
     using dht_hunter::utils::dht_core::RoutingTable;
     using dht_hunter::utils::dht_core::DHTNode;
     using dht_hunter::utils::dht_core::PersistenceManager;
+    using dht_hunter::utils::dht_core::NodeLookup;
+    using dht_hunter::utils::dht_core::NodeLookupState;
+    using dht_hunter::utils::dht_core::PeerLookup;
+    using dht_hunter::utils::dht_core::PeerLookupState;
 
     // Constants
     using dht_hunter::utils::dht_core::MAX_PEERS_PER_INFOHASH;

@@ -1039,4 +1039,805 @@ void DHTNode::findNodesWithMetadata(
     callback(nodes);
 }
 
+//=============================================================================
+// NodeLookup Implementation
+//=============================================================================
+
+// Initialize static members
+std::shared_ptr<NodeLookup> NodeLookup::s_instance = nullptr;
+std::mutex NodeLookup::s_instanceMutex;
+
+std::shared_ptr<NodeLookup> NodeLookup::getInstance(
+    const DHTConfig& config,
+    const types::NodeID& nodeID,
+    std::shared_ptr<RoutingTable> routingTable) {
+
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (!s_instance) {
+        s_instance = std::shared_ptr<NodeLookup>(new NodeLookup(config, nodeID, routingTable));
+    }
+    return s_instance;
+}
+
+NodeLookup::NodeLookup(const DHTConfig& config,
+                     const types::NodeID& nodeID,
+                     std::shared_ptr<RoutingTable> routingTable)
+    : m_config(config), m_nodeID(nodeID), m_routingTable(routingTable) {
+}
+
+NodeLookup::~NodeLookup() {
+    // Note: We don't clear the singleton instance here to avoid mutex issues
+    // during program termination. The instance will be cleaned up by the OS.
+}
+
+void NodeLookup::lookup(const types::NodeID& targetID,
+                      std::function<void(const std::vector<std::shared_ptr<types::Node>>&)> callback) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Generate a lookup ID
+        std::string lookupID = generateLookupID(targetID);
+
+        // Check if a lookup with this ID already exists
+        if (m_lookups.find(lookupID) != m_lookups.end()) {
+            return;
+        }
+
+        // Create a new lookup
+        NodeLookupState lookup(targetID, callback);
+
+        // Get the closest nodes from the routing table
+        if (m_routingTable) {
+            lookup.nodes = m_routingTable->getClosestNodes(targetID, 20);
+        }
+
+        // Add the lookup
+        m_lookups.emplace(lookupID, lookup);
+
+        // Send queries
+        sendQueries(lookupID);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.NodeLookup", e.what());
+    }
+}
+
+void NodeLookup::sendQueries(const std::string& lookupID) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Check if the lookup is complete
+        if (isLookupComplete(lookupID)) {
+            completeLookup(lookupID);
+            return;
+        }
+
+        // Sort nodes by distance to target
+        std::sort(lookup.nodes.begin(), lookup.nodes.end(),
+            [&lookup](const std::shared_ptr<types::Node>& a, const std::shared_ptr<types::Node>& b) {
+                types::NodeID distanceA = a->getID().distanceTo(lookup.targetID);
+                types::NodeID distanceB = b->getID().distanceTo(lookup.targetID);
+                return distanceA < distanceB;
+            });
+
+        // Send queries to the closest nodes that haven't been queried yet
+        size_t queriesSent = 0;
+        for (const auto& node : lookup.nodes) {
+            // Skip nodes that have already been queried
+            std::string nodeIDStr = node->getID().toString();
+            if (lookup.queriedNodes.find(nodeIDStr) != lookup.queriedNodes.end()) {
+                continue;
+            }
+
+            // Add the node to the queried nodes
+            lookup.queriedNodes.insert(nodeIDStr);
+
+            // Add the node to the active queries
+            lookup.activeQueries.insert(nodeIDStr);
+
+            // TODO: Send the query
+            // This would normally call the message sender to send a find_node query
+
+            queriesSent++;
+
+            // Stop if we've sent enough queries
+            if (queriesSent >= 3) { // Alpha value
+                break;
+            }
+        }
+
+        // Increment the iteration counter
+        lookup.iteration++;
+
+        // If no queries were sent and there are no active queries, complete the lookup
+        if (queriesSent == 0 && lookup.activeQueries.empty()) {
+            completeLookup(lookupID);
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.NodeLookup", e.what());
+    }
+}
+
+void NodeLookup::handleResponse(const std::string& lookupID,
+                              const std::vector<std::shared_ptr<types::Node>>& nodes,
+                              const types::EndPoint& sender) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Find the node that sent the response
+        std::string senderIDStr;
+        for (const auto& node : lookup.nodes) {
+            if (node->getEndpoint() == sender) {
+                senderIDStr = node->getID().toString();
+                break;
+            }
+        }
+
+        if (senderIDStr.empty()) {
+            return;
+        }
+
+        // Remove the node from the active queries
+        lookup.activeQueries.erase(senderIDStr);
+
+        // Add the node to the responded nodes
+        lookup.respondedNodes.insert(senderIDStr);
+
+        // Add the nodes from the response to the lookup
+        for (const auto& node : nodes) {
+            // Skip nodes that are already in the lookup
+            bool found = false;
+            for (const auto& existingNode : lookup.nodes) {
+                if (existingNode->getID() == node->getID()) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                lookup.nodes.push_back(node);
+
+                // Add the node to the routing table
+                if (m_routingTable) {
+                    m_routingTable->addNode(node);
+                }
+            }
+        }
+
+        // Send more queries
+        sendQueries(lookupID);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.NodeLookup", e.what());
+    }
+}
+
+void NodeLookup::handleError(const std::string& lookupID, const types::EndPoint& sender) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Find the node that sent the error
+        std::string senderIDStr;
+        for (const auto& node : lookup.nodes) {
+            if (node->getEndpoint() == sender) {
+                senderIDStr = node->getID().toString();
+                break;
+            }
+        }
+
+        if (senderIDStr.empty()) {
+            return;
+        }
+
+        // Remove the node from the active queries
+        lookup.activeQueries.erase(senderIDStr);
+
+        // Send more queries
+        sendQueries(lookupID);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.NodeLookup", e.what());
+    }
+}
+
+void NodeLookup::handleTimeout(const std::string& lookupID, const types::NodeID& nodeID) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Remove the node from the active queries
+        lookup.activeQueries.erase(nodeID.toString());
+
+        // Send more queries
+        sendQueries(lookupID);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.NodeLookup", e.what());
+    }
+}
+
+bool NodeLookup::isLookupComplete(const std::string& lookupID) {
+    auto it = m_lookups.find(lookupID);
+    if (it == m_lookups.end()) {
+        return true;
+    }
+
+    auto& lookup = it->second;
+
+    // If we've reached the maximum number of iterations, the lookup is complete
+    if (lookup.iteration >= 10) {
+        return true;
+    }
+
+    // If there are no active queries and all nodes have been queried, the lookup is complete
+    if (lookup.activeQueries.empty() && lookup.queriedNodes.size() >= lookup.nodes.size()) {
+        return true;
+    }
+
+    return false;
+}
+
+void NodeLookup::completeLookup(const std::string& lookupID) {
+    auto it = m_lookups.find(lookupID);
+    if (it == m_lookups.end()) {
+        return;
+    }
+
+    auto& lookup = it->second;
+
+    // Sort nodes by distance to target
+    std::sort(lookup.nodes.begin(), lookup.nodes.end(),
+        [&lookup](const std::shared_ptr<types::Node>& a, const std::shared_ptr<types::Node>& b) {
+            types::NodeID distanceA = a->getID().distanceTo(lookup.targetID);
+            types::NodeID distanceB = b->getID().distanceTo(lookup.targetID);
+            return distanceA < distanceB;
+        });
+
+    // Limit the number of nodes to return
+    if (lookup.nodes.size() > 20) {
+        lookup.nodes.resize(20);
+    }
+
+    // Call the callback with the result
+    if (lookup.callback) {
+        lookup.callback(lookup.nodes);
+    }
+
+    // Remove the lookup
+    m_lookups.erase(lookupID);
+}
+
+std::string NodeLookup::generateLookupID(const types::NodeID& targetID) const {
+    return "node_lookup_" + targetID.toString();
+}
+
+//=============================================================================
+// PeerLookup Implementation
+//=============================================================================
+
+// Initialize static members
+std::shared_ptr<PeerLookup> PeerLookup::s_instance = nullptr;
+std::mutex PeerLookup::s_instanceMutex;
+
+std::shared_ptr<PeerLookup> PeerLookup::getInstance(
+    const DHTConfig& config,
+    const types::NodeID& nodeID,
+    std::shared_ptr<RoutingTable> routingTable) {
+
+    std::lock_guard<std::mutex> lock(s_instanceMutex);
+    if (!s_instance) {
+        s_instance = std::shared_ptr<PeerLookup>(new PeerLookup(config, nodeID, routingTable));
+    }
+    return s_instance;
+}
+
+PeerLookup::PeerLookup(const DHTConfig& config,
+                     const types::NodeID& nodeID,
+                     std::shared_ptr<RoutingTable> routingTable)
+    : m_config(config), m_nodeID(nodeID), m_routingTable(routingTable) {
+}
+
+PeerLookup::~PeerLookup() {
+    // Note: We don't clear the singleton instance here to avoid mutex issues
+    // during program termination. The instance will be cleaned up by the OS.
+}
+
+void PeerLookup::lookup(const types::InfoHash& infoHash,
+                      std::function<void(const std::vector<types::EndPoint>&)> callback) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Generate a lookup ID
+        std::string lookupID = generateLookupID(infoHash);
+
+        // Check if a lookup with this ID already exists
+        if (m_lookups.find(lookupID) != m_lookups.end()) {
+            return;
+        }
+
+        // Create a new lookup
+        PeerLookupState lookup(infoHash, callback);
+
+        // Get the closest nodes from the routing table
+        if (m_routingTable) {
+            lookup.nodes = m_routingTable->getClosestNodes(types::NodeID(infoHash), 20);
+        }
+
+        // Add the lookup
+        m_lookups.emplace(lookupID, lookup);
+
+        // Send queries
+        sendQueries(lookupID);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+void PeerLookup::announce(const types::InfoHash& infoHash,
+                        uint16_t port,
+                        std::function<void(bool)> callback) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Generate a lookup ID
+        std::string lookupID = generateLookupID(infoHash);
+
+        // Check if a lookup with this ID already exists
+        if (m_lookups.find(lookupID) != m_lookups.end()) {
+            return;
+        }
+
+        // Create a new lookup
+        PeerLookupState lookup(infoHash, port, callback);
+
+        // Get the closest nodes from the routing table
+        if (m_routingTable) {
+            lookup.nodes = m_routingTable->getClosestNodes(types::NodeID(infoHash), 20);
+        }
+
+        // Add the lookup
+        m_lookups.emplace(lookupID, lookup);
+
+        // Send queries
+        sendQueries(lookupID);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+void PeerLookup::sendQueries(const std::string& lookupID) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Check if the lookup is complete
+        if (isLookupComplete(lookupID)) {
+            if (lookup.announcing) {
+                sendAnnouncements(lookupID);
+            } else {
+                completeLookup(lookupID);
+            }
+            return;
+        }
+
+        // Sort nodes by distance to target
+        std::sort(lookup.nodes.begin(), lookup.nodes.end(),
+            [&lookup](const std::shared_ptr<types::Node>& a, const std::shared_ptr<types::Node>& b) {
+                types::NodeID distanceA = a->getID().distanceTo(types::NodeID(lookup.infoHash));
+                types::NodeID distanceB = b->getID().distanceTo(types::NodeID(lookup.infoHash));
+                return distanceA < distanceB;
+            });
+
+        // Send queries to the closest nodes that haven't been queried yet
+        size_t queriesSent = 0;
+        for (const auto& node : lookup.nodes) {
+            // Skip nodes that have already been queried
+            std::string nodeIDStr = node->getID().toString();
+            if (lookup.queriedNodes.find(nodeIDStr) != lookup.queriedNodes.end()) {
+                continue;
+            }
+
+            // Add the node to the queried nodes
+            lookup.queriedNodes.insert(nodeIDStr);
+
+            // Add the node to the active queries
+            lookup.activeQueries.insert(nodeIDStr);
+
+            // TODO: Send the query
+            // This would normally call the message sender to send a get_peers query
+
+            queriesSent++;
+
+            // Stop if we've sent enough queries
+            if (queriesSent >= 3) { // Alpha value
+                break;
+            }
+        }
+
+        // Increment the iteration counter
+        lookup.iteration++;
+
+        // If no queries were sent and there are no active queries, complete the lookup
+        if (queriesSent == 0 && lookup.activeQueries.empty()) {
+            if (lookup.announcing) {
+                sendAnnouncements(lookupID);
+            } else {
+                completeLookup(lookupID);
+            }
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+void PeerLookup::sendAnnouncements(const std::string& lookupID) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // If there are no tokens, complete the announcement with failure
+        if (lookup.nodeTokens.empty()) {
+            completeAnnouncement(lookupID, false);
+            return;
+        }
+
+        // Send announcements to nodes with tokens
+        size_t announcementsSent = 0;
+        for (const auto& pair : lookup.nodeTokens) {
+            const std::string& nodeIDStr = pair.first;
+            const std::string& token = pair.second;
+
+            // Skip nodes that have already been announced to
+            if (lookup.announcedNodes.find(nodeIDStr) != lookup.announcedNodes.end()) {
+                continue;
+            }
+
+            // Find the node
+            std::shared_ptr<types::Node> node;
+            for (const auto& n : lookup.nodes) {
+                if (n->getID().toString() == nodeIDStr) {
+                    node = n;
+                    break;
+                }
+            }
+
+            if (!node) {
+                continue;
+            }
+
+            // Add the node to the announced nodes
+            lookup.announcedNodes.insert(nodeIDStr);
+
+            // Add the node to the active announcements
+            lookup.activeAnnouncements.insert(nodeIDStr);
+
+            // TODO: Send the announcement
+            // This would normally call the message sender to send an announce_peer query
+
+            announcementsSent++;
+        }
+
+        // If no announcements were sent and there are no active announcements, complete the announcement
+        if (announcementsSent == 0 && lookup.activeAnnouncements.empty()) {
+            completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+void PeerLookup::handleGetPeersResponse(const std::string& lookupID,
+                                      const std::vector<std::shared_ptr<types::Node>>& nodes,
+                                      const std::vector<types::EndPoint>& peers,
+                                      const std::string& token,
+                                      const types::EndPoint& sender) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Find the node that sent the response
+        std::string senderIDStr;
+        for (const auto& node : lookup.nodes) {
+            if (node->getEndpoint() == sender) {
+                senderIDStr = node->getID().toString();
+                break;
+            }
+        }
+
+        if (senderIDStr.empty()) {
+            return;
+        }
+
+        // Remove the node from the active queries
+        lookup.activeQueries.erase(senderIDStr);
+
+        // Add the node to the responded nodes
+        lookup.respondedNodes.insert(senderIDStr);
+
+        // Store the token
+        if (!token.empty()) {
+            lookup.nodeTokens[senderIDStr] = token;
+        }
+
+        // Add the peers from the response to the lookup
+        for (const auto& peer : peers) {
+            // Skip peers that are already in the lookup
+            bool found = false;
+            for (const auto& existingPeer : lookup.peers) {
+                if (existingPeer == peer) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                lookup.peers.push_back(peer);
+            }
+        }
+
+        // Add the nodes from the response to the lookup
+        for (const auto& node : nodes) {
+            // Skip nodes that are already in the lookup
+            bool found = false;
+            for (const auto& existingNode : lookup.nodes) {
+                if (existingNode->getID() == node->getID()) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                lookup.nodes.push_back(node);
+
+                // Add the node to the routing table
+                if (m_routingTable) {
+                    m_routingTable->addNode(node);
+                }
+            }
+        }
+
+        // Send more queries
+        sendQueries(lookupID);
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+void PeerLookup::handleAnnouncePeerResponse(const std::string& lookupID,
+                                          const types::EndPoint& sender) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Find the node that sent the response
+        std::string senderIDStr;
+        for (const auto& node : lookup.nodes) {
+            if (node->getEndpoint() == sender) {
+                senderIDStr = node->getID().toString();
+                break;
+            }
+        }
+
+        if (senderIDStr.empty()) {
+            return;
+        }
+
+        // Remove the node from the active announcements
+        lookup.activeAnnouncements.erase(senderIDStr);
+
+        // If there are no active announcements, complete the announcement
+        if (lookup.activeAnnouncements.empty()) {
+            completeAnnouncement(lookupID, true);
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+void PeerLookup::handleError(const std::string& lookupID,
+                           const types::EndPoint& sender) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Find the node that sent the error
+        std::string senderIDStr;
+        for (const auto& node : lookup.nodes) {
+            if (node->getEndpoint() == sender) {
+                senderIDStr = node->getID().toString();
+                break;
+            }
+        }
+
+        if (senderIDStr.empty()) {
+            return;
+        }
+
+        // Remove the node from the active queries or announcements
+        lookup.activeQueries.erase(senderIDStr);
+        lookup.activeAnnouncements.erase(senderIDStr);
+
+        // If there are no active queries, send more queries or complete the lookup
+        if (lookup.activeQueries.empty()) {
+            if (lookup.announcing && !lookup.activeAnnouncements.empty()) {
+                // Wait for announcements to complete
+            } else if (lookup.announcing) {
+                sendAnnouncements(lookupID);
+            } else {
+                sendQueries(lookupID);
+            }
+        }
+
+        // If there are no active announcements and no active queries, complete the announcement
+        if (lookup.announcing && lookup.activeAnnouncements.empty() && lookup.activeQueries.empty()) {
+            completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+void PeerLookup::handleTimeout(const std::string& lookupID,
+                             const types::NodeID& nodeID) {
+    try {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Find the lookup
+        auto it = m_lookups.find(lookupID);
+        if (it == m_lookups.end()) {
+            return;
+        }
+
+        auto& lookup = it->second;
+
+        // Remove the node from the active queries or announcements
+        lookup.activeQueries.erase(nodeID.toString());
+        lookup.activeAnnouncements.erase(nodeID.toString());
+
+        // If there are no active queries, send more queries or complete the lookup
+        if (lookup.activeQueries.empty()) {
+            if (lookup.announcing && !lookup.activeAnnouncements.empty()) {
+                // Wait for announcements to complete
+            } else if (lookup.announcing) {
+                sendAnnouncements(lookupID);
+            } else {
+                sendQueries(lookupID);
+            }
+        }
+
+        // If there are no active announcements and no active queries, complete the announcement
+        if (lookup.announcing && lookup.activeAnnouncements.empty() && lookup.activeQueries.empty()) {
+            completeAnnouncement(lookupID, !lookup.announcedNodes.empty());
+        }
+    } catch (const std::exception& e) {
+        unified_event::logError("DHT.PeerLookup", e.what());
+    }
+}
+
+bool PeerLookup::isLookupComplete(const std::string& lookupID) {
+    auto it = m_lookups.find(lookupID);
+    if (it == m_lookups.end()) {
+        return true;
+    }
+
+    auto& lookup = it->second;
+
+    // If we've reached the maximum number of iterations, the lookup is complete
+    if (lookup.iteration >= 10) {
+        return true;
+    }
+
+    // If there are no active queries and all nodes have been queried, the lookup is complete
+    if (lookup.activeQueries.empty() && lookup.queriedNodes.size() >= lookup.nodes.size()) {
+        return true;
+    }
+
+    // If we've found enough peers, the lookup is complete
+    if (!lookup.peers.empty() && lookup.peers.size() >= 20) {
+        return true;
+    }
+
+    return false;
+}
+
+void PeerLookup::completeLookup(const std::string& lookupID) {
+    auto it = m_lookups.find(lookupID);
+    if (it == m_lookups.end()) {
+        return;
+    }
+
+    auto& lookup = it->second;
+
+    // Call the callback with the result
+    if (lookup.lookupCallback) {
+        lookup.lookupCallback(lookup.peers);
+    }
+
+    // Remove the lookup
+    m_lookups.erase(lookupID);
+}
+
+void PeerLookup::completeAnnouncement(const std::string& lookupID, bool success) {
+    auto it = m_lookups.find(lookupID);
+    if (it == m_lookups.end()) {
+        return;
+    }
+
+    auto& lookup = it->second;
+
+    // Call the callback with the result
+    if (lookup.announceCallback) {
+        lookup.announceCallback(success);
+    }
+
+    // Remove the lookup
+    m_lookups.erase(lookupID);
+}
+
+std::string PeerLookup::generateLookupID(const types::InfoHash& infoHash) const {
+    return "peer_lookup_" + infoHash.toString();
+}
+
 } // namespace dht_hunter::utils::dht_core
