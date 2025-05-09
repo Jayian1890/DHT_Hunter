@@ -3,7 +3,7 @@
 /**
  * @file system_utils.hpp
  * @brief System utility functions and types for the BitScrape project
- * 
+ *
  * This file consolidates system-level functionality from various utility files:
  * - thread_utils.hpp (Thread management utilities)
  * - thread_pool.hpp (Thread pool implementation)
@@ -213,13 +213,21 @@ namespace system {
             auto enqueue(F&& f, Args&&... args)
                 -> std::future<typename std::invoke_result<F, Args...>::type>;
 
+            /**
+             * @brief Get the number of threads in the pool
+             * @return The number of threads
+             */
+            size_t getThreadCount() const {
+                return m_workers.size();
+            }
+
         private:
             // Worker threads
             std::vector<std::thread> m_workers;
-            
+
             // Task queue
             std::queue<std::function<void()>> m_tasks;
-            
+
             // Synchronization
             std::mutex m_queueMutex;
             std::condition_variable m_condition;
@@ -256,7 +264,7 @@ namespace system {
 
             // Notify a worker thread
             m_condition.notify_one();
-            
+
             return result;
         }
 
