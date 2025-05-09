@@ -1,18 +1,154 @@
-#include "dht_hunter/utility/system/memory_utils.hpp"
-#include "dht_hunter/unified_event/unified_event.hpp"
-#include <algorithm>
+/**
+ * @file system_utils.cpp
+ * @brief Implementation of system utility functions
+ */
 
-#ifdef __APPLE__
-#include <mach/mach.h>
-#include <sys/sysctl.h>
-#elif defined(_WIN32)
+#include "utils/system_utils.hpp"
+#include "dht_hunter/unified_event/unified_event.hpp"
+
+#include <algorithm>
+#include <sstream>
+#include <iomanip>
+
+// Platform-specific includes
+#ifdef _WIN32
 #include <windows.h>
+#include <psapi.h>
+#elif defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/task.h>
+#include <sys/sysctl.h>
 #else
 #include <unistd.h>
+#include <sys/resource.h>
 #include <sys/sysinfo.h>
 #endif
 
 namespace dht_hunter::utility::system {
+
+//-----------------------------------------------------------------------------
+// Thread utilities implementation
+//-----------------------------------------------------------------------------
+namespace thread {
+
+// Initialize the global shutdown flag
+std::atomic<bool> g_shuttingDown(false);
+
+ThreadPool::ThreadPool(size_t numThreads) : m_stop(false) {
+    for (size_t i = 0; i < numThreads; ++i) {
+        m_workers.emplace_back([this] {
+            while (true) {
+                std::function<void()> task;
+                
+                {
+                    std::unique_lock<std::mutex> lock(m_queueMutex);
+                    
+                    // Wait for a task or stop signal
+                    m_condition.wait(lock, [this] {
+                        return m_stop || !m_tasks.empty();
+                    });
+                    
+                    // Exit if stopped and no tasks
+                    if (m_stop && m_tasks.empty()) {
+                        return;
+                    }
+                    
+                    // Get the next task
+                    task = std::move(m_tasks.front());
+                    m_tasks.pop();
+                }
+                
+                // Execute the task
+                task();
+            }
+        });
+    }
+}
+
+ThreadPool::~ThreadPool() {
+    {
+        std::unique_lock<std::mutex> lock(m_queueMutex);
+        m_stop = true;
+    }
+    
+    // Notify all threads to check the stop flag
+    m_condition.notify_all();
+    
+    // Join all threads
+    for (std::thread& worker : m_workers) {
+        if (worker.joinable()) {
+            worker.join();
+        }
+    }
+}
+
+} // namespace thread
+
+//-----------------------------------------------------------------------------
+// Process utilities implementation
+//-----------------------------------------------------------------------------
+namespace process {
+
+uint64_t getMemoryUsage() {
+    try {
+#ifdef _WIN32
+        // Windows implementation
+        PROCESS_MEMORY_COUNTERS_EX pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
+            return pmc.WorkingSetSize;
+        }
+#elif defined(__APPLE__)
+        // macOS implementation
+        struct task_basic_info t_info;
+        mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
+
+        if (task_info(mach_task_self(), TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&t_info), &t_info_count) == KERN_SUCCESS) {
+            return t_info.resident_size;
+        }
+#else
+        // Linux implementation
+        long rss = 0L;
+        FILE* fp = NULL;
+        if ((fp = fopen("/proc/self/statm", "r")) == NULL) {
+            return 0;
+        }
+        if (fscanf(fp, "%*s%ld", &rss) != 1) {
+            fclose(fp);
+            return 0;
+        }
+        fclose(fp);
+        return (uint64_t)rss * (uint64_t)sysconf(_SC_PAGESIZE);
+#endif
+    } catch (const std::exception& e) {
+        unified_event::logError("Utility.Process", "Exception getting process memory usage: " + std::string(e.what()));
+    } catch (...) {
+        unified_event::logError("Utility.Process", "Unknown exception getting process memory usage");
+    }
+
+    return 0;
+}
+
+std::string formatSize(uint64_t bytes) {
+    static const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+    int unitIndex = 0;
+    double size = static_cast<double>(bytes);
+
+    while (size >= 1024.0 && unitIndex < 4) {
+        size /= 1024.0;
+        unitIndex++;
+    }
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << size << " " << units[unitIndex];
+    return oss.str();
+}
+
+} // namespace process
+
+//-----------------------------------------------------------------------------
+// Memory utilities implementation
+//-----------------------------------------------------------------------------
+namespace memory {
 
 uint64_t getTotalSystemMemory() {
     uint64_t totalMemory = 0;
@@ -135,5 +271,7 @@ size_t calculateMaxTransactions(
 
     return result;
 }
+
+} // namespace memory
 
 } // namespace dht_hunter::utility::system

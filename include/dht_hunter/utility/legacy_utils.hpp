@@ -3,7 +3,7 @@
 /**
  * @file legacy_utils.hpp
  * @brief Legacy utility header that forwards to the new consolidated utilities
- * 
+ *
  * This file provides backward compatibility for legacy code that still includes
  * the old utility headers. It forwards to the new consolidated utilities.
  */
@@ -11,6 +11,7 @@
 // Include the new consolidated utilities
 #include "utils/common_utils.hpp"
 #include "utils/domain_utils.hpp"
+#include "utils/system_utils.hpp"
 
 // Forward declarations for network utilities
 namespace dht_hunter::utility::network {
@@ -38,4 +39,30 @@ namespace dht_hunter::utility::metadata {
     using dht_hunter::utility::metadata::getInfoHashTotalSize;
     using dht_hunter::utility::metadata::getInfoHashMetadata;
     using dht_hunter::utility::metadata::getAllMetadata;
+}
+
+// Forward declarations for thread utilities
+namespace dht_hunter::utility::thread {
+    // Forward to the new consolidated utilities
+    using dht_hunter::utility::system::thread::LockTimeoutException;
+    using dht_hunter::utility::system::thread::g_shuttingDown;
+    using dht_hunter::utility::system::thread::withLock;
+    using dht_hunter::utility::system::thread::runAsync;
+    using dht_hunter::utility::system::thread::sleep;
+    using dht_hunter::utility::system::thread::ThreadPool;
+}
+
+// Forward declarations for process utilities
+namespace dht_hunter::utility::process {
+    // Forward to the new consolidated utilities
+    using dht_hunter::utility::system::process::getMemoryUsage;
+    using dht_hunter::utility::system::process::formatSize;
+}
+
+// Forward declarations for memory utilities
+namespace dht_hunter::utility::system {
+    // Forward to the new consolidated utilities
+    using dht_hunter::utility::system::memory::getTotalSystemMemory;
+    using dht_hunter::utility::system::memory::getAvailableSystemMemory;
+    using dht_hunter::utility::system::memory::calculateMaxTransactions;
 }

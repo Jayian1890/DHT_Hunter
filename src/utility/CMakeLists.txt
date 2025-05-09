@@ -6,16 +6,6 @@ add_library(dht_hunter_utility
         # Random utilities
         random/random_utils.cpp
 
-        # Thread utilities
-        thread/thread_pool.cpp
-        thread/thread_utils.cpp
-
-        # Process utilities
-        process/process_utils.cpp
-
-        # System utilities
-        system/memory_utils.cpp
-
         # JSON utilities
         json/json.cpp
 

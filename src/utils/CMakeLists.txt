@@ -4,6 +4,7 @@
 add_library(bitscrape_utils
     common_utils.cpp
     domain_utils.cpp
+    system_utils.cpp
 )
 
 # Set include directories

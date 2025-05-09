@@ -12,13 +12,10 @@
 // Include consolidated utility modules
 #include "utils/common_utils.hpp"
 #include "utils/domain_utils.hpp"
+#include "utils/system_utils.hpp"
 
 // Include remaining legacy utility modules
 #include "dht_hunter/utility/random/random_utils.hpp"
-#include "dht_hunter/utility/thread/thread_utils.hpp"
-#include "dht_hunter/utility/thread/thread_pool.hpp"
-#include "dht_hunter/utility/process/process_utils.hpp"
-#include "dht_hunter/utility/system/memory_utils.hpp"
 #include "dht_hunter/utility/json/json.hpp"
 #include "dht_hunter/utility/config/configuration_manager.hpp"
 
@@ -82,5 +79,28 @@ namespace dht_hunter::utility {
         using dht_hunter::utility::metadata::getInfoHashTotalSize;
         using dht_hunter::utility::metadata::getInfoHashMetadata;
         using dht_hunter::utility::metadata::getAllMetadata;
+    }
+
+    // Thread utilities
+    namespace thread {
+        using dht_hunter::utility::system::thread::LockTimeoutException;
+        using dht_hunter::utility::system::thread::g_shuttingDown;
+        using dht_hunter::utility::system::thread::withLock;
+        using dht_hunter::utility::system::thread::runAsync;
+        using dht_hunter::utility::system::thread::sleep;
+        using dht_hunter::utility::system::thread::ThreadPool;
+    }
+
+    // Process utilities
+    namespace process {
+        using dht_hunter::utility::system::process::getMemoryUsage;
+        using dht_hunter::utility::system::process::formatSize;
+    }
+
+    // Memory utilities
+    namespace system {
+        using dht_hunter::utility::system::memory::getTotalSystemMemory;
+        using dht_hunter::utility::system::memory::getAvailableSystemMemory;
+        using dht_hunter::utility::system::memory::calculateMaxTransactions;
     }
 }
