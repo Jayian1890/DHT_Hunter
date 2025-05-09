@@ -55,17 +55,7 @@ meson setup build
 meson compile -C build
 ```
 
-### Building with CMake (Legacy)
 
-The project also supports CMake as a legacy build system:
-
-```bash
-# Configure
-cmake -B build -DCMAKE_BUILD_TYPE=Debug
-
-# Build
-cmake --build build
-```
 
 ## Running
 
@@ -83,12 +73,12 @@ After building, you can run the application:
 
 ### VS Code Integration
 
-The project includes VS Code configuration files for both Meson and CMake. To use Meson in VS Code:
+The project includes VS Code configuration files for Meson. To use Meson in VS Code:
 
 1. Install the recommended extensions (Meson, C/C++, LLDB)
 2. Open the project in VS Code
 3. Use the "Meson: build" task to build the project
-4. Use the "Debug CLI (Meson)" or "Debug App (Meson)" configurations to debug
+4. Use the "Debug CLI" or "Debug App" configurations to debug
 
 ## License
 

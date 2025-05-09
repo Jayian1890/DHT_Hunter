@@ -1,12 +1,3 @@
-project('bencode', 'cpp',
-  version : '0.1.0',
-  default_options : [
-    'cpp_std=c++20',
-    'warning_level=2',
-    'buildtype=debug',
-  ]
-)
-
 # Find required dependencies
 thread_dep = dependency('threads')
 
@@ -29,13 +20,3 @@ bencode_dep = declare_dependency(
   link_with : bencode_lib,
   include_directories : inc_dirs,
 )
-
-# Example executable
-if get_option('build_examples')
-  bencode_example = executable('bencode_example',
-    'examples/bencode_example.cpp',
-    include_directories : inc_dirs,
-    dependencies : [bencode_dep],
-    install : true,
-  )
-endif

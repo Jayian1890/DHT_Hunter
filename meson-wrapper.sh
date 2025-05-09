@@ -1,10 +1,10 @@
 #!/bin/bash
-# Meson wrapper script that uses CMake under the hood
-# This provides a transitional path from CMake to Meson
+# Meson wrapper script
+# This provides a simple wrapper for common Meson commands
 
 # Default values
-BUILD_TYPE="Debug"
-ENABLE_ASAN=OFF
+BUILD_TYPE="debug"
+ENABLE_ASAN=false
 BUILD_DIR="build"
 CLEAN=false
 CONFIGURE=true
@@ -40,11 +40,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --buildtype=*)
       BUILD_TYPE="${1#*=}"
-      if [[ "$BUILD_TYPE" == "debug" ]]; then
-        BUILD_TYPE="Debug"
-      elif [[ "$BUILD_TYPE" == "release" ]]; then
-        BUILD_TYPE="Release"
-      fi
       shift
       ;;
     -C)
@@ -67,9 +62,9 @@ while [[ $# -gt 0 ]]; do
     -Denable_asan=*)
       ASAN_VALUE="${1#*=}"
       if [[ "$ASAN_VALUE" == "true" ]]; then
-        ENABLE_ASAN=ON
+        ENABLE_ASAN=true
       else
-        ENABLE_ASAN=OFF
+        ENABLE_ASAN=false
       fi
       shift
       ;;
@@ -116,42 +111,42 @@ fi
 
 # Configure
 if [[ "$CONFIGURE" == true ]]; then
-  echo "Configuring with CMake..."
-  CMAKE_ARGS="-B $BUILD_DIR -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DENABLE_ASAN=$ENABLE_ASAN"
-  
+  echo "Configuring with Meson..."
+  MESON_ARGS="setup $BUILD_DIR --buildtype=$BUILD_TYPE -Denable_asan=$ENABLE_ASAN"
+
   if [[ "$VERBOSE" == true ]]; then
-    echo "Running: cmake $CMAKE_ARGS"
+    echo "Running: meson $MESON_ARGS"
   fi
-  
-  cmake $CMAKE_ARGS
+
+  meson $MESON_ARGS
 fi
 
 # Build
 if [[ "$BUILD" == true ]]; then
   echo "Building..."
-  CMAKE_BUILD_ARGS="--build $BUILD_DIR"
-  
+  MESON_BUILD_ARGS="compile -C $BUILD_DIR"
+
   if [[ "$VERBOSE" == true ]]; then
-    CMAKE_BUILD_ARGS="$CMAKE_BUILD_ARGS --verbose"
+    MESON_BUILD_ARGS="$MESON_BUILD_ARGS --verbose"
   fi
-  
+
   if [[ "$VERBOSE" == true ]]; then
-    echo "Running: cmake $CMAKE_BUILD_ARGS"
+    echo "Running: meson $MESON_BUILD_ARGS"
   fi
-  
-  cmake $CMAKE_BUILD_ARGS
+
+  meson $MESON_BUILD_ARGS
 fi
 
 # Test
 if [[ "$TEST" == true ]]; then
   echo "Running tests..."
-  cd "$BUILD_DIR" && ctest -V
+  meson test -C "$BUILD_DIR" -v
 fi
 
 # Install
 if [[ "$INSTALL" == true ]]; then
   echo "Installing..."
-  cmake --install "$BUILD_DIR"
+  meson install -C "$BUILD_DIR"
 fi
 
 echo "Done!"

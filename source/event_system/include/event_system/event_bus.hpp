@@ -160,8 +160,10 @@ public:
             m_eventQueueCondition.notify_all();
 
             // Wait for the processing thread to finish
-            if (m_processingThread.valid()) {
+            try {
                 m_processingThread.wait();
+            } catch (const std::future_error&) {
+                // Future might already be invalid or ready
             }
         }
 
@@ -259,17 +261,17 @@ private:
                     processEvent(event);
                     
                     // Fulfill the promise
-                    if (promise.valid()) {
+                    try {
                         promise.set_value();
+                    } catch (const std::future_error&) {
+                        // Promise might already be satisfied or broken
                     }
                 } catch (...) {
                     // Set exception on the promise
-                    if (promise.valid()) {
-                        try {
-                            promise.set_exception(std::current_exception());
-                        } catch (const std::future_error&) {
-                            // Promise might already be satisfied or broken
-                        }
+                    try {
+                        promise.set_exception(std::current_exception());
+                    } catch (const std::future_error&) {
+                        // Promise might already be satisfied or broken
                     }
                 }
             }

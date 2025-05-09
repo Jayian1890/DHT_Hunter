@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <any>
 #include <vector>
+#include <functional>
 
 namespace event_system {
 

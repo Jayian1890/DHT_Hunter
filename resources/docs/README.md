@@ -35,11 +35,21 @@ To create a proper .icns file for your macOS application, follow these steps:
 
 ## Using the Icon
 
-Once you have created your .icns file, update the CMakeLists.txt file to reference it:
+Once you have created your .icns file, update the Meson build file to reference it:
 
-```cmake
-set(MACOSX_BUNDLE_ICON_FILE "AppIcon.icns")
-set(APP_ICON_MACOSX "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/AppIcon.icns")
+```python
+# In meson.build
+app_icon_macosx = meson.project_source_root() / 'resources/macos/AppIcon.icns'
+
+# When creating the app bundle
+custom_target('app_bundle',
+  # ...
+  command: [
+    # ...
+    '&&', 'cp', app_icon_macosx, '@OUTPUT@/Contents/Resources/AppIcon.icns',
+  ],
+  # ...
+)
 ```
 
 Make sure the icon file is properly copied to the Resources directory in the app bundle.

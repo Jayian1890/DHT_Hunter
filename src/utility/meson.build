@@ -3,15 +3,8 @@
 dht_hunter_utility_sources = [
   # Common utilities
   'common/common_utils.cpp',
-  
-  # Random utilities
-  'random/random_utils.cpp',
-  
-  # JSON utilities
-  'json/json.cpp',
-  
-  # Configuration utilities
-  'config/configuration_manager.cpp',
+
+  # All other utilities have been consolidated into the new utils module
 ]
 
 dht_hunter_utility_lib = library('dht_hunter_utility',

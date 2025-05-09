@@ -13,11 +13,8 @@
 #include "utils/common_utils.hpp"
 #include "utils/domain_utils.hpp"
 #include "utils/system_utils.hpp"
-
-// Include remaining legacy utility modules
-#include "dht_hunter/utility/random/random_utils.hpp"
-#include "dht_hunter/utility/json/json.hpp"
-#include "dht_hunter/utility/config/configuration_manager.hpp"
+#include "utils/misc_utils.hpp"
+#include "utils/config_utils.hpp"
 
 // Include legacy utils header for backward compatibility
 #include "dht_hunter/utility/legacy_utils.hpp"

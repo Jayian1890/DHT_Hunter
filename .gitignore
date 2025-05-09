@@ -1,11 +1,11 @@
 # Build directories
 build/
-cmake-build-*/
 .meson-subprojects/
 .meson-logs/
 builddir/
 
 # IDE files
+memory-bank/
 .idea/
 .vscode/
 *.swp
@@ -36,14 +36,6 @@ builddir/
 *.exe
 *.out
 *.app
-
-# CMake generated files
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-*.cmake
-!CMakeLists.txt
 
 # Meson generated files
 meson-logs/

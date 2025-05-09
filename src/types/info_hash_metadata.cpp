@@ -179,11 +179,10 @@ InfoHashMetadataRegistry::InfoHashMetadataRegistry() {
 InfoHashMetadataRegistry::~InfoHashMetadataRegistry() {
     // Clear the singleton instance
     try {
-        utility::thread::withLock(s_instanceMutex, [this]() {
-            if (s_instance.get() == this) {
-                s_instance.reset();
-            }
-        }, "InfoHashMetadataRegistry::s_instanceMutex");
+        std::lock_guard<std::mutex> lock(s_instanceMutex);
+        if (s_instance.get() == this) {
+            s_instance.reset();
+        }
     } catch (const utility::thread::LockTimeoutException& e) {
         std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
     }
@@ -191,12 +190,11 @@ InfoHashMetadataRegistry::~InfoHashMetadataRegistry() {
 
 std::shared_ptr<InfoHashMetadataRegistry> InfoHashMetadataRegistry::getInstance() {
     try {
-        return utility::thread::withLock(s_instanceMutex, []() {
-            if (!s_instance) {
-                s_instance = std::shared_ptr<InfoHashMetadataRegistry>(new InfoHashMetadataRegistry());
-            }
-            return s_instance;
-        }, "InfoHashMetadataRegistry::s_instanceMutex");
+        std::lock_guard<std::mutex> lock(s_instanceMutex);
+        if (!s_instance) {
+            s_instance = std::shared_ptr<InfoHashMetadataRegistry>(new InfoHashMetadataRegistry());
+        }
+        return s_instance;
     } catch (const utility::thread::LockTimeoutException& e) {
         std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return nullptr;
@@ -205,11 +203,10 @@ std::shared_ptr<InfoHashMetadataRegistry> InfoHashMetadataRegistry::getInstance(
 
 void InfoHashMetadataRegistry::registerMetadata(const InfoHashMetadata& metadata) {
     try {
-        utility::thread::withLock(m_mutex, [this, &metadata]() {
-            auto infoHash = metadata.getInfoHash();
-            auto metadataPtr = std::make_shared<InfoHashMetadata>(metadata);
-            m_metadata[infoHash] = metadataPtr;
-        }, "InfoHashMetadataRegistry::m_mutex");
+        std::lock_guard<std::mutex> lock(m_mutex);
+        auto infoHash = metadata.getInfoHash();
+        auto metadataPtr = std::make_shared<InfoHashMetadata>(metadata);
+        m_metadata[infoHash] = metadataPtr;
     } catch (const utility::thread::LockTimeoutException& e) {
         std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
     }
@@ -217,13 +214,12 @@ void InfoHashMetadataRegistry::registerMetadata(const InfoHashMetadata& metadata
 
 std::shared_ptr<InfoHashMetadata> InfoHashMetadataRegistry::getMetadata(const InfoHash& infoHash) const {
     try {
-        return utility::thread::withLock(m_mutex, [this, &infoHash]() -> std::shared_ptr<InfoHashMetadata> {
-            auto it = m_metadata.find(infoHash);
-            if (it != m_metadata.end()) {
-                return it->second;
-            }
-            return nullptr;
-        }, "InfoHashMetadataRegistry::m_mutex");
+        std::lock_guard<std::mutex> lock(m_mutex);
+        auto it = m_metadata.find(infoHash);
+        if (it != m_metadata.end()) {
+            return it->second;
+        }
+        return nullptr;
     } catch (const utility::thread::LockTimeoutException& e) {
         std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return nullptr;
@@ -232,14 +228,13 @@ std::shared_ptr<InfoHashMetadata> InfoHashMetadataRegistry::getMetadata(const In
 
 std::vector<std::shared_ptr<InfoHashMetadata>> InfoHashMetadataRegistry::getAllMetadata() const {
     try {
-        return utility::thread::withLock(m_mutex, [this]() {
-            std::vector<std::shared_ptr<InfoHashMetadata>> result;
-            result.reserve(m_metadata.size());
-            for (const auto& [_, metadata] : m_metadata) {
-                result.push_back(metadata);
-            }
-            return result;
-        }, "InfoHashMetadataRegistry::m_mutex");
+        std::lock_guard<std::mutex> lock(m_mutex);
+        std::vector<std::shared_ptr<InfoHashMetadata>> result;
+        result.reserve(m_metadata.size());
+        for (const auto& [_, metadata] : m_metadata) {
+            result.push_back(metadata);
+        }
+        return result;
     } catch (const utility::thread::LockTimeoutException& e) {
         std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return {};
@@ -248,33 +243,32 @@ std::vector<std::shared_ptr<InfoHashMetadata>> InfoHashMetadataRegistry::getAllM
 
 std::vector<uint8_t> InfoHashMetadataRegistry::serializeAll() const {
     try {
-        return utility::thread::withLock(m_mutex, [this]() {
-            std::vector<uint8_t> result;
+        std::lock_guard<std::mutex> lock(m_mutex);
+        std::vector<uint8_t> result;
 
-            // Get all metadata
-            auto allMetadata = getAllMetadata();
+        // Get all metadata
+        auto allMetadata = getAllMetadata();
 
-            // Write the number of metadata entries
-            uint32_t metadataCount = static_cast<uint32_t>(allMetadata.size());
-            result.resize(sizeof(metadataCount));
-            std::memcpy(result.data(), &metadataCount, sizeof(metadataCount));
+        // Write the number of metadata entries
+        uint32_t metadataCount = static_cast<uint32_t>(allMetadata.size());
+        result.resize(sizeof(metadataCount));
+        std::memcpy(result.data(), &metadataCount, sizeof(metadataCount));
 
-            // Write each metadata entry
-            for (const auto& metadata : allMetadata) {
-                auto serialized = metadata->serialize();
+        // Write each metadata entry
+        for (const auto& metadata : allMetadata) {
+            auto serialized = metadata->serialize();
 
-                // Write the size of the serialized data
-                uint32_t dataSize = static_cast<uint32_t>(serialized.size());
-                size_t oldSize = result.size();
-                result.resize(oldSize + sizeof(dataSize));
-                std::memcpy(result.data() + oldSize, &dataSize, sizeof(dataSize));
+            // Write the size of the serialized data
+            uint32_t dataSize = static_cast<uint32_t>(serialized.size());
+            size_t oldSize = result.size();
+            result.resize(oldSize + sizeof(dataSize));
+            std::memcpy(result.data() + oldSize, &dataSize, sizeof(dataSize));
 
-                // Write the serialized data
-                result.insert(result.end(), serialized.begin(), serialized.end());
-            }
+            // Write the serialized data
+            result.insert(result.end(), serialized.begin(), serialized.end());
+        }
 
-            return result;
-        }, "InfoHashMetadataRegistry::m_mutex");
+        return result;
     } catch (const utility::thread::LockTimeoutException& e) {
         std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return {};
@@ -283,55 +277,54 @@ std::vector<uint8_t> InfoHashMetadataRegistry::serializeAll() const {
 
 bool InfoHashMetadataRegistry::deserializeAll(const std::vector<uint8_t>& data) {
     try {
-        return utility::thread::withLock(m_mutex, [this, &data]() {
-            // Clear existing metadata
-            m_metadata.clear();
+        std::lock_guard<std::mutex> lock(m_mutex);
+        // Clear existing metadata
+        m_metadata.clear();
 
-            // Check if there's enough data for the metadata count
-            if (data.size() < sizeof(uint32_t)) {
+        // Check if there's enough data for the metadata count
+        if (data.size() < sizeof(uint32_t)) {
+            return false;
+        }
+
+        // Read the metadata count
+        uint32_t metadataCount;
+        std::memcpy(&metadataCount, data.data(), sizeof(metadataCount));
+        size_t offset = sizeof(metadataCount);
+
+        // Read each metadata entry
+        for (uint32_t i = 0; i < metadataCount; ++i) {
+            // Check if there's enough data for the data size
+            if (data.size() < offset + sizeof(uint32_t)) {
                 return false;
             }
 
-            // Read the metadata count
-            uint32_t metadataCount;
-            std::memcpy(&metadataCount, data.data(), sizeof(metadataCount));
-            size_t offset = sizeof(metadataCount);
+            // Read the data size
+            uint32_t dataSize;
+            std::memcpy(&dataSize, data.data() + offset, sizeof(dataSize));
+            offset += sizeof(dataSize);
 
-            // Read each metadata entry
-            for (uint32_t i = 0; i < metadataCount; ++i) {
-                // Check if there's enough data for the data size
-                if (data.size() < offset + sizeof(uint32_t)) {
-                    return false;
-                }
-
-                // Read the data size
-                uint32_t dataSize;
-                std::memcpy(&dataSize, data.data() + offset, sizeof(dataSize));
-                offset += sizeof(dataSize);
-
-                // Check if there's enough data for the serialized metadata
-                if (data.size() < offset + dataSize) {
-                    return false;
-                }
-
-                // Create a new metadata object
-                auto metadata = std::make_shared<InfoHashMetadata>();
-
-                // Deserialize the metadata
-                size_t bytesRead = metadata->deserialize(data, offset);
-                if (bytesRead == 0) {
-                    return false;
-                }
-
-                // Add the metadata to the registry
-                m_metadata[metadata->getInfoHash()] = metadata;
-
-                // Update the offset
-                offset += dataSize;
+            // Check if there's enough data for the serialized metadata
+            if (data.size() < offset + dataSize) {
+                return false;
             }
 
-            return true;
-        }, "InfoHashMetadataRegistry::m_mutex");
+            // Create a new metadata object
+            auto metadata = std::make_shared<InfoHashMetadata>();
+
+            // Deserialize the metadata
+            size_t bytesRead = metadata->deserialize(data, offset);
+            if (bytesRead == 0) {
+                return false;
+            }
+
+            // Add the metadata to the registry
+            m_metadata[metadata->getInfoHash()] = metadata;
+
+            // Update the offset
+            offset += dataSize;
+        }
+
+        return true;
     } catch (const utility::thread::LockTimeoutException& e) {
         std::cerr << "Error in Types.InfoHashMetadataRegistry: " << e.what() << std::endl;
         return false;

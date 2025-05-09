@@ -5,6 +5,8 @@ bitscrape_utils_sources = [
   'domain_utils.cpp',
   'system_utils.cpp',
   'dht_core_utils.cpp',
+  'misc_utils.cpp',
+  'config_utils.cpp',
 ]
 
 bitscrape_utils_lib = library('bitscrape_utils',
